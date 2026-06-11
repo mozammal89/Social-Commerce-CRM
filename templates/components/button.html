@@ -1,0 +1,11 @@
+<!-- Button Component -->
+<button type="{{ button_type|default:'button' }}" 
+        class="btn btn-{{ button_variant|default:'primary' }} {% if button_size %}btn-{{ button_size }}{% endif %} {% if button_outline %}btn-outline-{{ button_variant }}{% endif %} {% if button_block %}w-100{% endif %}"
+        {% if button_id %}id="{{ button_id }}"{% endif %}
+        {% if button_data_attributes %}{{ button_data_attributes }}{% endif %}
+        {% if button_disabled %}disabled{% endif %}>
+    {% if button_icon %}
+    <i class="bi bi-{{ button_icon }} {% if button_icon_position == 'right' %}ms-2{% else %}me-2{% endif %}"></i>
+    {% endif %}
+    {{ button_text }}
+</button>

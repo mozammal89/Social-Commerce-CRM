@@ -50,6 +50,7 @@ LOCAL_APPS = [
     "apps.stores",
     "apps.common",
     "apps.core",
+    "apps.dashboard",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -80,6 +81,13 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "apps.common.context_processors.app_settings",
+                "apps.common.context_processors.current_store",
+            ],
+            "builtins": [
+                "django.templatetags.i18n",
+                "django.templatetags.static",
+                "django.templatetags.cache",
             ],
         },
     },
@@ -132,10 +140,21 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
 
 
+# DATABASES = {
+#     "default": env.db_url(
+#         "DATABASE_URL", default="postgresql://crm_user:crm_password@localhost:5432/crm_db"
+#     )
+# }
+
 DATABASES = {
-    "default": env.db_url(
-        "DATABASE_URL", default="postgresql://crm_user:crm_password@localhost:5432/crm_db"
-    )
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": env.str("DB_NAME", default="crm_db"),
+        "USER": env.str("DB_USER", default="your_db_user"),
+        "PASSWORD": env.str("DB_PASSWORD", default="password"),
+        "HOST": env.str("DB_HOST", default="localhost"),
+        "PORT": env.str("DB_PORT", default="5432"),
+    }
 }
 
 

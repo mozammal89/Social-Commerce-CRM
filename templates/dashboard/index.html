@@ -1,0 +1,231 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Dashboard - {{ APP_NAME }}{% endblock %}
+
+{% block content %}
+<!-- Dashboard Overview -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="fw-bold mb-0">Welcome back, {{ user.first_name }}!</h2>
+                <p class="text-muted mb-0">Here's what's happening with your store today</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#quickAddModal">
+                    <i class="bi bi-plus-circle me-2"></i>Quick Add
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="bg-primary bg-opacity-10 p-3 rounded me-3">
+                        <i class="bi bi-currency-dollar fs-3 text-primary"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-0 text-muted">Total Revenue</h6>
+                        <h3 class="mb-0 fw-bold">$12,450</h3>
+                        <small class="text-success"><i class="bi bi-arrow-up"></i> 12% from last month</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="bg-success bg-opacity-10 p-3 rounded me-3">
+                        <i class="bi bi-cart3 fs-3 text-success"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-0 text-muted">Total Orders</h6>
+                        <h3 class="mb-0 fw-bold">156</h3>
+                        <small class="text-success"><i class="bi bi-arrow-up"></i> 8% from last month</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="bg-info bg-opacity-10 p-3 rounded me-3">
+                        <i class="bi bi-people fs-3 text-info"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-0 text-muted">New Customers</h6>
+                        <h3 class="mb-0 fw-bold">42</h3>
+                        <small class="text-success"><i class="bi bi-arrow-up"></i> 15% from last month</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="bg-warning bg-opacity-10 p-3 rounded me-3">
+                        <i class="bi bi-box-seam fs-3 text-warning"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-0 text-muted">Low Stock Items</h6>
+                        <h3 class="mb-0 fw-bold">8</h3>
+                        <small class="text-warning"><i class="bi bi-arrow-down"></i> 5 from last week</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity and Charts -->
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Recent Activity</h5>
+                <a href="#" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item d-flex align-items-center">
+                        <div class="bg-primary bg-opacity-10 p-2 rounded me-3">
+                            <i class="bi bi-cart-check text-primary"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">New Order #ORD-1234</h6>
+                            <small class="text-muted">John Smith placed an order for $234.50</small>
+                        </div>
+                        <small class="text-muted">2 minutes ago</small>
+                    </div>
+                    
+                    <div class="list-group-item d-flex align-items-center">
+                        <div class="bg-success bg-opacity-10 p-2 rounded me-3">
+                            <i class="bi bi-person-plus text-success"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">New Customer Registration</h6>
+                            <small class="text-muted">Sarah Johnson registered as a new customer</small>
+                        </div>
+                        <small class="text-muted">15 minutes ago</small>
+                    </div>
+                    
+                    <div class="list-group-item d-flex align-items-center">
+                        <div class="bg-warning bg-opacity-10 p-2 rounded me-3">
+                            <i class="bi bi-exclamation-triangle text-warning"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">Low Stock Alert</h6>
+                            <small class="text-muted">"Premium Widget" is running low (3 items left)</small>
+                        </div>
+                        <small class="text-muted">1 hour ago</small>
+                    </div>
+                    
+                    <div class="list-group-item d-flex align-items-center">
+                        <div class="bg-info bg-opacity-10 p-2 rounded me-3">
+                            <i class="bi bi-credit-card text-info"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">Payment Received</h6>
+                            <small class="text-muted">Payment of $1,234.50 received for order #ORD-1230</small>
+                        </div>
+                        <small class="text-muted">3 hours ago</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'customers:create' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-person-plus me-2"></i>Add Customer
+                    </a>
+                    <a href="{% url 'products:create' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-plus-circle me-2"></i>Add Product
+                    </a>
+                    <a href="{% url 'orders:list' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-cart3 me-2"></i>View Orders
+                    </a>
+                    <a href="{% url 'reports:sales' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-file-bar-graph me-2"></i>View Reports
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card border-0 shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">Store Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Products</span>
+                    <span class="fw-bold">248</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Customers</span>
+                    <span class="fw-bold">1,234</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Orders Today</span>
+                    <span class="fw-bold">23</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>Revenue Today</span>
+                    <span class="fw-bold">$3,450.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Add Modal -->
+<div class="modal fade" id="quickAddModal" tabindex="-1" aria-labelledby="quickAddModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickAddModalLabel">Quick Add</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'customers:create' %}" class="btn btn-outline-primary text-start p-3">
+                        <i class="bi bi-person-plus me-2"></i>
+                        <div>Add New Customer</div>
+                        <small class="text-muted">Register a new customer to your store</small>
+                    </a>
+                    <a href="{% url 'products:create' %}" class="btn btn-outline-primary text-start p-3">
+                        <i class="bi bi-plus-circle me-2"></i>
+                        <div>Add New Product</div>
+                        <small class="text-muted">Add a new product to your catalog</small>
+                    </a>
+                    <a href="{% url 'orders:create' %}" class="btn btn-outline-primary text-start p-3">
+                        <i class="bi bi-cart-plus me-2"></i>
+                        <div>Create Manual Order</div>
+                        <small class="text-muted">Create an order manually for a customer</small>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

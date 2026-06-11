@@ -1,0 +1,38 @@
+{% extends 'layouts/auth.html' %}
+
+{% block auth_content %}
+<form method="post" action="{% url 'accounts:login' %}" class="needs-validation" novalidate>
+    {% csrf_token %}
+    
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+        {% for error in form.non_field_errors %}
+        {{ error }}{% if not forloop.last %}<br>{% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    {% for field in form %}
+    <div class="mb-3">
+        <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}
+        <small class="text-muted">{{ field.help_text }}</small>
+        {% endif %}
+        {% if field.errors %}
+        <div class="text-danger mt-1">
+            {% for error in field.errors %}
+            {{ error }}{% if not forloop.last %}<br>{% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    
+    <div class="d-grid gap-2">
+        <button type="submit" class="btn btn-primary btn-lg">
+            <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+        </button>
+    </div>
+</form>
+{% endblock %}

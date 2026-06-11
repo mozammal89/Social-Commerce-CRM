@@ -14,11 +14,11 @@ ALLOWED_HOSTS = [
     "0.0.0.0",
 ]
 
-DATABASES = {
-    "default": env.db_url(
-        "DATABASE_URL", default="postgresql://crm_user:crm_password@localhost:5432/crm_db_dev"
-    ),
-}
+# DATABASES = {
+#     "default": env.db_url(
+#         "DATABASE_URL", default="postgresql://crm_user:crm_password@localhost:5432/crm_db_dev"
+#     ),
+# }
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 

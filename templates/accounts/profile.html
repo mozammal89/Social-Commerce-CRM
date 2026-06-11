@@ -1,0 +1,143 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Profile - {{ APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body text-center">
+                {% if user.avatar %}
+                <img src="{{ user.avatar.url }}" alt="{{ user.get_full_name }}" class="rounded-circle mb-3" width="150" height="150">
+                {% else %}
+                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mb-3 mx-auto" style="width: 150px; height: 150px; font-size: 4rem;">
+                    {{ user.first_name|first|upper }}{{ user.last_name|first|upper }}
+                </div>
+                {% endif %}
+                <h4 class="mb-1">{{ user.get_full_name }}</h4>
+                <p class="text-muted mb-2">{{ user.email }}</p>
+                <span class="badge bg-primary">{{ user.get_role_display }}</span>
+            </div>
+            <div class="card-body pt-0 border-top">
+                <button class="btn btn-outline-primary w-100" data-bs-toggle="modal" data-bs-target="#avatarModal">
+                    <i class="bi bi-camera me-2"></i>Change Avatar
+                </button>
+            </div>
+        </div>
+        
+        <div class="card border-0 shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">Account Settings</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'accounts:change_password' %}" class="btn btn-outline-primary text-start">
+                        <i class="bi bi-key me-2"></i>Change Password
+                    </a>
+                    <a href="{% url 'accounts:profile_settings' %}" class="btn btn-outline-primary text-start">
+                        <i class="bi bi-gear me-2"></i>Account Settings
+                    </a>
+                    <a href="#" class="btn btn-outline-primary text-start">
+                        <i class bi bi-bell me-2"></i>Notification Preferences
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Profile Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{% url 'accounts:profile' %}" class="needs-validation" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">First Name</label>
+                            <input type="text" class="form-control" name="first_name" value="{{ user.first_name }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Last Name</label>
+                            <input type="text" class="form-control" name="last_name" value="{{ user.last_name }}" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Email Address</label>
+                        <input type="email" class="form-control" name="email" value="{{ user.email }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Phone Number</label>
+                        <input type="tel" class="form-control" name="phone_number" value="{{ user.phone_number|default:'' }}">
+                    </div>
+                    
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'dashboard:home' %}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-2"></i>Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card border-0 shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">Account Statistics</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <h3 class="fw-bold text-primary mb-0">{{ user.owned_stores.count }}</h3>
+                            <small class="text-muted">Owned Stores</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <h3 class="fw-bold text-success mb-0">{{ user.managed_stores.count }}</h3>
+                            <small class="text-muted">Managed Stores</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <h3 class="fw-bold text-info mb-0">Member Since</h3>
+                            <small class="text-muted">{{ user.created_at|date:"F d, Y" }}</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Avatar Upload Modal -->
+<div class="modal fade" id="avatarModal" tabindex="-1" aria-labelledby="avatarModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="avatarModalLabel">Change Avatar</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" action="{% url 'accounts:avatar' %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Upload New Avatar</label>
+                        <input type="file" class="form-control" name="avatar" accept="image/*" required>
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-upload me-2"></i>Upload Avatar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

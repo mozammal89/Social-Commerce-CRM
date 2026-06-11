@@ -9,6 +9,16 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("", include("apps.core.urls_template")),
+    path("dashboard/", include("apps.dashboard.urls")),
+    path("auth/", include("apps.accounts.urls_template")),
+    path("customers/", include("apps.customers.urls")),
+    path("products/", include("apps.products.urls")),
+    path("orders/", include("apps.orders.urls")),
+    path("marketing/", include("apps.marketing.urls")),
+    path("reports/", include("apps.reports.urls")),
+    path("settings/", include("apps.settings.urls")),
+    path("help/", include("apps.help.urls")),
     path("api/v1/health/", include("apps.core.urls")),
     path("api/v1/auth/", include("apps.accounts.urls")),
     path("api/v1/stores/", include("apps.stores.urls")),

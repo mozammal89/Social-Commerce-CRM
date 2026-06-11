@@ -1,0 +1,294 @@
+/**
+ * Social Commerce CRM - Main CSS Styles
+ * Bootstrap 5.x with custom enhancements
+ */
+
+/* Base Styles */
+:root {
+    --primary-color: #0d6efd;
+    --secondary-color: #6c757d;
+    --success-color: #198754;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #0dcaf0;
+    --light-bg: #f8f9fa;
+    --dark-bg: #212529;
+    --primary-light: rgba(13, 110, 253, 0.1);
+    --secondary-light: rgba(108, 117, 125, 0.1);
+    --success-light: rgba(25, 135, 84, 0.1);
+    --danger-light: rgba(220, 53, 85, 0.1);
+    --warning-light: rgba(255, 193, 7, 0.1);
+    --info-light: rgba(13, 202, 240, 0.1);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: var(--light-bg);
+}
+
+/* Auth Page Background */
+.auth-page .bg-gradient-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* Dashboard Layout */
+.dashboard-page {
+    padding-top: 56px; /* Account for navbar */
+}
+
+/* Sidebar Styles */
+.sidebar {
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar .nav-link {
+    transition: all 0.2s ease-in-out;
+}
+
+.sidebar .nav-link:hover,
+.sidebar .nav-link.active {
+    background-color: var(--primary-light);
+    color: var(--primary-color);
+}
+
+.sidebar .nav-link.active {
+    border-left: 3px solid var(--primary-color);
+    margin-left: 0.75rem;
+    padding-left: calc(0.5rem - 3px);
+}
+
+/* Mobile Sidebar */
+@media (max-width: 991px) {
+    .sidebar {
+        position: fixed;
+        top: 56px;
+        left: 0;
+        width: 250px;
+        height: calc(100vh - 56px);
+        z-index: 1040;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+    }
+    
+    .sidebar.show {
+        transform: translateX(0);
+    }
+    
+    .sidebar-overlay {
+        position: fixed;
+        top: 56px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1030;
+        display: none;
+    }
+    
+    .sidebar-overlay.show {
+        display: block;
+    }
+}
+
+/* Card Enhancements */
+.card {
+    border: 1px solid rgba(0, 0, 0, 0.125);
+    border-radius: 0.5rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+/* Button Styles */
+.btn {
+    transition: all 0.2s ease-in-out;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--primary-light);
+}
+
+/* Table Styles */
+.table {
+    font-size: 0.95rem;
+}
+
+.table th {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* Form Styles */
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.form-check-input:checked {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+/* Badge Styles */
+.badge {
+    font-weight: 500;
+    padding: 0.5em 0.8em;
+}
+
+/* Empty State */
+.empty-state {
+    padding: 3rem 1rem;
+}
+
+.empty-state i {
+    opacity: 0.5;
+}
+
+/* Loading Indicator */
+.htmx-indicator {
+    opacity: 0;
+    transition: opacity 200ms ease-in;
+}
+
+.htmx-request .htmx-indicator {
+    opacity: 1;
+}
+
+.htmx-request.htmx-indicator {
+    display: inline-block;
+}
+
+/* Messages Container */
+.messages-container {
+    z-index: 9999;
+}
+
+.messages-container .alert {
+    min-width: 300px;
+    max-width: 500px;
+}
+
+/* Breadcrumb Styles */
+.breadcrumb-item a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.breadcrumb-item a:hover {
+    text-decoration: underline;
+}
+
+/* Modal Styles */
+.modal-header {
+    border-bottom: 2px solid var(--light-bg);
+}
+
+.modal-footer {
+    border-top: 1px solid var(--light-bg);
+}
+
+/* Status Badges */
+.status-active {
+    background-color: var(--success-light);
+    color: var(--success-color);
+}
+
+.status-inactive {
+    background-color: var(--danger-light);
+    color: var(--danger-color);
+}
+
+.status-pending {
+    background-color: var(--warning-light);
+    color: var(--warning-color);
+}
+
+.status-archived {
+    background-color: var(--secondary-light);
+    color: var(--secondary-color);
+}
+
+/* Utility Classes */
+.text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.border-left {
+    border-left: 3px solid;
+}
+
+.border-left-primary {
+    border-left-color: var(--primary-color);
+}
+
+.border-left-success {
+    border-left-color: var(--success-color);
+}
+
+.border-left-danger {
+    border-left-color: var(--danger-color);
+}
+
+.border-left-warning {
+    border-left-color: var(--warning-color);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.9rem;
+    }
+    
+    .btn-sm {
+        font-size: 0.875rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    .card {
+        margin-bottom: 1rem;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .sidebar,
+    .navbar,
+    .messages-container,
+    .no-print {
+        display: none !important;
+    }
+    
+    .dashboard-page {
+        padding-top: 0;
+    }
+    
+    .card {
+        break-inside: avoid;
+    }
+}

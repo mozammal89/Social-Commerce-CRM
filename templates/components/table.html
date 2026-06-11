@@ -1,0 +1,70 @@
+<!-- Table Component -->
+<div class="table-responsive">
+    <table class="table table-hover {% if table_striped %}table-striped{% endif %} {% if table_bordered %}table-bordered{% endif %}">
+        <thead>
+            <tr>
+                {% for column in table_columns %}
+                <th scope="col">
+                    {{ column.label }}
+                    {% if column.sortable %}
+                    <a href="?sort={{ column.field }}&order={% if request.GET.order == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none">
+                        <i class="bi bi-arrow-down-up ms-1"></i>
+                    </a>
+                    {% endif %}
+                </th>
+                {% endfor %}
+                {% if table_actions %}
+                <th scope="col" class="text-end">Actions</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in table_rows %}
+            <tr>
+                {% for column in table_columns %}
+                <td>
+                    {% if column.type == 'avatar' %}
+                    <div class="d-flex align-items-center">
+                        {% if row|get_item:column.avatar_field %}
+                        <img src="{{ row|get_item:column.avatar_field }}" alt="{{ row|get_item:column.display_field }}" class="rounded-circle me-2" width="32" height="32">
+                        {% else %}
+                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-2" style="width: 32px; height: 32px;">
+                            {{ row|get_item:column.display_field|first|upper }}
+                        </div>
+                        {% endif %}
+                        <span>{{ row|get_item:column.display_field }}</span>
+                    </div>
+                    {% elif column.type == 'badge' %}
+                    <span class="badge bg-{{ row|get_item:column.badge_color_field|default:'secondary' }}">{{ row|get_item:column.display_field }}</span>
+                    {% elif column.type == 'link' %}
+                    <a href="{{ row|get_item:column.url_field }}" class="text-decoration-none">{{ row|get_item:column.display_field }}</a>
+                    {% else %}
+                    {{ row|get_item:column.field }}
+                    {% endif %}
+                </td>
+                {% endfor %}
+                {% if table_actions %}
+                <td class="text-end">
+                    <div class="btn-group" role="group">
+                        {% for action in table_actions %}
+                        <a href="{{ action.url|format:row.id }}" class="btn btn-{{ action.variant|default:'secondary' }} btn-sm">
+                            <i class="bi bi-{{ action.icon }}"></i>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </td>
+                {% endif %}
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="{% if table_actions %}{{ table_columns|length|add:1 }}{% else %}{{ table_columns|length }}{% endif %}" class="text-center py-5">
+                    <div class="text-muted">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        <p class="mb-0">No {{ table_name|default:"items" }} found</p>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

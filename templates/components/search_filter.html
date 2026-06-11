@@ -1,0 +1,57 @@
+<!-- Search/Filter Component -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            {% if search_placeholder %}
+            <div class="col-md-4">
+                <div class="input-group">
+                    <span class="input-group-text">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" class="form-control" 
+                           placeholder="{{ search_placeholder }}" 
+                           name="search" 
+                           value="{{ request.GET.search|default:'' }}"
+                           {% if htmx_search %}hx-get="{{ htmx_search_url }}" hx-trigger="keyup changed delay:300ms" hx-target="{{ htmx_target }}"{% endif %}>
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if filters %}
+            {% for filter in filters %}
+            <div class="col-md-{{ filter.col_span|default:3 }}">
+                <label class="form-label">{{ filter.label }}</label>
+                {% if filter.type == 'select' %}
+                <select class="form-select" name="{{ filter.name }}" {% if htmx_filter %}hx-get="{{ htmx_filter_url }}" hx-trigger="change" hx-target="{{ htmx_target }}"{% endif %}>
+                    <option value="">All</option>
+                    {% for option in filter.options %}
+                    <option value="{{ option.value }}" {% if request.GET|get_item:filter.name == option.value %}selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+                {% elif filter.type == 'date' %}
+                <input type="date" class="form-control" name="{{ filter.name }}" value="{{ request.GET|get_item:filter.name|default:'' }}">
+                {% elif filter.type == 'range' %}
+                <div class="input-group">
+                    <input type="number" class="form-control" name="{{ filter.name }}_min" placeholder="Min" value="{{ request.GET|get_item:filter.name~'_min'|default:'' }}">
+                    <input type="number" class="form-control" name="{{ filter.name }}_max" placeholder="Max" value="{{ request.GET|get_item:filter.name~'_max'|default:'' }}">
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% endif %}
+            
+            {% if search_placeholder or filters %}
+            <div class="col-md-2 d-flex align-items-end">
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary {% if htmx_submit %}hx-post="{{ htmx_submit_url }}" hx-target="{{ htmx_target }}"{% endif %}">
+                        <i class="bi bi-funnel"></i>
+                    </button>
+                    <a href="{{ request.path }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-circle"></i>
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>

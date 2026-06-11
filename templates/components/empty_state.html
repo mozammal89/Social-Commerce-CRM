@@ -1,0 +1,13 @@
+<!-- Empty State Component -->
+<div class="text-center py-5 empty-state">
+    <div class="mb-4">
+        <i class="bi bi-{{ empty_state_icon|default:'inbox' }} text-secondary display-1"></i>
+    </div>
+    <h4 class="text-muted mb-3">{{ empty_state_title|default:"No data available" }}</h4>
+    <p class="text-muted mb-4">{{ empty_state_message|default:"Get started by adding some data to see it here." }}</p>
+    {% if empty_state_action %}
+    <a href="{{ empty_state_action.url }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle me-2"></i>{{ empty_state_action.text }}
+    </a>
+    {% endif %}
+</div>

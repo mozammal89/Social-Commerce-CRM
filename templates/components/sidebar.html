@@ -1,0 +1,227 @@
+<!-- Sidebar Navigation -->
+<aside class="sidebar bg-white border-end" :class="{ 'show': sidebarOpen }" style="min-height: calc(100vh - 56px);">
+    <div class="sidebar-content py-3">
+        <!-- Store Information -->
+        {% if current_store %}
+        <div class="px-3 mb-3">
+            <div class="card bg-light">
+                <div class="card-body p-2">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-2" style="width: 40px; height: 40px;">
+                            <i class="bi bi-store"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-0 fw-bold">{{ current_store.name }}</h6>
+                            <small class="text-muted">{{ current_store.slug }}</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Navigation Menu -->
+        <nav class="nav flex-column">
+            <div class="nav-item">
+                <a class="nav-link{% if request.resolver_match.url_name == 'dashboard:home' %} active{% endif %}" href="{% url 'dashboard:home' %}">
+                    <i class="bi bi-speedometer2 me-2"></i>Dashboard
+                </a>
+            </div>
+            
+            <!-- Customers Section -->
+            <div class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#customersMenu" aria-expanded="false">
+                    <i class="bi bi-people me-2"></i>Customers
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="collapse" id="customersMenu">
+                    <a class="nav-link ps-5{% if 'customers:list' in request.resolver_match.url_name %} active{% endif %}" href="{% url 'customers:list' %}">
+                        <i class="bi bi-list-ul me-2"></i>All Customers
+                    </a>
+                    <a class="nav-link ps-5" href="{% url 'customers:create' %}">
+                        <i class="bi bi-person-plus me-2"></i>Add Customer
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Products Section -->
+            <div class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#productsMenu" aria-expanded="false">
+                    <i class="bi bi-box-seam me-2"></i>Products
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="collapse" id="productsMenu">
+                    <a class="nav-link ps-5" href="{% url 'products:list' %}">
+                        <i class="bi bi-list-ul me-2"></i>All Products
+                    </a>
+                    <a class="nav-link ps-5" href="{% url 'products:create' %}">
+                        <i class="bi bi-plus-circle me-2"></i>Add Product
+                    </a>
+                    <a class="nav-link ps-5" href="{% url 'products:inventory' %}">
+                        <i class="bi bi-box me-2"></i>Inventory
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Orders Section -->
+            <div class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#ordersMenu" aria-expanded="false">
+                    <i class="bi bi-cart3 me-2"></i>Orders
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="collapse" id="ordersMenu">
+                    <a class="nav-link ps-5" href="{% url 'orders:list' %}">
+                        <i class="bi bi-list-ul me-2"></i>All Orders
+                    </a>
+                    <a class="nav-link ps-5" href="{% url 'orders:pending' %}">
+                        <i class="bi bi-clock me-2"></i>Pending
+                    </a>
+                    <a class="nav-link ps-5" href="{% url 'orders:processing' %}">
+                        <i class="bi bi-gear me-2"></i>Processing
+                    </a>
+                    <a class="nav-link ps-5" href="{% url 'orders:completed' %}">
+                        <i class="bi bi-check-circle me-2"></i>Completed
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Marketing Section -->
+            <div class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#marketingMenu" aria-expanded="false">
+                    <i class="bi bi-megaphone me-2"></i>Marketing
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="collapse" id="marketingMenu">
+                    <a class="nav-link ps-5" href="{% url 'marketing:campaigns' %}">
+                        <i class="bi bi-clipboard-data me-2"></i>Campaigns
+                    </a>
+                    <a class="nav-link ps-5" href="{% url 'marketing:promotions' %}">
+                        <i class="bi bi-tags me-2"></i>Promotions
+                    </a>
+                    <a class="nav-link ps-5" href="{% url 'marketing:analytics' %}">
+                        <i class="bi bi-graph-up me-2"></i>Analytics
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Reports Section -->
+            <div class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#reportsMenu" aria-expanded="false">
+                    <i class="bi bi-file-bar-graph me-2"></i>Reports
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="collapse" id="reportsMenu">
+                    <a class="nav-link ps-5" href="{% url 'reports:sales' %}">
+                        <i class="bi bi-currency-dollar me-2"></i>Sales
+                    </a>
+                    <a class="nav-link ps-5" href="{% url 'reports:customers' %}">
+                        <i class="bi bi-people me-2"></i>Customers
+                    </a>
+                    <a class="nav-link ps-5" href="{% url 'reports:products' %}">
+                        <i class="bi bi-box me-2"></i>Products
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Settings Section -->
+            <div class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#settingsMenu" aria-expanded="false">
+                    <i class="bi bi-gear me-2"></i>Settings
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="collapse" id="settingsMenu">
+                    <a class="nav-link ps-5" href="{% url 'settings:store' %}">
+                        <i class="bi bi-store me-2"></i>Store Settings
+                    </a>
+                    <a class="nav-link ps-5" href="{% url 'settings:team' %}">
+                        <i class="bi bi-people me-2"></i>Team
+                    </a>
+                    <a class="nav-link ps-5" href="{% url 'settings:integrations' %}">
+                        <i class="bi bi-link-45deg me-2"></i>Integrations
+                    </a>
+                    <a class="nav-link ps-5" href="{% url 'settings:billing' %}">
+                        <i class="bi bi-credit-card me-2"></i>Billing
+                    </a>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Help & Support -->
+        <div class="mt-4 px-3">
+            <h6 class="text-muted text-uppercase small mb-2">Help & Support</h6>
+            <a class="nav-link" href="{% url 'help:documentation' %}">
+                <i class="bi bi-book me-2"></i>Documentation
+            </a>
+            <a class="nav-link" href="{% url 'help:support' %}">
+                <i class="bi bi-headset me-2"></i>Support
+            </a>
+        </div>
+    </div>
+</aside>
+
+<style>
+.sidebar {
+    position: fixed;
+    top: 56px;
+    left: 0;
+    bottom: 0;
+    width: 250px;
+    overflow-y: auto;
+    z-index: 1000;
+    transition: transform 0.3s ease-in-out;
+}
+
+.sidebar.show {
+    transform: translateX(0);
+}
+
+.sidebar:not(.show) {
+    transform: translateX(-100%);
+}
+
+@media (min-width: 992px) {
+    .sidebar {
+        transform: translateX(0);
+    }
+    
+    .sidebar.show {
+        transform: translateX(-100%);
+    }
+}
+
+.sidebar-overlay {
+    position: fixed;
+    top: 56px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+}
+
+.sidebar .nav-link {
+    padding: 0.5rem 1rem;
+    color: #6c757d;
+    border-radius: 0.25rem;
+    margin: 0.125rem 0.75rem;
+}
+
+.sidebar .nav-link:hover {
+    background-color: #f8f9fa;
+    color: #212529;
+}
+
+.sidebar .nav-link.active {
+    background-color: #e7f1ff;
+    color: #0d6efd;
+}
+
+.sidebar .nav-link i {
+    font-size: 1.1rem;
+}
+
+.sidebar .h6 {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+</style>

@@ -86,7 +86,7 @@ class User(UUIDModel, TimeStampedModel, SoftDeleteModel, AbstractUser):
         STORE_STAFF = "store_staff", _("Store Staff")
         CUSTOMER = "customer", _("Customer")
 
-    username_validator = UnicodeUsernameValidator()
+    username = None
 
     email = models.EmailField(
         _("email address"),

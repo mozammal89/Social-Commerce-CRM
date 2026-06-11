@@ -1,0 +1,23 @@
+<!-- Card Component -->
+<div class="card{% if card_border %} border-{{ card_border }}{% endif %} {% if card_shadow %}shadow{{ card_shadow }}{% endif %}">
+    {% if card_header %}
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">{{ card_header }}</h5>
+        {% if card_header_actions %}
+        <div class="card-header-actions">
+            {% include 'components/button.html' with button_text=card_header_actions.0.button_text button_variant=card_header_actions.0.button_variant button_icon=card_header_actions.0.button_icon button_outline=card_header_actions.0.button_outline %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <div class="card-body">
+        {% block card_body %}{% endblock %}
+    </div>
+    
+    {% if card_footer %}
+    <div class="card-footer">
+        {% block card_footer_content %}{{ card_footer }}{% endblock %}
+    </div>
+    {% endif %}
+</div>

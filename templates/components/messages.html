@@ -1,0 +1,31 @@
+<!-- Messages Component -->
+{% if messages %}
+<div class="messages-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show d-flex align-items-center mb-2" role="alert">
+        {% if message.tags == 'success' %}
+        <i class="bi bi-check-circle-fill me-2 flex-shrink-0"></i>
+        {% elif message.tags == 'error' %}
+        <i class="bi bi-exclamation-circle-fill me-2 flex-shrink-0"></i>
+        {% elif message.tags == 'warning' %}
+        <i class="bi bi-exclamation-triangle-fill me-2 flex-shrink-0"></i>
+        {% else %}
+        <i class="bi bi-info-circle-fill me-2 flex-shrink-0"></i>
+        {% endif %}
+        <div>{{ message }}</div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Auto-dismiss messages after 5 seconds -->
+{% if messages %}
+<script>
+    setTimeout(function() {
+        document.querySelectorAll('.messages-container .alert').forEach(function(alert) {
+            alert.classList.remove('show');
+        });
+    }, 5000);
+</script>
+{% endif %}

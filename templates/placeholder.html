@@ -1,0 +1,82 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}{{ title }} - {{ APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="text-center mb-5">
+            <div class="mb-4">
+                <i class="bi bi-cone-striped text-warning" style="font-size: 4rem;"></i>
+            </div>
+            <h2 class="fw-bold mb-3">Under Construction</h2>
+            <p class="text-muted lead">
+                The <strong>{{ app_name }}</strong> module is currently under development.
+                We're working hard to bring you amazing features!
+            </p>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="bg-primary bg-opacity-10 p-3 rounded me-3">
+                        <i class="bi bi-info-circle text-primary fs-4"></i>
+                    </div>
+                    <div>
+                        <h5 class="mb-1">Coming Soon</h5>
+                        <p class="text-muted mb-0">This feature will be available in the next release.</p>
+                    </div>
+                </div>
+
+                <div class="alert alert-info">
+                    <strong>What to expect:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>Full CRUD operations</li>
+                        <li>Advanced filtering and search</li>
+                        <li>Data export capabilities</li>
+                        <li>Integration with other modules</li>
+                    </ul>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <a href="{% url 'dashboard:home' %}" class="btn btn-primary">
+                        <i class="bi bi-arrow-left me-2"></i>Return to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <div class="row text-center">
+                <div class="col-md-4">
+                    <div class="p-3">
+                        <div class="mb-2">
+                            <i class="bi bi-speedometer2 text-primary fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold">Fast & Efficient</h6>
+                        <small class="text-muted">Optimized performance</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="p-3">
+                        <div class="mb-2">
+                            <i class="bi bi-shield-check text-success fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold">Secure & Reliable</h6>
+                        <small class="text-muted">Enterprise-grade security</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="p-3">
+                        <div class="mb-2">
+                            <i class="bi bi-gear text-info fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold">Highly Customizable</h6>
+                        <small class="text-muted">Tailored to your needs</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
