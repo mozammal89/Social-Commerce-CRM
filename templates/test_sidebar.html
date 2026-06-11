@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sidebar Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        .navbar {
+            height: 56px;
+            background: white;
+            border-bottom: 1px solid #dee2e6;
+            position: sticky;
+            top: 0;
+            z-index: 1050;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 56px;
+            left: 0;
+            width: 280px;
+            height: calc(100vh - 56px);
+            z-index: 1000;
+            background: #ffffff;
+            border-right: 1px solid #dee2e6;
+            transition: transform 0.3s ease-in-out;
+            transform: translateX(-100%);
+        }
+
+        @media (min-width: 992px) {
+            .sidebar {
+                transform: translateX(0) !important;
+            }
+        }
+
+        .sidebar-content {
+            padding: 1rem;
+            height: 100%;
+            overflow-y: auto;
+        }
+
+        .sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            display: none;
+        }
+
+        .main-content {
+            margin-left: 0;
+            transition: margin-left 0.3s ease-in-out;
+            padding: 1rem;
+        }
+
+        @media (min-width: 992px) {
+            .main-content {
+                margin-left: 280px;
+            }
+        }
+
+        .sidebar.show {
+            transform: translateX(0);
+        }
+
+        .sidebar-overlay.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Navigation -->
+    <nav class="navbar px-4">
+        <div class="container-fluid">
+            <div class="d-flex align-items-center">
+                <button class="btn btn-link text-dark d-lg-none me-2" type="button" data-sidebar-toggle>
+                    <i class="bi bi-list fs-4"></i>
+                </button>
+                <a class="navbar-brand fw-bold text-primary" href="#">
+                    <i class="bi bi-shop me-2"></i>Test CRM
+                </a>
+            </div>
+            <div class="d-flex align-items-center">
+                <span class="me-3">Test User</span>
+                <div class="dropdown">
+                    <button class="btn btn-link text-dark" type="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-person-circle fs-4"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#">Profile</a></li>
+                        <li><a class="dropdown-item" href="#">Logout</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-content">
+            <h5>Sidebar Menu</h5>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link active" href="#">Dashboard</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#">Customers</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#">Products</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#">Orders</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay"></div>
+
+    <!-- Main Content -->
+    <div class="main-content" id="main-content-area">
+        <div class="container">
+            <h1>Dashboard Test</h1>
+            <p>This is a test page to verify sidebar functionality.</p>
+            <div class="alert alert-info">
+                <strong>Instructions:</strong>
+                <ul>
+                    <li>On mobile (window width < 992px), click the hamburger menu to toggle the sidebar</li>
+                    <li>On desktop (window width ≥ 992px), the sidebar should always be visible</li>
+                    <li>Click outside the sidebar on mobile to close it</li>
+                </ul>
+            </div>
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Current Window Width</h5>
+                    <p class="card-text" id="window-width">Loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Sidebar JavaScript -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Test page loaded');
+
+            // DOM Elements
+            const sidebar = document.querySelector('.sidebar');
+            const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
+            const sidebarOverlay = document.querySelector('.sidebar-overlay');
+            const mainContent = document.getElementById('main-content-area');
+            const widthDisplay = document.getElementById('window-width');
+
+            // State
+            let isSidebarOpen = window.innerWidth > 991;
+
+            // Update window width display
+            function updateWidthDisplay() {
+                widthDisplay.textContent = `${window.innerWidth}px (Sidebar ${window.innerWidth >= 992 ? 'visible' : 'hidden'})`;
+            }
+
+            // Initialize sidebar
+            function initializeSidebar() {
+                console.log('Initializing sidebar...');
+                console.log('Found elements:', {
+                    sidebar: !!sidebar,
+                    sidebarToggle: !!sidebarToggle,
+                    sidebarOverlay: !!sidebarOverlay
+                });
+
+                updateWidthDisplay();
+                updateSidebarState();
+            }
+
+            // Update sidebar state
+            function updateSidebarState() {
+                console.log('Updating sidebar state. isSidebarOpen:', isSidebarOpen, 'Window width:', window.innerWidth);
+
+                if (window.innerWidth < 992) {
+                    // Mobile: controlled by state
+                    if (isSidebarOpen) {
+                        sidebar.classList.add('show');
+                        sidebarOverlay.classList.add('show');
+                    } else {
+                        sidebar.classList.remove('show');
+                        sidebarOverlay.classList.remove('show');
+                    }
+                } else {
+                    // Desktop: sidebar always visible
+                    sidebar.classList.add('show');
+                    sidebarOverlay.classList.remove('show');
+                }
+
+                updateWidthDisplay();
+            }
+
+            // Toggle sidebar
+            function toggleSidebar(event) {
+                console.log('Toggle sidebar called');
+                event.preventDefault();
+                event.stopPropagation();
+
+                isSidebarOpen = !isSidebarOpen;
+                updateSidebarState();
+
+                return false;
+            }
+
+            // Close sidebar
+            function closeSidebar() {
+                if (window.innerWidth < 992) {
+                    isSidebarOpen = false;
+                    updateSidebarState();
+                }
+            }
+
+            // Set up event listeners
+            if (sidebarToggle) {
+                sidebarToggle.addEventListener('click', toggleSidebar);
+                console.log('Toggle button event listener attached');
+            } else {
+                console.error('Toggle button not found');
+            }
+
+            if (sidebarOverlay) {
+                sidebarOverlay.addEventListener('click', closeSidebar);
+            }
+
+            // Handle window resize
+            let resizeTimeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(function() {
+                    const newIsOpen = window.innerWidth > 991;
+                    if (newIsOpen !== isSidebarOpen) {
+                        isSidebarOpen = newIsOpen;
+                        updateSidebarState();
+                    }
+                }, 250);
+            });
+
+            // Initialize
+            initializeSidebar();
+        });
+    </script>
+</body>
+</html>

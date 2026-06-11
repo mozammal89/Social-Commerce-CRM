@@ -3,7 +3,20 @@
 {% block title %}{{ self.title }} - {{ APP_NAME }}{% endblock %}
 
 {% block body_attributes %}
-class="dashboard-page" x-data="{ sidebarOpen: window.innerWidth > 991 }"
+class="dashboard-page"
+x-data="{ 
+    sidebarOpen: window.innerWidth > 991 
+}"
+x-init="
+    window.addEventListener('resize', () => {
+        const wasOpen = this.sidebarOpen;
+        this.sidebarOpen = window.innerWidth > 991;
+        if (wasOpen !== this.sidebarOpen) {
+            $dispatch('sidebar-state-changed', { isOpen: this.sidebarOpen });
+            $dispatch('sidebar-resize');
+        }
+    });
+"
 {% endblock %}
 
 {% block body %}
@@ -11,24 +24,24 @@ class="dashboard-page" x-data="{ sidebarOpen: window.innerWidth > 991 }"
 {% include 'components/top_navigation.html' %}
 
 <!-- Dashboard Layout -->
-<div class="d-flex">
+<div class="d-flex" :class="{ 'sidebar-open': sidebarOpen }">
     <!-- Sidebar -->
     {% include 'components/sidebar.html' %}
     
-    <!-- Main Content Area -->
-    <div class="flex-grow-1" :style="sidebarOpen ? 'margin-left: 280px;' : 'margin-left: 0;'">
-        <!-- Content Container -->
-        <div class="content-container p-4">
-            <!-- Breadcrumbs -->
-            {% include 'components/breadcrumbs.html' %}
-            
-            <!-- Page Content -->
-            {% block content %}{% endblock %}
-        </div>
+<!-- Main Content Area -->
+<div class="flex-grow-1" id="main-content-area">
+    <!-- Content Container -->
+    <div class="content-container p-4">
+        <!-- Breadcrumbs -->
+        {% include 'components/breadcrumbs.html' %}
         
-        <!-- Footer -->
-        {% include 'components/footer.html' %}
+        <!-- Page Content -->
+        {% block content %}{% endblock %}
     </div>
+    
+    <!-- Footer -->
+    {% include 'components/footer.html' %}
+</div>
 </div>
 
 {% block extra_bottom_content %}{% endblock %}

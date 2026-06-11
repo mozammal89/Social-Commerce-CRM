@@ -3,7 +3,7 @@
     <div class="container-fluid px-4">
         <!-- Logo & Mobile Toggle -->
         <div class="d-flex align-items-center">
-            <button class="btn btn-link text-dark d-lg-none me-2" type="button" @click="sidebarOpen = !sidebarOpen">
+            <button class="btn btn-link text-dark d-lg-none me-2" type="button" data-sidebar-toggle>
                 <i class="bi bi-list fs-4"></i>
             </button>
             <a class="navbar-brand fw-bold text-primary" href="{% url 'dashboard:home' %}">
@@ -166,13 +166,3 @@
         </div>
     </div>
 </nav>
-
-<script>
-// Mobile sidebar toggle
-document.getElementById('sidebarToggle').addEventListener('click', function() {
-    const sidebar = document.querySelector('.sidebar');
-    const overlay = document.querySelector('.sidebar-overlay');
-    sidebar.classList.toggle('show');
-    overlay.style.display = sidebar.classList.contains('show') ? 'block' : 'none';
-});
-</script>

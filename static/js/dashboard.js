@@ -8,25 +8,109 @@ document.addEventListener('DOMContentLoaded', function() {
     // SIDEBAR FUNCTIONALITY
     // ========================================
     
-    // Mobile sidebar toggle
-    const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
+    // State variables
+    let isSidebarOpen = window.innerWidth > 991;
+    
+    // DOM Elements
     const sidebar = document.querySelector('.sidebar');
+    const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
     const sidebarOverlay = document.querySelector('.sidebar-overlay');
+    const dashboardPage = document.querySelector('.dashboard-page') || document.body;
     
-    if (sidebarToggle && sidebar && sidebarOverlay) {
-        sidebarToggle.addEventListener('click', function() {
-            sidebar.classList.toggle('sidebar-expanded');
-            sidebarOverlay.classList.toggle('show');
-        });
+    // Sidebar Overlay functionality
+    function closeSidebar() {
+        if (window.innerWidth < 992) {
+            isSidebarOpen = false;
+            updateSidebarState();
+        }
     }
     
-    // Close sidebar when overlay is clicked
-    if (sidebarOverlay && sidebar) {
-        sidebarOverlay.addEventListener('click', function() {
-            sidebar.classList.remove('sidebar-expanded');
-            sidebarOverlay.classList.remove('show');
-        });
+    // Initialize sidebar state
+    function initializeSidebar() {
+        isSidebarOpen = window.innerWidth > 991;
+        updateSidebarState();
     }
+    
+    // Update sidebar state
+    function updateSidebarState() {
+        if (sidebar && dashboardPage) {
+            if (window.innerWidth < 992) {
+                // Mobile: controlled by state
+                if (isSidebarOpen) {
+                    sidebar.style.transform = 'translateX(0)';
+                    dashboardPage.classList.add('sidebar-open');
+                    if (sidebarOverlay) {
+                        sidebarOverlay.style.display = 'block';
+                    }
+                } else {
+                    sidebar.style.transform = 'translateX(-100%)';
+                    dashboardPage.classList.remove('sidebar-open');
+                    if (sidebarOverlay) {
+                        sidebarOverlay.style.display = 'none';
+                    }
+                }
+            } else {
+                // Desktop: sidebar always visible, no overlay
+                sidebar.style.transform = 'translateX(0)';
+                dashboardPage.classList.remove('sidebar-open');
+                if (sidebarOverlay) {
+                    sidebarOverlay.style.display = 'none';
+                }
+            }
+        }
+    }
+    
+    // Toggle sidebar function
+    function toggleSidebar(event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        
+        isSidebarOpen = !isSidebarOpen;
+        updateSidebarState();
+        
+        return false;
+    }
+    
+    // Set up toggle button
+    if (sidebarToggle) {
+        // Remove existing listeners to avoid duplicates
+        sidebarToggle.replaceWith(sidebarToggle.cloneNode(true));
+        const newToggle = document.querySelector('[data-sidebar-toggle]');
+        
+        if (newToggle) {
+            newToggle.addEventListener('click', toggleSidebar);
+        }
+    }
+    
+    // Set up overlay click handler
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', closeSidebar);
+    }
+    
+    // Handle window resize
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(function() {
+            const newIsOpen = window.innerWidth > 991;
+            if (newIsOpen !== isSidebarOpen) {
+                isSidebarOpen = newIsOpen;
+                updateSidebarState();
+            }
+        }, 250);
+    });
+    
+    // Handle escape key to close sidebar on mobile
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && isSidebarOpen && window.innerWidth < 992) {
+            closeSidebar();
+        }
+    });
+    
+    // Initialize on page load
+    initializeSidebar();
     
     // ========================================
     // DROPDOWN FUNCTIONALITY
@@ -223,40 +307,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // RESPONSIVE SIDEBAR HANDLING
     // ========================================
     
-    // Handle window resize
-    let resizeTimeout;
-    window.addEventListener('resize', function() {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(function() {
-            handleResponsiveLayout();
-        }, 250);
-    });
     
-    function handleResponsiveLayout() {
-        const sidebar = document.querySelector('.sidebar');
-        const contentArea = document.querySelector('.content-container');
-        
-        if (window.innerWidth >= 992) {
-            // Desktop: Show sidebar, adjust content
-            if (sidebar) {
-                sidebar.style.transform = 'translateX(0)';
-            }
-            if (contentArea) {
-                contentArea.style.marginLeft = '280px';
-            }
-        } else {
-            // Mobile: Hide sidebar, adjust content
-            if (sidebar) {
-                sidebar.style.transform = 'translateX(-100%)';
-            }
-            if (contentArea) {
-                contentArea.style.marginLeft = '0';
-            }
+    // This function is now integrated into initializeSidebar()
+    
+    // Initialize on page load
+    initializeSidebar();
+    
+    // Listen for Alpine.js state changes
+    document.addEventListener('sidebar-state-changed', function(event) {
+        if (event.detail && typeof event.detail.isOpen !== 'undefined') {
+            isSidebarOpen = event.detail.isOpen;
+            updateSidebarState();
         }
-    }
-    
-    // Initial responsive setup
-    handleResponsiveLayout();
+    });
     
     // ========================================
     // LOADING STATES

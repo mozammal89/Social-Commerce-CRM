@@ -44,20 +44,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Sidebar toggle for mobile
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    if (sidebarToggle) {
-        sidebarToggle.addEventListener('click', function() {
-            const sidebar = document.querySelector('.sidebar');
-            const overlay = document.querySelector('.sidebar-overlay');
-            
-            if (sidebar && overlay) {
-                sidebar.classList.toggle('show');
-                overlay.style.display = sidebar.classList.contains('show') ? 'block' : 'none';
-            }
-        });
-    }
-
     // Store switcher
     const storeSelector = document.getElementById('storeSelector');
     if (storeSelector) {

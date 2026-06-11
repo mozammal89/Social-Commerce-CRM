@@ -8,9 +8,76 @@
     min-height: 100vh;
 }
 
+/* Content Area */
+#main-content-area {
+    margin-left: 280px; /* Default for desktop */
+    transition: margin-left 0.3s ease-in-out;
+    width: 100%;
+}
+
+/* Alternative class support */
+.content-area {
+    margin-left: 280px; /* Default for desktop */
+    transition: margin-left 0.3s ease-in-out;
+    width: 100%;
+}
+
+/* Mobile: Content without sidebar */
+@media (max-width: 991.98px) {
+    #main-content-area,
+    .content-area {
+        margin-left: 0 !important; /* Force no margin on mobile */
+    }
+    
+    .dashboard-page.sidebar-open #main-content-area,
+    .dashboard-page.sidebar-open .content-area {
+        margin-left: 0 !important; /* Keep sidebar offscreen when closed on mobile */
+    }
+}
+
+/* Desktop: Always show sidebar, content has margin */
+@media (min-width: 992px) {
+    #main-content-area,
+    .content-area {
+        margin-left: 280px !important;
+    }
+    
+    .sidebar {
+        transform: translateX(0) !important;
+    }
+    
+    .sidebar-overlay {
+        display: none !important;
+    }
+}
+
 /* Content Container */
 .content-container {
-    min-height: calc(100vh - 56px - 100px); /* navbar height + footer height approximate */
+    min-height: calc(100vh - 156px); /* navbar height + footer height approximate */
+}
+
+/* Content Area */
+.content-area {
+    margin-left: 0;
+    transition: margin-left 0.3s ease-in-out;
+}
+
+/* Desktop: Content with sidebar */
+@media (min-width: 992px) {
+    .dashboard-page.sidebar-open .content-area {
+        margin-left: 280px;
+    }
+}
+
+/* Sidebar toggle button handling */
+@media (max-width: 991.98px) {
+    .dashboard-page.sidebar-open .sidebar {
+        transform: translateX(0) !important;
+    }
+    
+    .dashboard-page.sidebar-open .content-area {
+        margin-left: 0;
+    }
 }
 
 /* ========================================
@@ -29,6 +96,100 @@
     border-right: 1px solid #dee2e6;
     transition: transform 0.3s ease-in-out;
     transform: translateX(-100%);
+}
+
+/* Desktop: Sidebar always visible */
+@media (min-width: 992px) {
+    .sidebar {
+        transform: translateX(0) !important;
+    }
+}
+
+/* Mobile: Sidebar controlled by Alpine.js state */
+@media (max-width: 991.98px) {
+    .dashboard-page.sidebar-open .sidebar {
+        transform: translateX(0) !important;
+    }
+}
+
+/* Sidebar Content Container */
+.sidebar-content {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Sidebar Navigation */
+.sidebar .nav {
+    flex-shrink: 0;
+}
+
+.sidebar .nav-link {
+    padding: 0.75rem 1rem;
+    color: #6c757d;
+    border-radius: 0.375rem;
+    margin: 0.125rem 0;
+    transition: all 0.2s ease-in-out;
+    white-space: nowrap;
+}
+
+.sidebar .nav-link:hover {
+    background-color: #f8f9fa;
+    color: #0d6efd;
+}
+
+.sidebar .nav-link.active {
+    background-color: #0d6efd;
+    color: #ffffff;
+}
+
+.sidebar .nav-link i {
+    font-size: 1.1rem;
+}
+
+/* Sidebar Sections */
+.sidebar .text-uppercase {
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    color: #adb5bd;
+}
+
+/* Sidebar Footer */
+.sidebar-footer {
+    flex-shrink: 0;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    margin-top: auto;
+}
+
+/* Sidebar Overlay */
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+}
+
+/* Custom Scrollbar for Sidebar */
+.sidebar-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+    background: #f8f9fa;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+    background: #dee2e6;
+    border-radius: 3px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb:hover {
+    background: #adb5bd;
 }
 
 /* Sidebar Content Container */
@@ -142,20 +303,21 @@
     z-index: 1050;
 }
 
-/* Navigation Items */
-.navbar .navbar-brand {
-    font-size: 1.25rem;
-    font-weight: 700;
-}
+ /* Navigation Items */
+ .navbar .navbar-brand {
+     font-size: 1.25rem;
+     font-weight: 700;
+ }
 
-.navbar .btn-link {
-    padding: 0.5rem;
-    border-radius: 0.375rem;
-}
+ .navbar .btn-link {
+     padding: 0.5rem;
+     border-radius: 0.375rem;
+     z-index: 1060; /* Ensure buttons are above other elements */
+ }
 
-.navbar .btn-link:hover {
-    background-color: #f8f9fa;
-}
+ .navbar .btn-link:hover {
+     background-color: #f8f9fa;
+ }
 
 /* Store Selector */
 .dropdown-toggle::after {
