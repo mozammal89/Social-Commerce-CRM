@@ -1,0 +1,81 @@
+<!-- Dashboard Footer -->
+<footer class="bg-white border-top mt-4 py-3">
+    <div class="container-fluid px-4">
+        <!-- <div class="row">
+            <div class="col-md-6 mb-3 mb-md-0">
+                <div class="d-flex align-items-center mb-3">
+                    <span class="fw-bold text-primary me-2">{{ APP_NAME }}</span>
+                    <span class="badge bg-light text-muted">{{ APP_VERSION }}</span>
+                </div>
+                <p class="text-muted small mb-2">
+                    Comprehensive social commerce CRM platform for managing your online business.
+                </p>
+                <div class="d-flex gap-2">
+                    <a href="#" class="btn btn-sm btn-outline-primary" title="Facebook">
+                        <i class="bi bi-facebook"></i>
+                    </a>
+                    <a href="#" class="btn btn-sm btn-outline-primary" title="Twitter">
+                        <i class="bi bi-twitter-x"></i>
+                    </a>
+                    <a href="#" class="btn btn-sm btn-outline-primary" title="LinkedIn">
+                        <i class="bi bi-linkedin"></i>
+                    </a>
+                    <a href="#" class="btn btn-sm btn-outline-primary" title="GitHub">
+                        <i class="bi bi-github"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="col-md-3 mb-3 mb-md-0">
+                <h6 class="fw-bold mb-3">Quick Links</h6>
+                <ul class="list-unstyled small">
+                    <li class="mb-2">
+                        <a href="{% url 'dashboard:home' %}" class="text-decoration-none text-muted">Dashboard</a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="{% url 'customers:list' %}" class="text-decoration-none text-muted">Customers</a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="{% url 'products:list' %}" class="text-decoration-none text-muted">Products</a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="{% url 'orders:list' %}" class="text-decoration-none text-muted">Orders</a>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="col-md-3">
+                <h6 class="fw-bold mb-3">Support</h6>
+                <ul class="list-unstyled small">
+                    <li class="mb-2">
+                        <a href="{% url 'help:documentation' %}" class="text-decoration-none text-muted">Documentation</a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="{% url 'help:support' %}" class="text-decoration-none text-muted">Help Center</a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="#" class="text-decoration-none text-muted">Contact Us</a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="#" class="text-decoration-none text-muted">API Documentation</a>
+                    </li>
+                </ul>
+            </div>
+        </div> -->
+        
+        <div class="row mt-4 pt-3 border-top">
+            <div class="col-md-6">
+                <p class="text-muted small mb-0">
+                    © {% now "Y" %} {{ APP_NAME }}. All rights reserved.
+                </p>
+            </div>
+            <div class="col-md-6 text-md-end">
+                <p class="text-muted small mb-0">
+                    <a href="#" class="text-decoration-none text-muted me-3">Privacy Policy</a>
+                    <a href="#" class="text-decoration-none text-muted me-3">Terms of Service</a>
+                    <a href="#" class="text-decoration-none text-muted">Cookie Policy</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>

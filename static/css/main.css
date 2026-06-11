@@ -33,7 +33,7 @@ body {
 
 /* Dashboard Layout */
 .dashboard-page {
-    padding-top: 56px; /* Account for navbar */
+    padding-top: 0px; /* Account for navbar */
 }
 
 /* Sidebar Styles */
