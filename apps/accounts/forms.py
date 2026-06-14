@@ -171,6 +171,18 @@ class ProfileForm(forms.ModelForm):
         model = User
         fields = ['first_name', 'last_name', 'email', 'phone_number', 'avatar']
 
+class CustomPasswordResetForm(PasswordResetForm):
+    """Custom password reset form."""
+    
+    email = forms.EmailField(
+        label="Email Address",
+        widget=forms.EmailInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Enter your email address',
+            'required': True,
+        })
+    )
+    
 
 class CustomPasswordChangeForm(PasswordChangeForm):
     """Custom password change form."""

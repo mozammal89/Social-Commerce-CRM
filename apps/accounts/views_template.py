@@ -22,6 +22,7 @@ from django.urls import reverse_lazy
 from django.http import HttpResponse
 
 from apps.accounts.forms import (
+    CustomPasswordResetForm,
     LoginForm,
     RegistrationForm,
     ProfileForm,
@@ -133,7 +134,7 @@ def avatar_upload(request):
 class CustomPasswordResetView(DjangoPasswordResetView):
     """Custom password reset view."""
     template_name = 'auth/password_reset.html'
-    form_class = PasswordResetForm
+    form_class = CustomPasswordResetForm
     success_url = reverse_lazy('accounts:password_reset_done')
     email_template_name = 'auth/password_reset_email.html'
     subject_template_name = 'auth/password_reset_subject.txt'

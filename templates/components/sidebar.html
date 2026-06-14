@@ -34,6 +34,25 @@
                 </li>
             </ul>
 
+            <!-- Account Section -->
+            <div class="px-3 mb-2 mt-4">
+                <small class="text-uppercase fw-bold text-muted">Account</small>
+            </div>
+            <ul class="nav flex-column px-2">
+                <li class="nav-item">
+                    <a class="nav-link d-flex align-items-center {% if request.resolver_match.url_name == 'accounts:profile' %}active{% endif %}" href="{% url 'accounts:profile' %}">
+                        <i class="bi bi-person me-2"></i>
+                        <span>Profile</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link d-flex align-items-center {% if request.resolver_match.url_name == 'accounts:change_password' %}active{% endif %}" href="{% url 'accounts:change_password' %}">
+                        <i class="bi bi-key me-2"></i>
+                        <span>Change Password</span>
+                    </a>
+                </li>
+            </ul>
+
             <!-- CRM Section -->
             <div class="px-3 mb-2 mt-4">
                 <small class="text-uppercase fw-bold text-muted">CRM</small>
