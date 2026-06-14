@@ -135,6 +135,15 @@ class CustomPasswordResetView(DjangoPasswordResetView):
     template_name = 'auth/password_reset.html'
     form_class = PasswordResetForm
     success_url = reverse_lazy('accounts:password_reset_done')
+    email_template_name = 'auth/password_reset_email.html'
+    subject_template_name = 'auth/password_reset_subject.txt'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Override the default password_reset_confirm URL to use namespaced version
+        context['protocol'] = 'https' if self.request.is_secure() else 'http'
+        context['domain'] = self.request.get_host()
+        return context
 
 
 class CustomPasswordResetConfirmView(DjangoPasswordResetConfirmView):

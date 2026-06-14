@@ -1,0 +1,471 @@
+/**
+ * ========================================
+ * AUTHENTICATION PAGES STYLES
+ * Modern, Professional Authentication UI
+ * ======================================== */
+
+/* ========================================
+ * BASE VARIABLES
+ * ======================================== */
+
+:root {
+  --auth-primary: #667eea;
+  --auth-primary-dark: #5568d3;
+  --auth-secondary: #764ba2;
+  --auth-success: #10b981;
+  --auth-success-dark: #059669;
+  --auth-gradient-start: #667eea;
+  --auth-gradient-end: #764ba2;
+  --auth-surface: #ffffff;
+  --auth-background: #f8fafc;
+  --auth-text-primary: #1e293b;
+  --auth-text-secondary: #64748b;
+  --auth-border: #e2e8f0;
+  --auth-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --auth-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --auth-radius: 0.75rem;
+  --auth-radius-lg: 1rem;
+  --auth-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ========================================
+ * AUTH PAGE LAYOUT
+ * ======================================== */
+
+.auth-page {
+  background: var(--auth-background);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.auth-page .container-fluid {
+  padding: 0;
+}
+
+/* Left Side - Branding Section */
+.auth-page .bg-gradient-primary {
+  background: linear-gradient(135deg, var(--auth-gradient-start) 0%, var(--auth-gradient-end) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Animated Background Pattern */
+.auth-page .bg-gradient-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+  animation: float 20s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  33% {
+    transform: translate(30px, -30px) rotate(120deg);
+  }
+  66% {
+    transform: translate(-20px, 20px) rotate(240deg);
+  }
+}
+
+.auth-page .bg-gradient-primary .text-white {
+  position: relative;
+  z-index: 1;
+}
+
+/* Feature Cards in Branding Section */
+.auth-page .bg-gradient-primary .card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: var(--auth-transition);
+}
+
+.auth-page .bg-gradient-primary .card:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-5px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.auth-page .bg-gradient-primary .card .display-6 {
+  opacity: 0.9;
+  transition: var(--auth-transition);
+}
+
+.auth-page .bg-gradient-primary .card:hover .display-6 {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+/* Right Side - Form Section */
+.auth-page .bg-light {
+  background: var(--auth-background);
+  position: relative;
+}
+
+/* Form Container */
+.auth-container {
+  animation: slideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ========================================
+ * FORM STYLES
+ * ======================================== */
+
+.form-control {
+  border: 2px solid var(--auth-border);
+  border-radius: var(--auth-radius);
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  transition: var(--auth-transition);
+  background-color: var(--auth-surface);
+}
+
+.form-control:focus {
+  border-color: var(--auth-primary);
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  background-color: var(--auth-surface);
+}
+
+.form-control::placeholder {
+  color: var(--auth-text-secondary);
+}
+
+.input-group .form-control {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.input-group .btn {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  background: var(--auth-surface);
+  border: 2px solid var(--auth-border);
+  border-left: none;
+  color: var(--auth-text-secondary);
+}
+
+.input-group .btn:hover {
+  background: var(--auth-background);
+  color: var(--auth-text-primary);
+}
+
+/* Form Labels */
+.form-label {
+  color: var(--auth-text-primary);
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.form-label i {
+  color: var(--auth-primary);
+}
+
+/* ========================================
+ * BUTTON STYLES
+ * ======================================== */
+
+.btn {
+  border-radius: var(--auth-radius);
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  transition: var(--auth-transition);
+  border: none;
+}
+
+.btn-lg {
+  padding: 1rem 2rem;
+  font-size: 1.125rem;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--auth-gradient-start) 0%, var(--auth-gradient-end) 100%);
+  box-shadow: 0 4px 6px -1px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 12px -2px rgba(102, 126, 234, 0.5);
+  background: linear-gradient(135deg, var(--auth-primary-dark) 0%, var(--auth-secondary) 100%);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, var(--auth-success) 0%, #34d399 100%);
+  box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.4);
+}
+
+.btn-success:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 12px -2px rgba(16, 185, 129, 0.5);
+  background: linear-gradient(135deg, var(--auth-success-dark) 0%, #10b981 100%);
+}
+
+.btn-outline-secondary {
+  border: 2px solid var(--auth-border);
+  color: var(--auth-text-secondary);
+  background: transparent;
+}
+
+.btn-outline-secondary:hover {
+  background: var(--auth-background);
+  border-color: var(--auth-text-secondary);
+  color: var(--auth-text-primary);
+}
+
+/* ========================================
+ * ALERT STYLES
+ * ======================================== */
+
+.alert {
+  border: none;
+  border-radius: var(--auth-radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--auth-shadow);
+}
+
+.alert-danger {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border-left: 4px solid #ef4444;
+}
+
+.alert-info {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-left: 4px solid #3b82f6;
+}
+
+.alert i {
+  font-size: 1.25rem;
+}
+
+/* ========================================
+ * TEXT STYLES
+ * ======================================== */
+
+.auth-page h2 {
+  color: var(--auth-text-primary);
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.auth-page .text-muted {
+  color: var(--auth-text-secondary) !important;
+}
+
+.auth-page .text-decoration-none {
+  color: var(--auth-primary);
+  font-weight: 600;
+  transition: var(--auth-transition);
+}
+
+.auth-page .text-decoration-none:hover {
+  color: var(--auth-primary-dark);
+  text-decoration: underline;
+}
+
+.fw-semibold {
+  font-weight: 600;
+}
+
+/* ========================================
+ * CHECKBOX STYLES
+ * ======================================== */
+
+.form-check-input {
+  border: 2px solid var(--auth-border);
+  border-radius: 0.375rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  cursor: pointer;
+  transition: var(--auth-transition);
+}
+
+.form-check-input:checked {
+  background-color: var(--auth-primary);
+  border-color: var(--auth-primary);
+}
+
+.form-check-input:focus {
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+}
+
+.form-check-label {
+  color: var(--auth-text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: var(--auth-transition);
+}
+
+.form-check-label:hover {
+  color: var(--auth-text-primary);
+}
+
+/* ========================================
+ * RESPONSIVE DESIGN
+ * ======================================== */
+
+/* Mobile Logo */
+.auth-page .d-lg-none h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--auth-primary);
+  margin-bottom: 1.5rem;
+}
+
+/* Tablet Adjustments */
+@media (max-width: 991.98px) {
+  .auth-page .bg-light {
+    padding: 2rem 1rem;
+  }
+  
+  .auth-container {
+    max-width: 100%;
+  }
+  
+  .auth-page .display-3 {
+    font-size: 2.5rem;
+  }
+}
+
+/* Mobile Adjustments */
+@media (max-width: 767.98px) {
+  .auth-page .form-control,
+  .auth-page .btn {
+    font-size: 1rem;
+  }
+  
+  .auth-page .btn-lg {
+    padding: 0.875rem 1.5rem;
+    font-size: 1rem;
+  }
+  
+  .auth-page .alert {
+    padding: 0.875rem 1rem;
+  }
+}
+
+/* Small Mobile */
+@media (max-width: 575.98px) {
+  .auth-page .bg-light {
+    padding: 1rem;
+  }
+  
+  .auth-page h2 {
+    font-size: 1.5rem;
+  }
+  
+  .auth-page .display-6 {
+    font-size: 2rem;
+  }
+}
+
+/* ========================================
+ * UTILITY CLASSES
+ * ======================================== */
+
+/* Glass Effect */
+.auth-glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Modern Shadows */
+.auth-shadow {
+  box-shadow: var(--auth-shadow);
+}
+
+.auth-shadow-lg {
+  box-shadow: var(--auth-shadow-lg);
+}
+
+/* Gradient Text */
+.auth-gradient-text {
+  background: linear-gradient(135deg, var(--auth-gradient-start) 0%, var(--auth-gradient-end) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ========================================
+ * ANIMATIONS
+ * ======================================== */
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.pulse-soft {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(to right, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.3) 50%, 
+    transparent 100%);
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* ========================================
+ * FOCUS STYLES
+ * ======================================== */
+
+.btn:focus,
+.form-control:focus,
+.form-check-input:focus {
+  outline: none;
+}
+
+/* ========================================
+ * PRINT STYLES
+ * ======================================== */
+
+@media print {
+  .auth-page .bg-gradient-primary {
+    background: var(--auth-text-primary);
+    color: white;
+  }
+  
+  .auth-page .bg-light {
+    background: white;
+  }
+}

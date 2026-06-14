@@ -1,23 +1,8 @@
 """
-URL configuration for accounts app.
-
-This file contains both API and template-based URL patterns.
+Template URL configuration for accounts app.
 """
 
 from django.urls import path
-from rest_framework_simplejwt.views import TokenRefreshView
-
-# API Views
-from apps.accounts.views import (
-    RegisterView,
-    CustomTokenObtainPairView,
-    UserProfileView,
-    ChangePasswordView,
-    user_me,
-    logout,
-)
-
-# Template Views
 from apps.accounts.views_template import (
     LoginView as TemplateLoginView,
     RegistrationView as TemplateRegisterView,
@@ -34,19 +19,7 @@ from apps.common.views_placeholder import placeholder_view
 
 app_name = "accounts"
 
-# API URL Patterns
-api_urlpatterns = [
-    path("register/", RegisterView.as_view(), name="api_register"),
-    path("login/", CustomTokenObtainPairView.as_view(), name="api_login"),
-    path("token/refresh/", TokenRefreshView.as_view(), name="api_token_refresh"),
-    path("logout/", logout, name="api_logout"),
-    path("me/", user_me, name="api_user_me"),
-    path("profile/", UserProfileView.as_view(), name="api_profile"),
-    path("change-password/", ChangePasswordView.as_view(), name="api_change_password"),
-]
-
-# Template URL Patterns
-template_urlpatterns = [
+urlpatterns = [
     path("login/", TemplateLoginView.as_view(), name="login"),
     path("register/", TemplateRegisterView.as_view(), name="register"),
     path("logout/", TemplateLogoutView.as_view(), name="logout"),
@@ -60,6 +33,3 @@ template_urlpatterns = [
     path("password-reset/confirm/<uidb64>/<token>/", TemplatePasswordResetConfirmView.as_view(), name="password_reset_confirm"),
     path("password-reset/complete/", TemplatePasswordResetCompleteView.as_view(), name="password_reset_complete"),
 ]
-
-# For main auth routes, use template patterns
-urlpatterns = template_urlpatterns

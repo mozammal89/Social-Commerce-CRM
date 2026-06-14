@@ -1,0 +1,426 @@
+/**
+ * ========================================
+ * PROFILE PAGE STYLES
+ * Modern, Professional Profile UI
+ * ======================================== */
+
+/* ========================================
+ * BASE VARIABLES
+ * ======================================== */
+
+:root {
+  --profile-primary: #667eea;
+  --profile-primary-dark: #5568d3;
+  --profile-secondary: #764ba2;
+  --profile-success: #10b981;
+  --profile-warning: #f59e0b;
+  --profile-danger: #ef4444;
+  --profile-surface: #ffffff;
+  --profile-background: #f8fafc;
+  --profile-text-primary: #1e293b;
+  --profile-text-secondary: #64748b;
+  --profile-border: #e2e8f0;
+  --profile-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --profile-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --profile-radius: 0.75rem;
+  --profile-radius-lg: 1rem;
+  --profile-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ========================================
+ * PROFILE PAGE LAYOUT
+ * ======================================== */
+
+.profile-page {
+  background: var(--profile-background);
+  min-height: 100vh;
+  padding-top: 0;
+}
+
+.profile-page .container-fluid {
+  padding: 2rem;
+}
+
+/* ========================================
+ * CARD STYLES
+ * ======================================== */
+
+.profile-page .card {
+  background: var(--profile-surface);
+  border: 1px solid var(--profile-border);
+  border-radius: var(--profile-radius-lg);
+  box-shadow: var(--profile-shadow);
+  transition: var(--profile-transition);
+  overflow: hidden;
+}
+
+.profile-page .card:hover {
+  box-shadow: var(--profile-shadow-lg);
+  transform: translateY(-2px);
+}
+
+.profile-page .card-header {
+  background: var(--profile-surface);
+  border-bottom: 2px solid var(--profile-border);
+  padding: 1.5rem;
+  font-weight: 700;
+  color: var(--profile-text-primary);
+}
+
+.profile-page .card-body {
+  padding: 1.5rem;
+}
+
+.profile-page .card.pt-0 {
+  padding-top: 0;
+}
+
+.profile-page .card-body.pt-0 {
+  padding-top: 0;
+}
+
+.profile-page .card.border-top {
+  border-top: 2px solid var(--profile-border);
+}
+
+/* ========================================
+ * PROFILE CARD STYLES
+ * ======================================== */
+
+.profile-page .card-body.text-center {
+  padding: 2rem;
+}
+
+/* Avatar Styles */
+.profile-page .rounded-circle {
+  border: 4px solid var(--profile-surface);
+  box-shadow: var(--profile-shadow-lg);
+  transition: var(--profile-transition);
+  object-fit: cover;
+}
+
+.profile-page .rounded-circle:hover {
+  transform: scale(1.05);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* Avatar Placeholder */
+.profile-page .bg-primary.text-white.rounded-circle {
+  background: linear-gradient(135deg, var(--profile-primary) 0%, var(--profile-secondary) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  font-weight: 700;
+  box-shadow: var(--profile-shadow-lg);
+}
+
+/* Profile Name */
+.profile-page .card-body.text-center h4 {
+  color: var(--profile-text-primary);
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.profile-page .card-body.text-center p {
+  color: var(--profile-text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+/* Badge Styles */
+.profile-page .badge.bg-primary {
+  background: linear-gradient(135deg, var(--profile-primary) 0%, var(--profile-secondary) 100%) !important;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 1rem;
+}
+
+/* ========================================
+ * BUTTON STYLES
+ * ======================================== */
+
+.profile-page .btn {
+  border-radius: var(--profile-radius);
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  transition: var(--profile-transition);
+  border: 2px solid transparent;
+}
+
+.profile-page .btn-outline-primary {
+  border-color: var(--profile-primary);
+  color: var(--profile-primary);
+  background: transparent;
+}
+
+.profile-page .btn-outline-primary:hover {
+  background: var(--profile-primary);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(102, 126, 234, 0.4);
+}
+
+.profile-page .btn-primary {
+  background: linear-gradient(135deg, var(--profile-primary) 0%, var(--profile-secondary) 100%);
+  border: none;
+}
+
+.profile-page .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(102, 126, 234, 0.4);
+  background: linear-gradient(135deg, var(--profile-primary-dark) 0%, var(--profile-secondary) 100%);
+}
+
+.profile-page .btn-outline-secondary {
+  border-color: var(--profile-border);
+  color: var(--profile-text-secondary);
+  background: transparent;
+}
+
+.profile-page .btn-outline-secondary:hover {
+  background: var(--profile-background);
+  border-color: var(--profile-text-secondary);
+  color: var(--profile-text-primary);
+}
+
+.profile-page .btn i {
+  font-size: 1.1rem;
+  vertical-align: text-bottom;
+}
+
+/* ========================================
+ * FORM STYLES
+ * ======================================== */
+
+.profile-page .form-control {
+  border: 2px solid var(--profile-border);
+  border-radius: var(--profile-radius);
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  transition: var(--profile-transition);
+  background-color: var(--profile-surface);
+}
+
+.profile-page .form-control:focus {
+  border-color: var(--profile-primary);
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  background-color: var(--profile-surface);
+}
+
+.profile-page .form-control::placeholder {
+  color: var(--profile-text-secondary);
+}
+
+.profile-page .form-label {
+  color: var(--profile-text-primary);
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+/* ========================================
+ * ACCOUNT SETTINGS CARD
+ * ======================================== */
+
+.profile-page .d-grid.gap-2 .btn {
+  text-align: left;
+  padding: 1rem 1.25rem;
+  border: 2px solid var(--profile-border);
+  border-radius: var(--profile-radius);
+  color: var(--profile-text-primary);
+  background: var(--profile-surface);
+  transition: var(--profile-transition);
+}
+
+.profile-page .d-grid.gap-2 .btn:hover {
+  border-color: var(--profile-primary);
+  background: rgba(102, 126, 234, 0.05);
+  transform: translateX(5px);
+}
+
+.profile-page .d-grid.gap-2 .btn i {
+  margin-right: 0.75rem;
+  color: var(--profile-primary);
+}
+
+/* ========================================
+ * ACCOUNT STATISTICS
+ * ======================================== */
+
+.profile-page .text-center h3 {
+  color: var(--profile-text-primary);
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.profile-page .text-center small {
+  color: var(--profile-text-secondary);
+  font-weight: 500;
+}
+
+/* ========================================
+ * MODAL STYLES
+ * ======================================== */
+
+.profile-page .modal-content {
+  border: none;
+  border-radius: var(--profile-radius-lg);
+  box-shadow: var(--profile-shadow-lg);
+}
+
+.profile-page .modal-header {
+  border-bottom: 2px solid var(--profile-border);
+  padding: 1.5rem;
+}
+
+.profile-page .modal-title {
+  font-weight: 700;
+  color: var(--profile-text-primary);
+}
+
+.profile-page .modal-body {
+  padding: 1.5rem;
+}
+
+/* ========================================
+ * RESPONSIVE DESIGN
+ * ======================================== */
+
+/* Desktop */
+@media (min-width: 992px) {
+  .profile-page .container-fluid {
+    padding: 2rem;
+  }
+}
+
+/* Tablet */
+@media (max-width: 991.98px) {
+  .profile-page .container-fluid {
+    padding: 1.5rem;
+  }
+  
+  .profile-page .card {
+    margin-bottom: 1.5rem;
+  }
+  
+  .profile-page .rounded-circle {
+    width: 120px !important;
+    height: 120px !important;
+  }
+}
+
+/* Mobile */
+@media (max-width: 767.98px) {
+  .profile-page .container-fluid {
+    padding: 1rem;
+  }
+  
+  .profile-page .card-body {
+    padding: 1rem;
+  }
+  
+  .profile-page .card-header {
+    padding: 1rem;
+  }
+  
+  .profile-page .rounded-circle {
+    width: 100px !important;
+    height: 100px !important;
+  }
+  
+  .profile-page .bg-primary.text-white.rounded-circle {
+    font-size: 2.5rem;
+  }
+}
+
+/* Small Mobile */
+@media (max-width: 575.98px) {
+  .profile-page .container-fluid {
+    padding: 0.75rem;
+  }
+  
+  .profile-page .btn {
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* ========================================
+ * UTILITY CLASSES
+ * ======================================== */
+
+/* Modern Shadows */
+.profile-shadow {
+  box-shadow: var(--profile-shadow);
+}
+
+.profile-shadow-lg {
+  box-shadow: var(--profile-shadow-lg);
+}
+
+/* Gradient Text */
+.profile-gradient-text {
+  background: linear-gradient(135deg, var(--profile-primary) 0%, var(--profile-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ========================================
+ * ANIMATIONS
+ * ======================================== */
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.profile-page .card {
+  animation: slideIn 0.4s ease-out;
+}
+
+.profile-page .col-lg-4 .card {
+  animation-delay: 0.1s;
+}
+
+.profile-page .col-lg-8 .card:nth-child(1) {
+  animation-delay: 0.2s;
+}
+
+.profile-page .col-lg-8 .card:nth-child(2) {
+  animation-delay: 0.3s;
+}
+
+/* ========================================
+ * FOCUS STYLES
+ * ======================================== */
+
+.profile-page .btn:focus,
+.profile-page .form-control:focus {
+  outline: none;
+}
+
+/* ========================================
+ * PRINT STYLES
+ * ======================================== */
+
+@media print {
+  .profile-page {
+    background: white;
+  }
+  
+  .profile-page .card {
+    box-shadow: none;
+    border: 1px solid #ddd;
+  }
+  
+  .profile-page .btn {
+    display: none;
+  }
+}

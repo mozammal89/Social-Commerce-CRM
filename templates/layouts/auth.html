@@ -1,41 +1,86 @@
 {% extends 'layouts/base.html' %}
 
-{% block title %}Login - {{ APP_NAME }}{% endblock %}
+{% block title %}{{ self.title }}{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+{% endblock %}
 
 {% block body_attributes %} class="auth-page"{% endblock %}
 
 {% block body %}
 <div class="container-fluid">
     <div class="row min-vh-100">
-        <div class="col-lg-6 d-none d-lg-block bg-gradient-primary d-flex align-items-center justify-content-center">
+        <!-- Left Side - Branding -->
+        <div class="col-lg-6 d-none d-lg-block bg-gradient-primary d-flex align-items-center justify-content-center position-relative">
             <div class="text-white text-center p-5">
-                <h1 class="display-3 fw-bold mb-4">🛍️ {{ APP_NAME }}</h1>
-                <p class="lead mb-4">Manage your social commerce business with ease</p>
-                <div class="mt-5">
-                    <h3 class="mb-3">Features:</h3>
-                    <ul class="list-unstyled text-start d-inline-block">
-                        <li class="mb-2">📊 Real-time Analytics</li>
-                        <li class="mb-2">👥 Customer Management</li>
-                        <li class="mb-2">📦 Inventory Tracking</li>
-                        <li class="mb-2">💰 Payment Processing</li>
-                        <li>📱 Social Media Integration</li>
-                    </ul>
+                <h1 class="display-3 fw-bold mb-4">
+                    <i class="bi bi-shop me-3"></i>{{ APP_NAME }}
+                </h1>
+                <p class="lead mb-5">Manage your social commerce business with ease</p>
+                
+                <div class="row mt-5">
+                    <div class="col-md-6 mb-4">
+                        <div class="card bg-white bg-opacity-10 border-0 text-white">
+                            <div class="card-body">
+                                <div class="display-6 mb-3">
+                                    <i class="bi bi-graph-up-arrow"></i>
+                                </div>
+                                <h5 class="fw-semibold">Real-time Analytics</h5>
+                                <p class="small mb-0">Track sales, customers, and performance metrics</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="card bg-white bg-opacity-10 border-0 text-white">
+                            <div class="card-body">
+                                <div class="display-6 mb-3">
+                                    <i class="bi bi-people"></i>
+                                </div>
+                                <h5 class="fw-semibold">Customer Management</h5>
+                                <p class="small mb-0">Build relationships and manage customer data</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="card bg-white bg-opacity-10 border-0 text-white">
+                            <div class="card-body">
+                                <div class="display-6 mb-3">
+                                    <i class="bi bi-box-seam"></i>
+                                </div>
+                                <h5 class="fw-semibold">Inventory Tracking</h5>
+                                <p class="small mb-0">Monitor stock levels and product availability</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="card bg-white bg-opacity-10 border-0 text-white">
+                            <div class="card-body">
+                                <div class="display-6 mb-3">
+                                    <i class="bi bi-share"></i>
+                                </div>
+                                <h5 class="fw-semibold">Social Integration</h5>
+                                <p class="small mb-0">Connect and sell across multiple platforms</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-lg-6 d-flex align-items-center justify-content-center bg-light">
-            <div class="auth-container w-100" style="max-width: 450px;">
-                <div class="text-center mb-4">
-                    <h2 class="fw-bold">Welcome Back</h2>
-                    <p class="text-muted">Sign in to your account</p>
+        
+        <!-- Right Side - Auth Form -->
+        <div class="col-lg-6 d-flex align-items-center justify-content-center bg-light position-relative">
+            <div class="auth-container w-100 px-4" style="max-width: 480px;">
+                
+                <!-- Mobile Logo -->
+                <div class="text-center mb-4 d-lg-none">
+                    <h1 class="fw-bold text-primary">
+                        <i class="bi bi-shop me-2"></i>{{ APP_NAME }}
+                    </h1>
                 </div>
                 
                 {% block auth_content %}{% endblock %}
                 
-                <div class="text-center mt-4">
-                    <p class="mb-0">Don't have an account? <a href="{% url 'accounts:register' %}" class="text-decoration-none">Sign up</a></p>
-                    <p class="mb-0 mt-2"><a href="{% url 'accounts:password_reset' %}" class="text-decoration-none">Forgot password?</a></p>
-                </div>
             </div>
         </div>
     </div>
