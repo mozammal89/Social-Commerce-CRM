@@ -1,0 +1,104 @@
+{% load static %}
+
+{# =====================================================================
+   Auth layout v2 - new design system
+   Used by the redesigned auth pages. Pages can extend this and fill
+   the auth_content block.
+   ===================================================================== #}
+
+{% block title %}{{ block.super }}{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/auth-design-system.css' %}">
+{% endblock %}
+
+{% block body_attributes %} class="auth-page"{% endblock %}
+
+{% block body %}
+<div class="auth-wrapper">
+    {# ----- Branding panel (left, hidden on mobile) ----- #}
+    <aside class="auth-branding" aria-label="Product information">
+        <div class="branding-content">
+            <div>
+                <div class="branding-header">
+                    <span class="branding-logo" aria-hidden="true">
+                        <i class="bi bi-bag-check"></i>
+                    </span>
+                    <span class="branding-product">{{ APP_NAME }}</span>
+                </div>
+            </div>
+
+            <div>
+                <h1 class="branding-headline">
+                    Run your social commerce business with confidence.
+                </h1>
+                <p class="branding-subheadline">
+                    One workspace for orders, customers, inventory, and insights —
+                    built for modern sellers across every channel.
+                </p>
+
+                <ul class="branding-features">
+                    <li class="branding-feature">
+                        <span class="branding-feature__icon" aria-hidden="true">
+                            <i class="bi bi-graph-up-arrow"></i>
+                        </span>
+                        <div>
+                            <p class="branding-feature__title">Real-time analytics</p>
+                            <p class="branding-feature__desc">Track sales, customers, and channel performance as it happens.</p>
+                        </div>
+                    </li>
+                    <li class="branding-feature">
+                        <span class="branding-feature__icon" aria-hidden="true">
+                            <i class="bi bi-people"></i>
+                        </span>
+                        <div>
+                            <p class="branding-feature__title">Customer management</p>
+                            <p class="branding-feature__desc">A single, organized view of every customer and conversation.</p>
+                        </div>
+                    </li>
+                    <li class="branding-feature">
+                        <span class="branding-feature__icon" aria-hidden="true">
+                            <i class="bi bi-box-seam"></i>
+                        </span>
+                        <div>
+                            <p class="branding-feature__title">Inventory &amp; orders</p>
+                            <p class="branding-feature__desc">Monitor stock levels and fulfill orders from one place.</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="branding-trust" aria-label="Security and trust">
+                <span class="branding-trust__item">
+                    <i class="bi bi-shield-check" aria-hidden="true"></i> SOC 2 ready
+                </span>
+                <span class="branding-trust__item">
+                    <i class="bi bi-lock" aria-hidden="true"></i> Encrypted in transit
+                </span>
+                <span class="branding-trust__item">
+                    <i class="bi bi-globe" aria-hidden="true"></i> GDPR compliant
+                </span>
+            </div>
+        </div>
+    </aside>
+
+    {# ----- Form panel (right) ----- #}
+    <main class="auth-form-wrapper" role="main">
+        <div class="auth-form-card">
+            {# Mobile-only logo, hidden on desktop because the branding panel is visible #}
+            <div class="auth-mobile-logo d-lg-none">
+                <span class="auth-mobile-logo__mark" aria-hidden="true">
+                    <i class="bi bi-bag-check"></i>
+                </span>
+                <span>{{ APP_NAME }}</span>
+            </div>
+
+            {% block auth_content %}{% endblock %}
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'js/auth.js' %}" defer></script>
+{% endblock %}

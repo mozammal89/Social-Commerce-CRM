@@ -1,0 +1,15 @@
+{# Auth divider with label.
+   Usage:
+     {% include 'components/auth_sso.html' with providers=sso_providers label='or use email' %}
+#}
+<div class="auth-sso">
+    {% for provider in providers %}
+        <a href="{{ provider.url }}" class="btn btn-outline-primary btn--block">
+            {% if provider.icon %}<i class="bi bi-{{ provider.icon }} me-2" aria-hidden="true"></i>{% endif %}
+            {{ provider.label }}
+        </a>
+    {% endfor %}
+</div>
+{% if label %}
+<div class="auth-divider" role="separator"><span>{{ label }}</span></div>
+{% endif %}

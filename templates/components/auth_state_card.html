@@ -1,0 +1,20 @@
+{# Auth state card partial (success / warning / danger / info).
+   Usage:
+     {% include 'components/auth_state_card.html' with icon='check-circle' tone='success' title='...' body='...' %}
+#}
+{% if icon or title or body %}
+<section class="auth-card auth-card--state auth-card--narrow" {% if tone == 'danger' or tone == 'warning' %}role="alert"{% else %}role="status"{% endif %}>
+    {% if icon %}
+        <div class="state-icon state-icon--{{ tone|default:'info' }}" aria-hidden="true">
+            <i class="bi bi-{{ icon }}"></i>
+        </div>
+    {% endif %}
+
+    {% if title %}<h1 class="auth-card__title">{{ title }}</h1>{% endif %}
+    {% if body %}<p class="auth-card__subtitle">{{ body|safe }}</p>{% endif %}
+
+    <div class="auth-stack mt-3">
+        {{ content|default:"" }}
+    </div>
+</section>
+{% endif %}

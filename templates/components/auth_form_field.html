@@ -1,0 +1,58 @@
+{# Reusable auth form field partial (new design system).
+   Usage example: include this partial with a Django form field and optional
+   keyword arguments such as label, hint, autocomplete, inputmode, autofocus,
+   password, match_target, and strength. #}
+<div class="form-field">
+    <label for="{{ id|default:field.id_for_label }}" class="form-label">
+        {{ label|default:field.label }}{% if field.field.required %}<span class="text-danger ms-1" aria-hidden="true">*</span>{% endif %}
+    </label>
+
+    {% if password %}
+        <div class="input-group input-group--password">
+            <input
+                type="password"
+                name="{{ name|default:field.name }}"
+                id="{{ id|default:field.id_for_label }}"
+                class="form-control{% if field.errors %} is-invalid{% endif %}"
+                {% if autocomplete %}autocomplete="{{ autocomplete }}"{% endif %}
+                {% if inputmode %}inputmode="{{ inputmode }}"{% endif %}
+                {% if autofocus %}autofocus{% endif %}
+                {% if field.field.required %}required{% endif %}
+                {% if match_target %}data-match-target="{{ match_target }}"{% endif %}
+                {% if field.value %}value="{{ field.value }}"{% endif %}
+                aria-invalid="{% if field.errors %}true{% else %}false{% endif %}"
+            />
+            <button type="button" class="input-group__toggle" data-toggle="password" aria-pressed="false" aria-label="Show password">
+                <i class="bi bi-eye" data-show></i>
+                <i class="bi bi-eye-slash d-none" data-hide></i>
+            </button>
+        </div>
+
+        {% if strength %}
+            <div class="password-meter" role="meter" aria-label="Password strength">
+                <div class="password-meter__bar" data-strength-bar></div>
+            </div>
+            <p class="form-hint" data-strength-label
+               data-placeholder="{% if hint %}{{ hint }}{% else %}Use 8+ characters with a number and symbol{% endif %}"
+               aria-live="polite">
+                {% if hint %}{{ hint }}{% else %}Use 8+ characters with a number and symbol{% endif %}
+            </p>
+        {% elif hint %}
+            <p class="form-hint">{{ hint }}</p>
+        {% endif %}
+    {% else %}
+        {{ field }}
+        {% if hint %}<p class="form-hint">{{ hint }}</p>{% endif %}
+    {% endif %}
+
+    {% if match_target %}
+        <p class="form-hint" data-match-feedback aria-live="polite"></p>
+    {% endif %}
+
+    {% if field.errors %}
+        <p class="form-error" role="alert">
+            <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+            {{ field.errors|join:" " }}
+        </p>
+    {% endif %}
+</div>
