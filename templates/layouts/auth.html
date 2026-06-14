@@ -9,79 +9,85 @@
 {% block body_attributes %} class="auth-page"{% endblock %}
 
 {% block body %}
-<div class="container-fluid">
-    <div class="row min-vh-100">
-        <!-- Left Side - Branding -->
-        <div class="col-lg-6 d-none d-lg-block bg-gradient-primary d-flex align-items-center justify-content-center position-relative">
-            <div class="text-white text-center p-5">
-                <h1 class="display-3 fw-bold mb-4">
-                    <i class="bi bi-shop me-3"></i>{{ APP_NAME }}
-                </h1>
-                <p class="lead mb-5">Manage your social commerce business with ease</p>
-                
-                <div class="row mt-5">
-                    <div class="col-md-6 mb-4">
-                        <div class="card bg-white bg-opacity-10 border-0 text-white">
-                            <div class="card-body">
-                                <div class="display-6 mb-3">
-                                    <i class="bi bi-graph-up-arrow"></i>
-                                </div>
-                                <h5 class="fw-semibold">Real-time Analytics</h5>
-                                <p class="small mb-0">Track sales, customers, and performance metrics</p>
-                            </div>
-                        </div>
+<div class="auth-wrapper">
+    <!-- Left Side - Branding -->
+    <div class="auth-branding">
+        <div class="branding-content">
+            <h1 class="branding-title">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline; vertical-align: text-bottom; margin-right: 0.5rem;">
+                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <path d="M16 10a4 4 0 0 1-8 0"></path>
+                </svg>
+                {{ APP_NAME }}
+            </h1>
+            <p class="branding-subtitle">Manage your social commerce business with ease</p>
+
+            <div class="branding-features">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                            <polyline points="17 6 23 6 23 12"></polyline>
+                        </svg>
                     </div>
-                    <div class="col-md-6 mb-4">
-                        <div class="card bg-white bg-opacity-10 border-0 text-white">
-                            <div class="card-body">
-                                <div class="display-6 mb-3">
-                                    <i class="bi bi-people"></i>
-                                </div>
-                                <h5 class="fw-semibold">Customer Management</h5>
-                                <p class="small mb-0">Build relationships and manage customer data</p>
-                            </div>
-                        </div>
+                    <h5 class="feature-title">Real-time Analytics</h5>
+                    <p class="feature-desc">Track sales, customers, and performance metrics</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
                     </div>
-                    <div class="col-md-6 mb-4">
-                        <div class="card bg-white bg-opacity-10 border-0 text-white">
-                            <div class="card-body">
-                                <div class="display-6 mb-3">
-                                    <i class="bi bi-box-seam"></i>
-                                </div>
-                                <h5 class="fw-semibold">Inventory Tracking</h5>
-                                <p class="small mb-0">Monitor stock levels and product availability</p>
-                            </div>
-                        </div>
+                    <h5 class="feature-title">Customer Management</h5>
+                    <p class="feature-desc">Build relationships and manage customer data</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg>
                     </div>
-                    <div class="col-md-6 mb-4">
-                        <div class="card bg-white bg-opacity-10 border-0 text-white">
-                            <div class="card-body">
-                                <div class="display-6 mb-3">
-                                    <i class="bi bi-share"></i>
-                                </div>
-                                <h5 class="fw-semibold">Social Integration</h5>
-                                <p class="small mb-0">Connect and sell across multiple platforms</p>
-                            </div>
-                        </div>
+                    <h5 class="feature-title">Inventory Tracking</h5>
+                    <p class="feature-desc">Monitor stock levels and product availability</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="18" cy="5" r="3"></circle>
+                            <circle cx="6" cy="12" r="3"></circle>
+                            <circle cx="18" cy="19" r="3"></circle>
+                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                        </svg>
                     </div>
+                    <h5 class="feature-title">Social Integration</h5>
+                    <p class="feature-desc">Connect and sell across multiple platforms</p>
                 </div>
             </div>
         </div>
-        
-        <!-- Right Side - Auth Form -->
-        <div class="col-lg-6 d-flex align-items-center justify-content-center bg-light position-relative">
-            <div class="auth-container w-100 px-4" style="max-width: 480px;">
-                
-                <!-- Mobile Logo -->
-                <div class="text-center mb-4 d-lg-none">
-                    <h1 class="fw-bold text-primary">
-                        <i class="bi bi-shop me-2"></i>{{ APP_NAME }}
-                    </h1>
-                </div>
-                
-                {% block auth_content %}{% endblock %}
-                
+    </div>
+
+    <!-- Right Side - Auth Form -->
+    <div class="auth-form-wrapper">
+        <div class="auth-form-card">
+            <!-- Mobile Logo -->
+            <div class="auth-mobile-logo d-lg-none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline; vertical-align: text-bottom; margin-right: 0.5rem;">
+                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <path d="M16 10a4 4 0 0 1-8 0"></path>
+                </svg>
+                <span class="fw-bold">{{ APP_NAME }}</span>
             </div>
+
+            {% block auth_content %}{% endblock %}
         </div>
     </div>
 </div>
