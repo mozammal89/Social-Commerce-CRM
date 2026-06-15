@@ -1,208 +1,212 @@
 <!-- Sidebar Navigation -->
-<div class="sidebar bg-white border-end">
-    <!-- Sidebar Container with proper scrolling -->
+<div class="sidebar" x-data="{ open: false }">
+    <!-- Scrollable Content -->
     <div class="sidebar-content">
         <!-- User Profile Section -->
-        <div class="p-4 border-bottom">
-            <div class="d-flex align-items-center">
-                {% if user.avatar %}
-                    <img src="{{ user.avatar.url }}" class="rounded-circle me-3" alt="{{ user.email }}" width="48" height="48">
-                {% else %}
-                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
-                        {{ user.first_name|first }}{{ user.last_name|first }}
-                    </div>
-                {% endif %}
-                <div class="flex-grow-1">
-                    <div class="fw-bold">{{ user.get_full_name }}</div>
-                    <div class="text-muted small">{{ user.role|title }}</div>
+        <div class="sidebar-section">
+            <a href="{% url 'accounts:profile' %}" class="sidebar-nav-item" style="margin-bottom: var(--space-4);">
+                <div class="sidebar-nav-icon">
+                    {% if user.avatar %}
+                        <img src="{{ user.avatar.url }}" alt="{{ user.email }}" class="navbar-user-avatar">
+                    {% else %}
+                        <div class="navbar-user-avatar-placeholder">{{ user.first_name|first }}{{ user.last_name|first }}</div>
+                    {% endif %}
                 </div>
-            </div>
+                <div class="sidebar-nav-label">
+                    <div class="navbar-user-name" style="font-size: var(--font-size-sm);">{{ user.get_full_name }}</div>
+                    <div class="navbar-user-role" style="font-size: var(--font-size-xs);">{{ user.role|title }}</div>
+                </div>
+            </a>
         </div>
 
         <!-- Navigation Menu -->
-        <nav class="py-3">
-            <!-- Dashboard Section -->
-            <div class="px-3 mb-2">
-                <small class="text-uppercase fw-bold text-muted">Main</small>
+        <nav class="sidebar-nav">
+            <!-- Main Section -->
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">
+                    <i class="bi bi-grid"></i>
+                    <span>Main</span>
+                </div>
+                <a href="{% url 'dashboard:home' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'dashboard:home' %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-speedometer2"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Dashboard</span>
+                </a>
             </div>
-            <ul class="nav flex-column px-2">
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if request.resolver_match.url_name == 'dashboard:home' %}active{% endif %}" href="{% url 'dashboard:home' %}">
-                        <i class="bi bi-speedometer2 me-2"></i>
-                        <span>Dashboard</span>
-                    </a>
-                </li>
-            </ul>
 
             <!-- Account Section -->
-            <div class="px-3 mb-2 mt-4">
-                <small class="text-uppercase fw-bold text-muted">Account</small>
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">
+                    <i class="bi bi-person"></i>
+                    <span>Account</span>
+                </div>
+                <a href="{% url 'accounts:profile' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'accounts:profile' %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-person-circle"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Profile</span>
+                </a>
+                <a href="{% url 'accounts:change_password' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'accounts:change_password' %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-key"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Change Password</span>
+                </a>
             </div>
-            <ul class="nav flex-column px-2">
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if request.resolver_match.url_name == 'accounts:profile' %}active{% endif %}" href="{% url 'accounts:profile' %}">
-                        <i class="bi bi-person me-2"></i>
-                        <span>Profile</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if request.resolver_match.url_name == 'accounts:change_password' %}active{% endif %}" href="{% url 'accounts:change_password' %}">
-                        <i class="bi bi-key me-2"></i>
-                        <span>Change Password</span>
-                    </a>
-                </li>
-            </ul>
 
             <!-- CRM Section -->
-            <div class="px-3 mb-2 mt-4">
-                <small class="text-uppercase fw-bold text-muted">CRM</small>
-            </div>
-            <ul class="nav flex-column px-2">
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if 'customers' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'customers:list' %}">
-                        <i class="bi bi-people me-2"></i>
-                        <span>Customers</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if 'products' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'products:list' %}">
-                        <i class="bi bi-box me-2"></i>
-                        <span>Products</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if 'orders' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'orders:list' %}">
-                        <i class="bi bi-cart3 me-2"></i>
-                        <span>Orders</span>
-                    </a>
-                </li>
-            </ul>
-
-            <!-- Marketing Section -->
-            <div class="px-3 mb-2 mt-4">
-                <small class="text-uppercase fw-bold text-muted">Marketing</small>
-            </div>
-            <div x-data="{ marketingOpen: false }">
-                <a href="#" class="nav-link d-flex align-items-center justify-content-between px-3" @click.prevent="marketingOpen = !marketingOpen">
-                    <span><i class="bi bi-megaphone me-2"></i>Marketing</span>
-                    <i class="bi" :class="marketingOpen ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">
+                    <i class="bi bi-briefcase"></i>
+                    <span>CRM</span>
+                </div>
+                <a href="{% url 'customers:list' %}" class="sidebar-nav-item {% if 'customers' in request.resolver_match.url_name %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-people"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Customers</span>
                 </a>
-                <ul x-show="marketingOpen" x-transition style="display: none;">
-                    <li>
-                        <a class="nav-link ps-5 {% if 'campaigns' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'marketing:campaigns' %}">
-                            Campaigns
+                <a href="{% url 'products:list' %}" class="sidebar-nav-item {% if 'products' in request.resolver_match.url_name %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-box"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Products</span>
+                </a>
+                <a href="{% url 'orders:list' %}" class="sidebar-nav-item {% if 'orders' in request.resolver_match.url_name %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-cart3"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Orders</span>
+                </a>
+            </div>
+
+            <!-- Marketing Section (Collapsible) -->
+            <div class="sidebar-section" x-data="{ marketingOpen: false }">
+                <button class="sidebar-nav-item" @click="marketingOpen = !marketingOpen" style="width: 100%; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: var(--space-3);">
+                        <div class="sidebar-nav-icon">
+                            <i class="bi bi-megaphone"></i>
+                        </div>
+                        <span class="sidebar-nav-label">Marketing</span>
+                    </div>
+                    <i class="bi" :class="marketingOpen ? 'bi-chevron-up' : 'bi-chevron-down'" style="font-size: var(--font-size-xs);"></i>
+                </button>
+                <div x-show="marketingOpen" x-transition style="display: none;">
+                    <div style="padding-left: var(--space-8); margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1);">
+                        <a href="{% url 'marketing:campaigns' %}" class="sidebar-nav-item {% if 'campaigns' in request.resolver_match.url_name %}active{% endif %}">
+                            <span class="sidebar-nav-label">Campaigns</span>
                         </a>
-                    </li>
-                    <li>
-                        <a class="nav-link ps-5 {% if 'promotions' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'marketing:promotions' %}">
-                            Promotions
+                        <a href="{% url 'marketing:promotions' %}" class="sidebar-nav-item {% if 'promotions' in request.resolver_match.url_name %}active{% endif %}">
+                            <span class="sidebar-nav-label">Promotions</span>
                         </a>
-                    </li>
-                    <li>
-                        <a class="nav-link ps-5 {% if 'analytics' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'marketing:analytics' %}">
-                            Analytics
+                        <a href="{% url 'marketing:analytics' %}" class="sidebar-nav-item {% if 'analytics' in request.resolver_match.url_name %}active{% endif %}">
+                            <span class="sidebar-nav-label">Analytics</span>
                         </a>
-                    </li>
-                </ul>
+                    </div>
+                </div>
             </div>
 
             <!-- Reports Section -->
-            <div class="px-3 mb-2 mt-4">
-                <small class="text-uppercase fw-bold text-muted">Reports</small>
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">
+                    <i class="bi bi-bar-chart"></i>
+                    <span>Reports</span>
+                </div>
+                <a href="{% url 'reports:sales' %}" class="sidebar-nav-item {% if 'sales' in request.resolver_match.url_name %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-currency-dollar"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Sales Reports</span>
+                </a>
+                <a href="{% url 'reports:customers' %}" class="sidebar-nav-item {% if 'customers' in request.resolver_match.url_name and request.resolver_match.app_name == 'reports' %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-graph-up"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Customer Reports</span>
+                </a>
+                <a href="{% url 'reports:products' %}" class="sidebar-nav-item {% if 'products' in request.resolver_match.url_name and request.resolver_match.app_name == 'reports' %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-pie-chart"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Product Reports</span>
+                </a>
             </div>
-            <ul class="nav flex-column px-2">
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if 'sales' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'reports:sales' %}">
-                        <i class="bi bi-bar-chart me-2"></i>
-                        <span>Sales Reports</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if 'customers' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'reports:customers' %}">
-                        <i class="bi bi-graph-up me-2"></i>
-                        <span>Customer Reports</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if 'products' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'reports:products' %}">
-                        <i class="bi bi-pie-chart me-2"></i>
-                        <span>Product Reports</span>
-                    </a>
-                </li>
-            </ul>
 
             <!-- Settings Section -->
-            <div class="px-3 mb-2 mt-4">
-                <small class="text-uppercase fw-bold text-muted">Settings</small>
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">
+                    <i class="bi bi-gear"></i>
+                    <span>Settings</span>
+                </div>
+                <a href="{% url 'settings:store' %}" class="sidebar-nav-item {% if 'store' in request.resolver_match.url_name and request.resolver_match.app_name == 'settings' %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-shop"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Store Settings</span>
+                </a>
+                <a href="{% url 'settings:team' %}" class="sidebar-nav-item {% if 'team' in request.resolver_match.url_name %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-people"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Team Management</span>
+                </a>
+                <a href="{% url 'settings:integrations' %}" class="sidebar-nav-item {% if 'integrations' in request.resolver_match.url_name %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-plug"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Integrations</span>
+                </a>
+                <a href="{% url 'settings:billing' %}" class="sidebar-nav-item {% if 'billing' in request.resolver_match.url_name %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-credit-card"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Billing</span>
+                </a>
             </div>
-            <ul class="nav flex-column px-2">
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if 'store' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'settings:store' %}">
-                        <i class="bi bi-shop me-2"></i>
-                        <span>Store Settings</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if 'team' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'settings:team' %}">
-                        <i class="bi bi-people me-2"></i>
-                        <span>Team Management</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if 'integrations' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'settings:integrations' %}">
-                        <i class="bi bi-plug me-2"></i>
-                        <span>Integrations</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if 'billing' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'settings:billing' %}">
-                        <i class="bi bi-credit-card me-2"></i>
-                        <span>Billing</span>
-                    </a>
-                </li>
-            </ul>
 
             <!-- Help Section -->
-            <div class="px-3 mb-2 mt-4">
-                <small class="text-uppercase fw-bold text-muted">Help</small>
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">
+                    <i class="bi bi-question-circle"></i>
+                    <span>Help</span>
+                </div>
+                <a href="{% url 'help:documentation' %}" class="sidebar-nav-item {% if 'documentation' in request.resolver_match.url_name %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-book"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Documentation</span>
+                </a>
+                <a href="{% url 'help:support' %}" class="sidebar-nav-item {% if 'support' in request.resolver_match.url_name %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-life-preserver"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Support</span>
+                </a>
             </div>
-            <ul class="nav flex-column px-2">
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if 'documentation' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'help:documentation' %}">
-                        <i class="bi bi-book me-2"></i>
-                        <span>Documentation</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center {% if 'support' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'help:support' %}">
-                        <i class="bi bi-life-preserver me-2"></i>
-                        <span>Support</span>
-                    </a>
-                </li>
-            </ul>
         </nav>
+    </div>
 
-        <!-- Sidebar Footer -->
-        <div class="sidebar-footer p-4 border-top">
-            <div class="d-grid gap-2">
-                <a href="{% url 'help:support' %}" class="btn btn-outline-primary btn-sm">
-                    <i class="bi bi-question-circle me-2"></i>Get Help
-                </a>
-                <a href="{% url 'accounts:logout' %}" class="btn btn-outline-danger btn-sm">
-                    <i class="bi bi-box-arrow-right me-2"></i>Logout
-                </a>
-            </div>
-        </div>
+    <!-- Sidebar Footer -->
+    <div class="sidebar-footer">
+        <a href="{% url 'help:support' %}" class="btn btn-ghost btn-sm" style="width: 100%; margin-bottom: var(--space-2);">
+            <i class="bi bi-question-circle"></i>
+            <span>Get Help</span>
+        </a>
+        <a href="{% url 'accounts:logout' %}" class="btn btn-ghost btn-sm" style="width: 100%; color: var(--danger-600);">
+            <i class="bi bi-box-arrow-right"></i>
+            <span>Logout</span>
+        </a>
     </div>
 </div>
 
 <!-- Sidebar Overlay for Mobile -->
-<div class="sidebar-overlay d-lg-none"
-     x-show="sidebarOpen" 
+<div class="sidebar-overlay"
+     x-show="sidebarOpen"
      x-transition:enter="transition ease-out duration-300"
      x-transition:enter-start="opacity-0"
      x-transition:enter-end="opacity-100"
-     x-transition:leave="transition ease-in duration-300"
+     x-transition:leave="transition ease-in duration-200"
      x-transition:leave-start="opacity-100"
      x-transition:leave-end="opacity-0"
      @click="sidebarOpen = false"

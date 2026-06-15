@@ -4,19 +4,18 @@
 
 {% block body_attributes %}
 class="dashboard-page"
-x-data="{ 
-    sidebarOpen: window.innerWidth > 991 
+x-data="{
+    sidebarOpen: window.innerWidth > 991,
+    init() {
+        window.addEventListener('resize', () => {
+            const wasOpen = this.sidebarOpen;
+            this.sidebarOpen = window.innerWidth > 991;
+            if (wasOpen !== this.sidebarOpen) {
+                window.dispatchEvent(new CustomEvent('sidebar-state-changed', { isOpen: this.sidebarOpen }));
+            }
+        });
+    }
 }"
-x-init="
-    window.addEventListener('resize', () => {
-        const wasOpen = this.sidebarOpen;
-        this.sidebarOpen = window.innerWidth > 991;
-        if (wasOpen !== this.sidebarOpen) {
-            $dispatch('sidebar-state-changed', { isOpen: this.sidebarOpen });
-            $dispatch('sidebar-resize');
-        }
-    });
-"
 {% endblock %}
 
 {% block body %}
@@ -27,22 +26,31 @@ x-init="
 <div class="d-flex" :class="{ 'sidebar-open': sidebarOpen }">
     <!-- Sidebar -->
     {% include 'components/sidebar.html' %}
-    
-<!-- Main Content Area -->
-<div class="flex-grow-1" id="main-content-area">
-    <!-- Content Container -->
-    <div class="content-container p-4">
+
+    <!-- Main Content Area -->
+    <div id="main-content-area">
         <!-- Breadcrumbs -->
         {% include 'components/breadcrumbs.html' %}
-        
+
         <!-- Page Content -->
-        {% block content %}{% endblock %}
+        <div class="content-container">
+            {% block content %}{% endblock %}
+        </div>
+
+        <!-- Footer -->
+        {% include 'components/footer.html' %}
     </div>
-    
-    <!-- Footer -->
-    {% include 'components/footer.html' %}
-</div>
 </div>
 
-{% block extra_bottom_content %}{% endblock %}
+<!-- Alpine.js Sidebar Toggle Script -->
+<script>
+document.addEventListener('alpine:init', () => {
+    // Listen for sidebar toggle events
+    document.addEventListener('sidebar-open', () => {
+        Alpine.store('sidebar', { open: true });
+    });
+});
+</script>
 {% endblock %}
+
+{% block extra_bottom_content %}{% endblock %}
