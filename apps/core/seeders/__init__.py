@@ -35,12 +35,23 @@ def get_all_seeders():
     from . import orders
     from . import stores
 
+    from apps.permissions.seeders import (
+        features_seeder,
+        plans_seeder,
+        roles_seeder,
+        permissions_seeder,
+    )
+
     return {
         "accounts": accounts.AccountSeeder,
         "customers": customers.CustomerSeeder,
         "products": products.ProductSeeder,
         "orders": orders.OrderSeeder,
         "stores": stores.StoreSeeder,
+        "features": features_seeder.FeaturesSeeder,
+        "plans": plans_seeder.PlansSeeder,
+        "roles": roles_seeder.RolesSeeder,
+        "role-permissions": permissions_seeder.RolePermissionsSeeder,
     }
 
 

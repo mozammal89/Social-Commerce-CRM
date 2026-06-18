@@ -1,3 +1,4 @@
+{% load rbac %}
 <!-- Sidebar Navigation -->
 <div class="sidebar" x-data="{ open: false }">
     <!-- Scrollable Content -->
@@ -14,7 +15,7 @@
                 </div>
                 <div class="sidebar-nav-label">
                     <div class="navbar-user-name" style="font-size: var(--font-size-sm);">{{ user.get_full_name }}</div>
-                    <div class="navbar-user-role" style="font-size: var(--font-size-xs);">{{ user.role|title }}</div>
+                    <div class="navbar-user-role" style="font-size: var(--font-size-xs);">{% user_role current_store %}</div>
                 </div>
             </a>
         </div>
@@ -22,6 +23,7 @@
         <!-- Navigation Menu -->
         <nav class="sidebar-nav">
             <!-- Main Section -->
+            {% can "dashboard.view" %}
             <div class="sidebar-section">
                 <div class="sidebar-section-title">
                     <i class="bi bi-grid"></i>
@@ -34,6 +36,7 @@
                     <span class="sidebar-nav-label">Dashboard</span>
                 </a>
             </div>
+            {% endcan %}
 
             <!-- Account Section -->
             <div class="sidebar-section">
@@ -56,32 +59,46 @@
             </div>
 
             <!-- CRM Section -->
+            {% can_any "customers.view" "products.view" "orders.view" as show_crm %}
+            {% if show_crm %}
             <div class="sidebar-section">
                 <div class="sidebar-section-title">
                     <i class="bi bi-briefcase"></i>
                     <span>CRM</span>
                 </div>
+                {% can "customers.view" %}
                 <a href="{% url 'customers:list' %}" class="sidebar-nav-item {% if 'customers' in request.resolver_match.url_name %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-people"></i>
                     </div>
                     <span class="sidebar-nav-label">Customers</span>
                 </a>
+                {% endcan %}
+                {% can "products.view" %}
                 <a href="{% url 'products:list' %}" class="sidebar-nav-item {% if 'products' in request.resolver_match.url_name %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-box"></i>
                     </div>
                     <span class="sidebar-nav-label">Products</span>
                 </a>
+                {% endcan %}
+                {% can "orders.view" %}
                 <a href="{% url 'orders:list' %}" class="sidebar-nav-item {% if 'orders' in request.resolver_match.url_name %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-cart3"></i>
                     </div>
                     <span class="sidebar-nav-label">Orders</span>
                 </a>
+                {% endcan %}
             </div>
+            {% endif %}
 
-            <!-- Marketing Section (Collapsible) -->
+            <!-- Marketing Section (Collapsible, feature-gated) -->
+            {% can_any "campaigns.view" "promo_codes.view" as show_marketing %}
+            {% has_feature "marketing_campaigns" as has_marketing %}
+            {% has_feature "promo_codes" as has_promos %}
+            {% if show_marketing %}
+            {% if has_marketing or has_promos %}
             <div class="sidebar-section" x-data="{ marketingOpen: false }">
                 <button class="sidebar-nav-item" @click="marketingOpen = !marketingOpen" style="width: 100%; justify-content: space-between;">
                     <div style="display: flex; align-items: center; gap: var(--space-3);">
@@ -94,20 +111,31 @@
                 </button>
                 <div x-show="marketingOpen" x-transition style="display: none;">
                     <div style="padding-left: var(--space-8); margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1);">
+                        {% can "campaigns.view" %}
+                        {% if has_marketing %}
                         <a href="{% url 'marketing:campaigns' %}" class="sidebar-nav-item {% if 'campaigns' in request.resolver_match.url_name %}active{% endif %}">
                             <span class="sidebar-nav-label">Campaigns</span>
                         </a>
+                        {% endif %}
+                        {% endcan %}
+                        {% can "promo_codes.view" %}
                         <a href="{% url 'marketing:promotions' %}" class="sidebar-nav-item {% if 'promotions' in request.resolver_match.url_name %}active{% endif %}">
                             <span class="sidebar-nav-label">Promotions</span>
                         </a>
+                        {% endcan %}
+                        {% can "reports.view" %}
                         <a href="{% url 'marketing:analytics' %}" class="sidebar-nav-item {% if 'analytics' in request.resolver_match.url_name %}active{% endif %}">
                             <span class="sidebar-nav-label">Analytics</span>
                         </a>
+                        {% endcan %}
                     </div>
                 </div>
             </div>
+            {% endif %}
+            {% endif %}
 
             <!-- Reports Section -->
+            {% can "reports.view" %}
             <div class="sidebar-section">
                 <div class="sidebar-section-title">
                     <i class="bi bi-bar-chart"></i>
@@ -132,31 +160,42 @@
                     <span class="sidebar-nav-label">Product Reports</span>
                 </a>
             </div>
+            {% endcan %}
 
             <!-- Settings Section -->
+            {% can_any "settings.view" "settings.update" "employees.view" "roles.view" "integrations.view" as show_settings %}
+            {% if show_settings %}
             <div class="sidebar-section">
                 <div class="sidebar-section-title">
                     <i class="bi bi-gear"></i>
                     <span>Settings</span>
                 </div>
+                {% can_any "settings.view" "settings.update" as show_store_settings %}
+                {% if show_store_settings %}
                 <a href="{% url 'settings:store' %}" class="sidebar-nav-item {% if 'store' in request.resolver_match.url_name and request.resolver_match.app_name == 'settings' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-shop"></i>
                     </div>
                     <span class="sidebar-nav-label">Store Settings</span>
                 </a>
+                {% endif %}
+                {% can_any "employees.view" "roles.view" as show_team_settings %}
+                {% if show_team_settings %}
                 <a href="{% url 'settings:team' %}" class="sidebar-nav-item {% if 'team' in request.resolver_match.url_name %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-people"></i>
                     </div>
                     <span class="sidebar-nav-label">Team Management</span>
                 </a>
+                {% endif %}
+                {% can "integrations.view" %}
                 <a href="{% url 'settings:integrations' %}" class="sidebar-nav-item {% if 'integrations' in request.resolver_match.url_name %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-plug"></i>
                     </div>
                     <span class="sidebar-nav-label">Integrations</span>
                 </a>
+                {% endcan %}
                 <a href="{% url 'settings:billing' %}" class="sidebar-nav-item {% if 'billing' in request.resolver_match.url_name %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-credit-card"></i>
@@ -164,6 +203,7 @@
                     <span class="sidebar-nav-label">Billing</span>
                 </a>
             </div>
+            {% endif %}
 
             <!-- Help Section -->
             <div class="sidebar-section">

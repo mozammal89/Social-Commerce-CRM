@@ -128,7 +128,17 @@ Social-Commerce-CRM/
 │   ├── accounts/        # User authentication & management
 │   ├── stores/          # Multi-tenancy store management
 │   ├── common/          # Shared models & utilities
-│   └── core/            # Core functionality (health checks)
+│   ├── core/            # Core functionality (health checks)
+│   ├── customers/       # CRM customer records
+│   ├── products/        # Catalog
+│   ├── orders/          # Order management
+│   ├── marketing/       # Campaigns & promo codes
+│   ├── reports/         # Analytics
+│   ├── permissions/     # RBAC, roles, plans, audit logging
+│   ├── audit/           # Audit trail
+│   ├── settings/        # Store settings
+│   ├── help/            # Help / support content
+│   └── dashboard/       # Home dashboard
 ├── tests/                # Test suite
 ├── requirements/         # Python dependencies
 │   ├── base.txt         # Core dependencies
@@ -168,6 +178,19 @@ Social-Commerce-CRM/
 - Automatic tenant filtering
 - Soft delete support
 - Tenant ownership validation
+
+### Authorization & Permissions (`apps.permissions`)
+
+- 5-layer access control: Subscription plan → Store membership → Role → Permission override → Object-level
+- Single-source-of-truth permission registry; `sync_permissions` syncs the DB
+- System roles (Store Owner, Manager, Viewer, …) + per-store custom roles
+- DENY modifier wins over GRANT (privilege-escalation guard)
+- Subscription feature gating (Marketing campaigns, Multi-warehouse, …)
+- Append-only `AuditLog` for every role / membership / override change
+- Version-stamp cache invalidation (no need to enumerate Redis keys)
+- Template tags (`{% can %}`, `{% can_any %}`, `{% has_feature %}`), function-view decorators, CBV mixins, and DRF permission classes all share one resolver
+- JWT fast-path: RBAC claims embedded in access token, short-circuit when fresh
+- See `apps/permissions/README.md` for usage
 
 ### API Endpoints
 

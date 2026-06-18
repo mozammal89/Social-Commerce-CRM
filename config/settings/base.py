@@ -51,6 +51,7 @@ LOCAL_APPS = [
     "apps.common",
     "apps.core",
     "apps.dashboard",
+    "apps.permissions",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -63,9 +64,11 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.permissions.middleware.AuditContextMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",
+    "apps.permissions.middleware.HTMX403Middleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -83,11 +86,13 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "apps.common.context_processors.app_settings",
                 "apps.common.context_processors.current_store",
+                "apps.permissions.context_processors.rbac",
             ],
             "builtins": [
                 "django.templatetags.i18n",
                 "django.templatetags.static",
                 "django.templatetags.cache",
+                "apps.permissions.templatetags.rbac",
             ],
         },
     },
@@ -192,6 +197,7 @@ REST_FRAMEWORK = {
         "rest_framework.parsers.JSONParser",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "apps.permissions.exception_handler.rbac_exception_handler",
 }
 
 SIMPLE_JWT = {
