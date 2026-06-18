@@ -33,6 +33,7 @@ DJANGO_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.humanize",
     "django.contrib.postgres",
 ]
 
@@ -52,6 +53,7 @@ LOCAL_APPS = [
     "apps.core",
     "apps.dashboard",
     "apps.permissions",
+    "apps.permissions.ui",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -87,6 +89,8 @@ TEMPLATES = [
                 "apps.common.context_processors.app_settings",
                 "apps.common.context_processors.current_store",
                 "apps.permissions.context_processors.rbac",
+                "apps.permissions.ui.context_processors.role_permission_breadcrumbs",
+                "apps.permissions.ui.context_processors.role_permission_sidebar_extra",
             ],
             "builtins": [
                 "django.templatetags.i18n",

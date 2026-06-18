@@ -1,0 +1,63 @@
+{% extends "layouts/dashboard.html" %}
+{% load rbac %}
+
+{% block title %}Add member - {{ APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    {% include "components/messages.html" %}
+
+    <div class="row justify-content-center">
+        <div class="col-12 col-md-8 col-lg-6">
+            <div class="mb-4">
+                <h1 class="h3 mb-1">Add a member</h1>
+                <p class="text-muted mb-0">
+                    The user must already have an account. Assign a role to grant them access to
+                    {% if current_store %}{{ current_store.name }}{% else %}the store{% endif %}.
+                </p>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger" role="alert">
+                            {% for err in form.non_field_errors %}<p class="mb-0">{{ err }}</p>{% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <div class="mb-3">
+                            <label for="{{ form.email.id_for_label }}" class="form-label">Email *</label>
+                            {{ form.email }}
+                            <div class="form-text">Enter the email of an existing user.</div>
+                            {% if form.email.errors %}<div class="invalid-feedback d-block">{{ form.email.errors.0 }}</div>{% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.role.id_for_label }}" class="form-label">Role *</label>
+                            {{ form.role }}
+                            {% if form.role.errors %}<div class="invalid-feedback d-block">{{ form.role.errors.0 }}</div>{% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.expires_at.id_for_label }}" class="form-label">Expires at (optional)</label>
+                            {{ form.expires_at }}
+                            <div class="form-text">If set, the membership will auto-deactivate at this time.</div>
+                            {% if form.expires_at.errors %}<div class="invalid-feedback d-block">{{ form.expires_at.errors.0 }}</div>{% endif %}
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2 mt-4">
+                            <a href="{% url 'role_permission:member_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-person-plus me-1"></i> Add member
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

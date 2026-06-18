@@ -1,0 +1,116 @@
+{% extends "layouts/dashboard.html" %}
+{% load rbac %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Roles - {{ APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    {% include "components/messages.html" %}
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">
+                {% if is_superuser %}
+                    All roles
+                {% else %}
+                    Roles
+                    {% if current_store %}
+                        <span class="text-muted">in {{ current_store.name }}</span>
+                    {% endif %}
+                {% endif %}
+            </h1>
+            <p class="text-muted mb-0">
+                {% if is_superuser %}
+                    Superuser view: manage system roles and per-store custom roles.
+                {% else %}
+                    System roles are managed by platform admins. You can clone and customize per-store roles.
+                {% endif %}
+            </p>
+        </div>
+        {% if can_manage %}
+        <a href="{% url 'role_permission:role_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i> New role
+        </a>
+        {% endif %}
+    </div>
+
+    {# Filters #}
+    <form method="get" class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-{% if is_superuser %}4{% else %}6{% endif %}">
+                    <label for="q" class="visually-hidden">Search</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input
+                            id="q" name="q" type="search"
+                            value="{{ search_query }}"
+                            placeholder="Search by name or slug…"
+                            class="form-control"
+                            data-debounce="300" data-auto-submit
+                        />
+                    </div>
+                </div>
+                <div class="col-md-{% if is_superuser %}4{% else %}3{% endif %}">
+                    <label for="level" class="visually-hidden">Level</label>
+                    <select id="level" name="level" class="form-select" data-auto-submit>
+                        <option value="">All levels</option>
+                        {% for value, label in level_choices %}
+                        <option value="{{ value }}" {% if value|stringformat:"s" == level_filter %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% if is_superuser %}
+                <div class="col-md-4">
+                    <label for="store" class="visually-hidden">Store</label>
+                    <select id="store" name="store" class="form-select" data-auto-submit>
+                        <option value="">All stores</option>
+                        {% for store in admin_stores %}
+                        <option value="{{ store.id }}" {% if request.GET.store == store.id|stringformat:"s" %}selected{% endif %}>{{ store.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+
+    {% if not roles %}
+        <div class="card">
+            <div class="card-body">
+                {% if search_query or level_filter %}
+                    {% include "components/empty_state.html" with empty_state_icon="search" empty_state_title="No matches" empty_state_message="Try adjusting your filters to find what you're looking for." %}
+                {% else %}
+                    {% include "components/empty_state.html" with empty_state_icon="shield" empty_state_title="No roles yet" empty_state_message="Create your first custom role to start managing permissions." %}
+                {% endif %}
+                {% if can_manage and not search_query and not level_filter %}
+                <div class="text-center mt-3">
+                    <a href="{% url 'role_permission:role_create' %}" class="btn btn-primary">
+                        <i class="bi bi-plus-lg me-1"></i> Create role
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    {% else %}
+        <div class="row g-4" data-component="role-grid">
+            {% for role in roles %}
+            <div class="col-12 col-md-6 col-lg-4 col-xl-3">
+                {% include "role_permission/components/role_card.html" with role=role %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="mt-4">
+            {% include "components/pagination.html" %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_bottom_content %}
+{{ block.super }}
+<script type="module" src="{% static 'permissions/js/rp/app.js' %}"></script>
+{% endblock %}

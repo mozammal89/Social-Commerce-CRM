@@ -1,0 +1,48 @@
+{% extends "layouts/dashboard.html" %}
+{% load rbac %}
+
+{% block title %}Permission catalog - {{ APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    {% include "components/messages.html" %}
+
+    <div class="mb-4">
+        <h1 class="h3 mb-1">Permission catalog</h1>
+        <p class="text-muted mb-0">Read-only view of every permission registered in the system.</p>
+    </div>
+
+    {% for resource in resources %}
+    <details class="card mb-2 permission-group" open>
+        <summary class="card-header" style="cursor: pointer; list-style: none;">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="bi bi-chevron-right me-2" style="font-size: 0.8rem;"></i>
+                    <strong>{{ resource.name }}</strong>
+                    <span class="badge bg-light text-dark ms-2">{{ resource.category }}</span>
+                </div>
+                <span class="text-muted small">{{ resource.permissions.count }} actions</span>
+            </div>
+        </summary>
+        <div class="card-body">
+            {% if resource.description %}
+            <p class="text-muted small mb-3">{{ resource.description }}</p>
+            {% endif %}
+            <div class="row g-2">
+                {% for p in resource.permissions.all %}
+                <div class="col-12 col-md-6">
+                    {% include "role_permission/components/permission_row.html" with perm=p can_manage=False readonly=True %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </details>
+    {% empty %}
+    <div class="card">
+        <div class="card-body">
+            {% include "components/empty_state.html" with empty_state_icon="key" empty_state_title="No resources registered" empty_state_message="Resources are added by application code; run the seeders to register them." %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

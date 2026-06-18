@@ -1,0 +1,171 @@
+{% extends "layouts/dashboard.html" %}
+{% load rbac %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Members - {{ APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    {% include "components/messages.html" %}
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">
+                Members
+                {% if current_store %}
+                    <span class="text-muted">of {{ current_store.name }}</span>
+                {% endif %}
+            </h1>
+            <p class="text-muted mb-0">Manage who can access this store and what they can do.</p>
+        </div>
+        {% if can_manage %}
+        <a href="{% url 'role_permission:member_add' %}" class="btn btn-primary">
+            <i class="bi bi-person-plus me-1"></i> Add member
+        </a>
+        {% endif %}
+    </div>
+
+    <form method="get" class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label for="q" class="visually-hidden">Search</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input
+                            id="q" name="q" type="search"
+                            value="{{ search_query }}"
+                            placeholder="Search by name, email, or role…"
+                            class="form-control"
+                            data-debounce="300" data-auto-submit
+                        />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label for="role" class="visually-hidden">Role</label>
+                    <select id="role" name="role" class="form-select" data-auto-submit>
+                        <option value="">All roles</option>
+                        {% for r in available_roles %}
+                        <option value="{{ r.id }}" {% if role_filter == r.id|stringformat:"s" %}selected{% endif %}>{{ r.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="status" class="visually-hidden">Status</label>
+                    <select id="status" name="status" class="form-select" data-auto-submit>
+                        <option value="active" {% if status_filter == "active" %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if status_filter == "inactive" %}selected{% endif %}>Inactive</option>
+                        <option value="all" {% if status_filter == "all" %}selected{% endif %}>All</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    {% if not members %}
+        <div class="card">
+            <div class="card-body">
+                {% if search_query or role_filter or status_filter != "active" %}
+                    {% include "components/empty_state.html" with empty_state_icon="search" empty_state_title="No matches" empty_state_message="Try adjusting your filters." %}
+                {% else %}
+                    {% include "components/empty_state.html" with empty_state_icon="people" empty_state_title="No members yet" empty_state_message="Add the first member to start collaborating." %}
+                    {% if can_manage %}
+                    <div class="text-center mt-3">
+                        <a href="{% url 'role_permission:member_add' %}" class="btn btn-primary">
+                            <i class="bi bi-person-plus me-1"></i> Add member
+                        </a>
+                    </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    {% else %}
+        <div class="card border-0 shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" data-component="member-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Member</th>
+                            <th>Role</th>
+                            <th>Joined</th>
+                            <th>Status</th>
+                            {% if can_manage %}<th class="text-end">Actions</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for m in members %}
+                        <tr data-membership-id="{{ m.id }}" class="{% if not m.is_active %}text-muted{% endif %}">
+                            <td>
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center bg-primary-subtle text-primary fw-semibold"
+                                         style="width: 36px; height: 36px; flex-shrink: 0;">
+                                        {{ m.user.first_name|slice:":1"|upper|default:m.user.email|slice:":1"|upper }}
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="fw-semibold">
+                                            {% if m.user.get_full_name %}{{ m.user.get_full_name }}{% else %}{{ m.user.email }}{% endif %}
+                                        </div>
+                                        <div class="text-muted small">{{ m.user.email }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                {% if can_manage %}
+                                <select class="form-select form-select-sm member-role-select"
+                                        data-action="change-role"
+                                        data-membership-id="{{ m.id }}"
+                                        {% if not m.is_active %}disabled{% endif %}>
+                                    {% for r in available_roles %}
+                                    <option value="{{ r.id }}" {% if r.id == m.role.id %}selected{% endif %}>{{ r.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% else %}
+                                <span class="badge bg-primary-subtle text-primary-emphasis">{{ m.role.name }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <time datetime="{{ m.joined_at|date:'c' }}" title="{{ m.joined_at }}">
+                                    {{ m.joined_at|naturaltime }}
+                                </time>
+                                {% if m.expires_at %}
+                                <div class="text-muted small">expires {{ m.expires_at|date:"M j, Y" }}</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if m.is_active %}
+                                <span class="badge bg-success-subtle text-success-emphasis">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            {% if can_manage %}
+                            <td class="text-end">
+                                {% if m.is_active %}
+                                <button type="button" class="btn btn-sm btn-outline-danger"
+                                        data-action="deactivate-member"
+                                        data-membership-id="{{ m.id }}"
+                                        data-member-name="{{ m.user.email }}">
+                                    <i class="bi bi-person-x"></i> Deactivate
+                                </button>
+                                {% endif %}
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            {% include "components/pagination.html" %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_bottom_content %}
+{{ block.super }}
+<script type="module" src="{% static 'permissions/js/rp/member-list.js' %}"></script>
+{% endblock %}

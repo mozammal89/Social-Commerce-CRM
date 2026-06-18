@@ -1,0 +1,103 @@
+{% extends "layouts/dashboard.html" %}
+{% load rbac %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Audit log - {{ APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    {% include "components/messages.html" %}
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">
+                {% if is_superuser %}All activity{% else %}Activity{% endif %}
+            </h1>
+            <p class="text-muted mb-0">
+                Every change to roles, permissions, and members is recorded here.
+            </p>
+        </div>
+        {% if is_superuser %}
+        <a href="{% url 'role_permission:audit_export' %}?{{ request.GET.urlencode }}" class="btn btn-outline-secondary">
+            <i class="bi bi-download me-1"></i> Export CSV
+        </a>
+        {% endif %}
+    </div>
+
+    <form method="get" class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="action" class="form-label small text-muted text-uppercase">Action</label>
+                    <input id="action" name="action" type="text" value="{{ action_filter }}"
+                           placeholder="e.g. role.create" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label for="target_type" class="form-label small text-muted text-uppercase">Target type</label>
+                    <input id="target_type" name="target_type" type="text" value="{{ target_type_filter }}"
+                           placeholder="e.g. role" class="form-control" />
+                </div>
+                <div class="col-md-4 d-flex align-items-end gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-funnel me-1"></i> Filter
+                    </button>
+                    {% if action_filter or target_type_filter %}
+                    <a href="{% url 'role_permission:audit_log' %}" class="btn btn-outline-secondary">Clear</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </form>
+
+    {% if not events %}
+    <div class="card">
+        <div class="card-body">
+            {% include "components/empty_state.html" with empty_state_icon="journal" empty_state_title="No events yet" empty_state_message="Activity will appear here as changes are made." %}
+        </div>
+    </div>
+    {% else %}
+    <div class="card border-0 shadow-sm">
+        <div class="card-body" data-component="audit-timeline">
+            <ol class="list-unstyled mb-0">
+                {% for ev in events %}
+                <li class="d-flex gap-3 pb-3 {% if not forloop.last %}mb-3 border-bottom{% endif %}"
+                    data-event-id="{{ ev.id }}">
+                    <div class="text-muted small text-end" style="min-width: 100px; padding-top: 2px;">
+                        <time datetime="{{ ev.created_at|date:'c' }}" title="{{ ev.created_at }}">
+                            {{ ev.created_at|naturaltime }}
+                        </time>
+                    </div>
+                    <div class="rounded-circle bg-primary flex-shrink-0"
+                         style="width: 10px; height: 10px; margin-top: 6px;"></div>
+                    <div class="flex-grow-1 min-w-0">
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                            <span class="badge bg-{% if 'create' in ev.action %}success{% elif 'delete' in ev.action or 'deactivate' in ev.action %}danger{% elif 'update' in ev.action or 'toggle' in ev.action or 'change' in ev.action %}warning{% else %}info{% endif %}-subtle text-{% if 'create' in ev.action %}success{% elif 'delete' in ev.action or 'deactivate' in ev.action %}danger{% elif 'update' in ev.action or 'toggle' in ev.action or 'change' in ev.action %}warning{% else %}info{% endif %}-emphasis">
+                                {{ ev.action }}
+                            </span>
+                            <code class="small text-muted">{{ ev.target_type }}#{{ ev.target_id|truncatechars:8 }}</code>
+                        </div>
+                        <div class="d-flex flex-wrap gap-3 small text-muted">
+                            <span>by <strong class="text-dark">{% if ev.actor %}{{ ev.actor.email }}{% else %}<em>system</em>{% endif %}</strong></span>
+                            {% if ev.store %}<span>in {{ ev.store.name }}</span>{% endif %}
+                            {% if ev.ip_address %}<span><i class="bi bi-globe"></i> {{ ev.ip_address }}</span>{% endif %}
+                        </div>
+                        {% if ev.after %}
+                        <details class="mt-2">
+                            <summary class="text-primary small" style="cursor: pointer;">View details</summary>
+                            <pre class="bg-light p-2 rounded small mt-2 mb-0" style="max-height: 200px; overflow: auto;"><code>{{ ev.after|pprint }}</code></pre>
+                        </details>
+                        {% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ol>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        {% include "components/pagination.html" %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

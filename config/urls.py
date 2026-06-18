@@ -15,6 +15,7 @@ urlpatterns = [
     path("", home, name="home"),  # Home page (template-based)
     path("admin/", admin.site.urls),
     path("dashboard/", include("apps.dashboard.urls")),
+    path("dashboard/roles/", include(("apps.permissions.ui.urls", "role_permission"))),
     path("auth/", include("apps.accounts.urls")),  # Template-based auth
     path("customers/", include("apps.customers.urls")),
     path("products/", include("apps.products.urls")),

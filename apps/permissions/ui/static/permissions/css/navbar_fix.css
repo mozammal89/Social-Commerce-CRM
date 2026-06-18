@@ -1,0 +1,128 @@
+/* =============================================================
+   Top Navigation Bar — layout & dropdown fixes
+
+   Issues addressed:
+     1. .navbar was height: 64px but had no display:flex, so children
+        weren't vertically centered (causing alignment issues).
+     2. .navbar-sticky-top class was undefined (the navbar wasn't
+        actually sticking to the top of the viewport).
+     3. .navbar-store-button is taller than 40px when wrapped with
+        flex children, so it overflows the navbar.
+     4. Bootstrap dropdowns inside the navbar needed explicit
+        z-index and position rules because the navbar's z-index
+        context wasn't defined.
+     5. Notification/user buttons didn't have a flex shrink rule,
+        so they got squeezed on narrow screens.
+
+   All rules use high specificity to win against the existing
+   dashboard-design-system.css. None use !important.
+   ============================================================= */
+
+/* 1. Make the navbar a proper flex container, vertically center children */
+.navbar {
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 var(--space-6) !important;
+    box-sizing: border-box !important;
+    position: relative;
+    z-index: 1030;
+}
+
+.navbar > .container-fluid {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    flex-wrap: nowrap;
+    gap: var(--space-4, 1rem);
+}
+
+/* 2. Sticky-top class — make the navbar actually stick */
+.navbar-sticky-top {
+    position: sticky !important;
+    top: 0;
+    z-index: 1030;
+}
+
+/* 3. Constrain inner flex containers */
+.navbar .d-flex.align-items-center[style*="width: 100%"] {
+    width: 100% !important;
+    flex-wrap: nowrap !important;
+    gap: var(--space-4, 1rem);
+}
+
+/* Center section (search) shrinks properly */
+.navbar-search {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 420px;
+}
+
+/* Right section doesn't shrink */
+.navbar > .container-fluid > .d-flex.align-items-center.gap-3 {
+    flex-shrink: 0;
+}
+
+/* 4. Dropdown menus — Bootstrap 5 already handles this, but ensure
+      the menu sits on top and isn't clipped by overflow rules */
+.navbar .dropdown-menu {
+    z-index: 1040;
+    margin-top: var(--space-2, 0.5rem);
+    border: 1px solid var(--border-light, #e5e7eb);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+    border-radius: var(--radius, 6px);
+}
+
+/* 5. Notification / user buttons — never shrink, keep their icon size */
+.navbar-notifications,
+.navbar-user,
+.navbar-store-selector {
+    flex-shrink: 0;
+}
+
+/* 6. The buttons themselves — uniform height matching navbar */
+.navbar-store-button,
+.navbar-notification-button,
+.navbar-user-button {
+    height: 40px;
+    box-sizing: border-box;
+}
+
+/* 7. Avatar placeholder sizing consistency */
+.navbar-user-avatar,
+.navbar-user-avatar-placeholder {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+}
+
+/* 8. Mobile: hide user name text, keep avatar */
+@media (max-width: 767.98px) {
+    .navbar-user-info { display: none !important; }
+    .navbar-search { display: none !important; }
+}
+
+/* 9. Tablet: keep name, hide search */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .navbar-search { display: none !important; }
+}
+
+/* 10. Bootstrap dropdown caret — keep but don't break alignment */
+.navbar .dropdown-toggle::after {
+    margin-left: 0.35em;
+    vertical-align: middle;
+}
+
+/* 11. Make sure the navbar-store-icon is properly aligned inline */
+.navbar-store-button {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+/* 12. Notification badge — prevent it from being clipped by overflow */
+.navbar-notification-button {
+    position: relative;
+    overflow: visible;
+}

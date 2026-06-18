@@ -1,0 +1,23 @@
+{# Reusable permission row for the matrix. #}
+<div class="permission-row d-flex align-items-center gap-3 p-2 rounded border {% if perm.granted %}border-primary bg-primary-subtle{% else %}border-light{% endif %}"
+     data-permission-id="{{ perm.id }}">
+    {% if not readonly %}
+    <input
+        type="checkbox"
+        class="form-check-input flex-shrink-0"
+        {% if perm.granted %}checked{% endif %}
+        {% if not can_manage %}disabled{% endif %}
+        data-action="toggle-permission"
+        data-permission-id="{{ perm.id }}"
+        aria-label="Toggle {{ perm.code }}"
+    />
+    {% endif %}
+    <div class="flex-grow-1 min-w-0">
+        <code class="small">{{ perm.code }}</code>
+        <div class="small">{{ perm.name }}</div>
+    </div>
+    <span class="badge bg-{% if perm.action == 'view' %}info{% elif perm.action == 'create' %}success{% elif perm.action == 'update' %}warning{% elif perm.action == 'delete' %}danger{% else %}secondary{% endif %}-subtle text-{% if perm.action == 'view' %}info{% elif perm.action == 'create' %}success{% elif perm.action == 'update' %}warning{% elif perm.action == 'delete' %}danger{% else %}secondary{% endif %}-emphasis"
+          style="text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.7rem;">
+        {{ perm.action }}
+    </span>
+</div>

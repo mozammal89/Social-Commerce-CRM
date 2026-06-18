@@ -1,0 +1,40 @@
+/* =============================================================
+   Role & Permission UI — small overrides on top of the global
+   dashboard styles. Most styling comes from the project's
+   design tokens (--brand-*, --space-*, --radius-*, etc.) and
+   Bootstrap utility classes. This file only adds what isn't
+   covered by those.
+   ============================================================= */
+
+/* Permission matrix — checkbox row click target is the whole label */
+.permission-group summary::-webkit-details-marker { display: none; }
+.permission-group summary::marker { content: ""; }
+.permission-group[open] > summary .bi-chevron-right { transform: rotate(90deg); }
+.permission-group summary .bi-chevron-right { transition: transform 150ms ease; }
+
+/* Permission row: visual feedback for granted state */
+.permission-row { transition: background 150ms ease, border-color 150ms ease; }
+.permission-row.bg-primary-subtle code { color: var(--primary, #2563eb); }
+
+/* Form labels — slightly tighter than Bootstrap default */
+.form-label { font-weight: var(--font-weight-medium, 500); color: var(--text-primary, #0f172a); margin-bottom: 0.35rem; }
+
+/* Empty-state spacing */
+.empty-state { padding: var(--space-10, 2.5rem) var(--space-6, 1.5rem); }
+
+/* Breadcrumb back icon alignment */
+.breadcrumb-item .bi-house { vertical-align: -2px; }
+
+/* Sidebar nav active state for our section */
+.sidebar-nav-item.active {
+    background: var(--brand-50, #eff6ff);
+    color: var(--brand-700, #1d4ed8);
+    font-weight: var(--font-weight-semibold, 600);
+}
+
+/* Permission row hover affordance */
+.permission-row:hover { background: var(--gray-50, #f8fafc); }
+.permission-row.bg-primary-subtle:hover { background: var(--primary-subtle, #dbeafe) !important; }
+
+/* Role card hover lift */
+.card.h-100:hover { transform: translateY(-1px); transition: transform 150ms ease; }
