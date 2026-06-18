@@ -115,34 +115,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     // DROPDOWN FUNCTIONALITY
     // ========================================
-    
-    // Let Bootstrap handle dropdowns automatically
-    // Initialize Bootstrap dropdowns when DOM is ready
-    const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
-    if (dropdownToggles.length > 0 && typeof bootstrap !== 'undefined') {
-        dropdownToggles.forEach(function(toggle) {
-            if (toggle && !bootstrap.Dropdown.getInstance(toggle)) {
-                try {
-                    new bootstrap.Dropdown(toggle);
-                } catch (error) {
-                    console.warn('Failed to initialize dropdown:', error);
-                }
-            }
-        });
-    }
-    
-    // Close dropdowns when clicking outside (Bootstrap handles this automatically)
-    // This is just a backup for any custom dropdowns
-    document.addEventListener('click', function(e) {
-        if (!e.target.closest('.dropdown')) {
-            const dropdownMenus = document.querySelectorAll('.dropdown-menu.show');
-            if (dropdownMenus.length > 0) {
-                dropdownMenus.forEach(function(menu) {
-                    menu.classList.remove('show');
-                });
-            }
-        }
-    });
+
+    // Bootstrap 5 automatically handles dropdowns via data-bs-toggle="dropdown"
+    // No manual initialization needed - it's handled by Bootstrap's data API
+    // Just ensure dropdown menus have proper z-index and positioning
     
     // ========================================
     // NOTIFICATION FUNCTIONALITY

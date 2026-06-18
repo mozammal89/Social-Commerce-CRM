@@ -165,6 +165,7 @@
     --z-modal: 1050;
     --z-popover: 1060;
     --z-tooltip: 1070;
+    --z-navbar: 1030;
 }
 
 /* =====================================================================
@@ -402,6 +403,44 @@
     background: var(--surface-primary);
     border-bottom: 1px solid var(--border-light);
     height: var(--navbar-height);
+    position: sticky;
+    top: 0;
+    z-index: var(--z-navbar);
+    width: 100%;
+    left: 0;
+    right: 0;
+}
+
+.navbar .container-fluid {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+}
+
+.navbar-sticky-top {
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+}
+
+/* Navbar Left Section */
+.navbar > .container-fluid > .d-flex:first-child {
+    flex: 0 0 auto;
+}
+
+/* Navbar Right Section */
+.navbar > .container-fluid > .d-flex:last-child {
+    flex: 0 0 auto;
+}
+
+/* Navbar Center Section (Search) */
+.navbar-search {
+    flex: 1 1 auto;
+    max-width: 400px;
+    margin: 0 var(--space-4);
 }
 
 .navbar-brand {
@@ -431,9 +470,10 @@
     font-weight: var(--font-weight-bold);
 }
 
-/* Search Bar */
-.navbar-search {
-    max-width: 320px;
+@media (max-width: 991.98px) {
+    .navbar-search {
+        display: none;
+    }
 }
 
 .navbar-search-wrapper {
@@ -493,6 +533,12 @@
 /* Store Selector */
 .navbar-store-selector {
     height: 40px;
+    position: relative;
+}
+
+.navbar-store-selector .dropdown {
+    position: relative;
+    height: 100%;
 }
 
 .navbar-store-button {
@@ -508,22 +554,56 @@
     color: var(--text-secondary);
     cursor: pointer;
     transition: all var(--transition-fast);
+    white-space: nowrap;
 }
 
-.navbar-store-button:hover {
+.navbar-store-button:hover,
+.navbar-store-button:focus {
     background: var(--surface-secondary);
     border-color: var(--border-default);
+    outline: none;
 }
 
 .navbar-store-icon {
     width: 20px;
     height: 20px;
     color: var(--brand-600);
+    flex-shrink: 0;
+}
+
+/* Ensure dropdown toggle shows chevron properly */
+.navbar-store-button.dropdown-toggle::after {
+    display: none;
+}
+
+/* Store dropdown menu positioning */
+.navbar-store-selector .dropdown-menu {
+    left: 0;
+    right: auto;
+}
+
+/* Notification dropdown menu positioning */
+.navbar-notifications .dropdown-menu {
+    right: 0;
+    left: auto;
+    min-width: 320px;
+}
+
+/* User dropdown menu positioning */
+.navbar-user .dropdown-menu {
+    right: 0;
+    left: auto;
 }
 
 /* Notification Center */
 .navbar-notifications {
     position: relative;
+    height: 40px;
+}
+
+.navbar-notifications .dropdown {
+    position: relative;
+    height: 100%;
 }
 
 .navbar-notification-button {
@@ -538,11 +618,24 @@
     color: var(--text-tertiary);
     cursor: pointer;
     transition: all var(--transition-fast);
+    position: relative;
 }
 
-.navbar-notification-button:hover {
+.navbar-notification-button:hover,
+.navbar-notification-button:focus {
     background: var(--surface-secondary);
     color: var(--text-primary);
+    outline: none;
+}
+
+.navbar-notification-button.dropdown-toggle::after {
+    display: none;
+}
+
+/* Navbar Right Section - ensure proper spacing and alignment */
+.navbar .d-flex.align-items-center.gap-3 {
+    flex: 0 0 auto;
+    margin-left: auto;
 }
 
 .navbar-notification-badge {
@@ -561,6 +654,7 @@
     color: var(--text-inverse);
     border-radius: var(--radius-full);
     border: 2px solid var(--surface-primary);
+    pointer-events: none;
 }
 
 /* User Menu */
@@ -568,22 +662,49 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
+    height: 40px;
+}
+
+.navbar-user .dropdown {
+    position: relative;
+    height: 100%;
 }
 
 .navbar-user-button {
     display: flex;
     align-items: center;
     gap: var(--space-3);
+    height: 100%;
     padding: var(--space-1) var(--space-2);
     background: transparent;
     border: none;
     border-radius: var(--radius-full);
     cursor: pointer;
     transition: background var(--transition-fast);
+    white-space: nowrap;
 }
 
-.navbar-user-button:hover {
+.navbar-user-button:hover,
+.navbar-user-button:focus {
     background: var(--surface-secondary);
+    outline: none;
+}
+
+.navbar-user-button.dropdown-toggle::after {
+    display: none;
+}
+
+/* Fix dropdown positioning to prevent overflow issues */
+.dropdown-menu {
+    max-width: 90vw;
+}
+
+@media (max-width: 575.98px) {
+    .dropdown-menu {
+        max-width: calc(100vw - 32px);
+        left: var(--space-4) !important;
+        right: var(--space-4) !important;
+    }
 }
 
 .navbar-user-avatar {
@@ -1095,6 +1216,10 @@ textarea.form-control {
    DROPDOWNS
    ===================================================================== */
 
+.dropdown {
+    position: relative;
+}
+
 .dropdown-menu {
     min-width: 200px;
     padding: var(--space-2);
@@ -1102,6 +1227,38 @@ textarea.form-control {
     border: 1px solid var(--border-light);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
+    position: absolute;
+    z-index: var(--z-dropdown);
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    will-change: transform, opacity;
+}
+
+.dropdown-menu-end {
+    right: 0;
+    left: auto;
+}
+
+.dropdown-menu-start {
+    left: 0;
+    right: auto;
+}
+
+.dropdown-menu.show {
+    display: block;
+    animation: dropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .dropdown-item {
@@ -1113,11 +1270,33 @@ textarea.form-control {
     color: var(--text-secondary);
     border-radius: var(--radius);
     transition: all var(--transition-fast);
+    text-decoration: none;
+    white-space: nowrap;
+    width: 100%;
+    clear: both;
+    font-weight: var(--font-weight-normal);
+    text-align: inherit;
+    background: transparent;
+    border: 0;
 }
 
-.dropdown-item:hover {
+.dropdown-item:hover,
+.dropdown-item:focus {
     background: var(--surface-secondary);
     color: var(--text-primary);
+    outline: none;
+}
+
+.dropdown-item.active,
+.dropdown-item:active {
+    background: var(--brand-50);
+    color: var(--brand-700);
+}
+
+.dropdown-item.disabled,
+.dropdown-item:disabled {
+    pointer-events: none;
+    opacity: 0.5;
 }
 
 .dropdown-divider {
@@ -1457,6 +1636,11 @@ textarea.form-control {
     #main-content-area {
         margin-left: 0;
     }
+
+    .navbar {
+        width: 100%;
+        left: 0;
+    }
 }
 
 /* Mobile */
@@ -1488,6 +1672,12 @@ textarea.form-control {
     .table tbody td {
         padding: var(--space-3) var(--space-4);
     }
+
+    /* Hide user info on mobile, show avatar only */
+    .navbar-user-info,
+    .navbar-user-button .bi-chevron-down {
+        display: none;
+    }
 }
 
 /* Desktop */
@@ -1502,6 +1692,11 @@ textarea.form-control {
 
     #main-content-area {
         margin-left: var(--sidebar-width);
+    }
+
+    /* Navbar should not have margin on desktop since it's full width */
+    .navbar {
+        margin-left: 0;
     }
 }
 
