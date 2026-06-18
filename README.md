@@ -190,7 +190,8 @@ Social-Commerce-CRM/
 - Version-stamp cache invalidation (no need to enumerate Redis keys)
 - Template tags (`{% can %}`, `{% can_any %}`, `{% has_feature %}`), function-view decorators, CBV mixins, and DRF permission classes all share one resolver
 - JWT fast-path: RBAC claims embedded in access token, short-circuit when fresh
-- See `apps/permissions/README.md` for usage
+- **Full step-by-step guide:** [`docs/RBAC_USER_GUIDE.md`](docs/RBAC_USER_GUIDE.md)
+- Quick reference: [`apps/permissions/README.md`](apps/permissions/README.md)
 
 ### API Endpoints
 

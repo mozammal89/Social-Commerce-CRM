@@ -6,6 +6,12 @@ truth for who can do what in which store, on which plan.
 It plugs into Django function views, DRF, template tags, and the admin — all
 sharing the same `PermissionResolver`.
 
+> **New to the system?** Read the end-to-end user guide at
+> [`docs/RBAC_USER_GUIDE.md`](../../docs/RBAC_USER_GUIDE.md) for a
+> step-by-step walkthrough including how to add members, create roles,
+> bind permissions, write templates, and troubleshoot common issues.
+> What follows here is a quick reference.
+
 ---
 
 ## 1. The 5 layers
