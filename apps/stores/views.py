@@ -1,6 +1,24 @@
 """
 Views for Store management.
+
+Bug fixes applied (per RBAC audit plan):
+
+* Bug 1: store-scoped views now require an active membership via
+  ``@current_store`` (function views) or ``IsStoreMember`` + ``HasPermission``
+  (DRF CBVs).
+* Bug 2: queryset filters use ``StoreMembership`` (active) instead of
+  the legacy ``owners/managers/staff`` M2M.
+* Bug 4: ``MyStoresView`` returns stores where the user has any active
+  membership (not just owned).
+* Bug 8: ``manage_store_staff`` routes through ``add_member`` /
+  ``remove_member`` instead of the legacy M2M helpers, which means cache
+  invalidation and audit emission fire automatically (Bug 11).
+* Bug 9: ``perform_create`` enforces the plan's ``max_stores`` cap.
 """
+
+from __future__ import annotations
+
+import logging
 
 from django.db import models
 from rest_framework import generics, status, permissions, exceptions
@@ -15,47 +33,107 @@ from apps.stores.serializers import (
     StoreStaffSerializer,
 )
 from apps.accounts.models import User
+from apps.permissions.decorators import current_store
+from apps.permissions.permissions import IsStoreMember, HasStoreRole
+from apps.permissions.services import (
+    add_member,
+    remove_member,
+    assert_within_plan_limit,
+)
+from apps.permissions.models import Role
 
 
+logger = logging.getLogger("apps.stores")
+
+
+# Map a serializer "role" string to the system role slug and store-owner level.
+# (The serializer still accepts "manager"/"staff" as legacy input; we resolve
+# to the canonical system role here.)
+ROLE_SLUG_FOR_LEGACY = {
+    "manager": "manager",
+    "staff": "viewer",  # legacy "staff" maps to viewer-role membership
+}
+
+
+# ---------------------------------------------------------------------------
+# Bug 9 — fallback when no subscription exists yet
+# ---------------------------------------------------------------------------
+DEFAULT_PLAN_MAX_STORES = 5  # generous default for tests / new users
+
+
+# ---------------------------------------------------------------------------
+# StoreListView
+# ---------------------------------------------------------------------------
 class StoreListView(generics.ListCreateAPIView):
     """View for listing and creating stores."""
 
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        """Return stores accessible to current user."""
+        """Return stores where the user has an active membership."""
         user = self.request.user
+        if getattr(user, "is_superuser", False):
+            return Store.objects.filter(is_deleted=False).distinct()
         return Store.objects.filter(
-            models.Q(owners=user) | models.Q(managers=user) | models.Q(staff=user)
+            memberships__user=user,
+            memberships__is_active=True,
+            is_deleted=False,
         ).distinct()
 
     def get_serializer_class(self):
-        """Return appropriate serializer based on request method."""
         if self.request.method == "POST":
             return StoreCreateSerializer
         return StoreSerializer
 
     def perform_create(self, serializer):
-        """Save store with current user as owner."""
-        serializer.save()
+        """Save store with plan-limit guard (Bug 9)."""
+        user = self.request.user
+        current_count = Store.objects.filter(
+            memberships__user=user,
+            memberships__is_active=True,
+            is_deleted=False,
+        ).distinct().count()
+
+        # Determine cap. For new users we may not have a subscription yet,
+        # so fall back to a generous default plan cap.
+        cap = _resolve_max_stores_cap(user)
+        if current_count >= cap:
+            from apps.permissions.exceptions import PlanLimitExceeded
+            raise PlanLimitExceeded("max_stores", current_count, cap)
+
+        store = serializer.save()
+        # Make the creator the store-owner via the legacy M2M for any
+        # legacy read paths still relying on it. The proper membership
+        # is created by the serializer (which also calls add_owner).
+        store.add_owner(user)
 
 
+# ---------------------------------------------------------------------------
+# StoreDetailView
+# ---------------------------------------------------------------------------
 class StoreDetailView(generics.RetrieveUpdateDestroyAPIView):
     """View for retrieving, updating, and deleting stores."""
 
     serializer_class = StoreUpdateSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsStoreMember,
+        HasStoreRole.with_level(Role.LEVEL_MANAGER),
+    ]
     lookup_field = "id"
 
     def get_queryset(self):
-        """Return stores accessible to current user."""
+        """Return stores accessible via active membership."""
         user = self.request.user
+        if getattr(user, "is_superuser", False):
+            return Store.objects.filter(is_deleted=False)
         return Store.objects.filter(
-            models.Q(owners=user) | models.Q(managers=user) | models.Q(staff=user)
+            memberships__user=user,
+            memberships__is_active=True,
+            is_deleted=False,
         ).distinct()
 
     def get_serializer_class(self):
-        """Return appropriate serializer based on request method."""
         if self.request.method == "GET":
             return StoreSerializer
         return StoreUpdateSerializer
@@ -65,8 +143,10 @@ class StoreDetailView(generics.RetrieveUpdateDestroyAPIView):
         store = self.get_object()
         user = self.request.user
 
-        if not store.is_owner(user):
-            raise exceptions.PermissionDenied("Only store owners can update store information.")
+        if not getattr(user, "is_superuser", False) and not store.is_owner(user):
+            raise exceptions.PermissionDenied(
+                "Only store owners can update store information.",
+            )
 
         serializer.save()
 
@@ -74,55 +154,120 @@ class StoreDetailView(generics.RetrieveUpdateDestroyAPIView):
         """Soft delete store."""
         user = self.request.user
 
-        if not instance.is_owner(user):
-            raise exceptions.PermissionDenied("Only store owners can delete stores.")
+        if not getattr(user, "is_superuser", False) and not instance.is_owner(user):
+            raise exceptions.PermissionDenied(
+                "Only store owners can delete stores.",
+            )
 
         instance.soft_delete(deleted_by=user)
 
 
+# ---------------------------------------------------------------------------
+# manage_store_staff — routes through add_member/remove_member
+# ---------------------------------------------------------------------------
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
-def manage_store_staff(request, store_id):
-    """View for managing store staff."""
+@current_store
+def manage_store_staff(request, store_id=None):
+    """View for managing store staff.
 
-    try:
-        store = Store.objects.get(id=store_id)
-    except Store.DoesNotExist:
-        return Response({"error": "Store not found"}, status=status.HTTP_404_NOT_FOUND)
+    Bug 8: routes through ``add_member``/``remove_member`` so that cache
+    invalidation and audit emission fire via the existing signal handlers
+    (Bug 11).
+    """
+    store = request.store
+    if store is None:
+        return Response(
+            {"error": "Store not found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
-    if not store.is_owner(request.user):
-        raise exceptions.PermissionDenied("Only store owners can manage staff.")
+    user = request.user
+    if not getattr(user, "is_superuser", False) and not store.is_owner(user):
+        raise exceptions.PermissionDenied(
+            "Only store owners can manage staff.",
+        )
 
     serializer = StoreStaffSerializer(data=request.data, context={"store": store})
     serializer.is_valid(raise_exception=True)
 
     user_id = serializer.validated_data["user_id"]
-    role = serializer.validated_data["role"]
+    role_key = serializer.validated_data["role"]
 
-    user = User.objects.get(id=user_id)
+    target_user = User.objects.get(id=user_id)
+
+    role_slug = ROLE_SLUG_FOR_LEGACY.get(role_key, role_key)
+    try:
+        role = Role.objects.get(slug=role_slug, store=None)
+    except Role.DoesNotExist:
+        return Response(
+            {"error": f"Unknown role '{role_slug}'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     if serializer.validated_data["action"] == "add":
-        if role == "manager":
-            store.add_manager(user)
-        else:
-            store.add_staff(user)
-        message = f"User added as {role}"
+        add_member(target_user, store, role, invited_by=user)
+        message = f"User added as {role.name}"
     else:
-        if role == "manager":
-            store.remove_manager(user)
-        else:
-            store.remove_staff(user)
-        message = f"User removed as {role}"
+        remove_member(target_user, store, role)
+        message = f"User removed as {role.name}"
 
     return Response({"message": message}, status=status.HTTP_200_OK)
 
 
+# ---------------------------------------------------------------------------
+# MyStoresView
+# ---------------------------------------------------------------------------
 class MyStoresView(generics.ListAPIView):
-    """View for listing current user's stores."""
+    """View for listing current user's stores.
+
+    Bug 4: returns stores where the user has any active membership,
+    not just stores they own.
+    """
 
     serializer_class = StoreSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        """Return stores owned by current user."""
-        return Store.objects.by_owner(self.request.user.id)
+        user = self.request.user
+        if getattr(user, "is_superuser", False):
+            return Store.objects.filter(is_deleted=False).distinct()
+        return Store.objects.filter(
+            memberships__user=user,
+            memberships__is_active=True,
+            is_deleted=False,
+        ).distinct().order_by("name")
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def _resolve_max_stores_cap(user) -> int:
+    """Return the max_stores cap from the highest active subscription the
+    user has, falling back to DEFAULT_PLAN_MAX_STORES.
+    """
+    from apps.permissions.models import Subscription, Plan
+
+    sub = (
+        Subscription.objects.filter(
+            store__memberships__user=user,
+            store__memberships__is_active=True,
+            status__in=("active", "trialing"),
+        )
+        .select_related("plan")
+        .order_by("-plan__max_stores")
+        .first()
+    )
+    if sub is not None and getattr(sub.plan, "max_stores", None):
+        return int(sub.plan.max_stores)
+
+    # Fallback: pick the public free/trial plan if any.
+    free_plan = (
+        Plan.objects.filter(is_active=True, is_public=True)
+        .order_by("-max_stores")
+        .first()
+    )
+    if free_plan is not None and getattr(free_plan, "max_stores", None):
+        return int(free_plan.max_stores)
+
+    return DEFAULT_PLAN_MAX_STORES

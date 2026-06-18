@@ -21,33 +21,43 @@ def app_settings(request):
 
 
 def current_store(request):
-    """Add current store context if available."""
+    """Add current store context if available.
+
+    Bug 2 / Bug 15 fix: this used to query the legacy M2M (owners /
+    managers / staff) and would return stores the user no longer has an
+    active membership for. It now consults ``StoreMembership`` (active
+    rows only), matching the resolution order used by the new
+    ``@current_store`` decorator (session → first available).
+    """
     context = {
         "current_store": None,
         "user_stores": [],
     }
-    
-    if request.user.is_authenticated:
-        user = request.user
-        context["user_stores"] = Store.objects.filter(
-            models.Q(owners=user) | 
-            models.Q(managers=user) | 
-            models.Q(staff=user)
-        ).distinct()
-        
-        # Get current store from session or first available
-        store_id = request.session.get("current_store_id")
-        if store_id:
-            try:
-                context["current_store"] = Store.objects.get(
-                    id=store_id,
-                    is_deleted=False
-                )
-            except Store.DoesNotExist:
-                pass
-        
-        # Set default store if none selected
-        if not context["current_store"] and context["user_stores"].exists():
-            context["current_store"] = context["user_stores"].first()
-    
+
+    if not getattr(request.user, "is_authenticated", False):
+        return context
+
+    user = request.user
+
+    # Bug 2: filter by active StoreMembership rows.
+    context["user_stores"] = list(
+        Store.objects.filter(
+            memberships__user=user,
+            memberships__is_active=True,
+            is_deleted=False,
+        ).distinct().order_by("name")
+    )
+
+    # Get current store from session or first available
+    store_id = request.session.get("current_store_id")
+    if store_id:
+        for s in context["user_stores"]:
+            if str(s.id) == str(store_id):
+                context["current_store"] = s
+                break
+
+    # Set default store if none selected
+    if not context["current_store"] and context["user_stores"]:
+        context["current_store"] = context["user_stores"][0]
+
     return context

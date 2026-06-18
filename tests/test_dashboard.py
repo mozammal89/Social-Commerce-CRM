@@ -65,6 +65,20 @@ def make_store():
     return _make_store
 
 
+@pytest.fixture(autouse=True)
+def _seed_rbac(db):
+    """Run the role + role-permission seeders so that the seeded
+    ``manager`` / ``viewer`` / ``owner`` roles carry the permission
+    grants they would have in production. The dashboard view is now
+    gated by ``@permission_required("dashboard.view")`` and these
+    tests assume that grant.
+    """
+    from apps.permissions.seeders.roles_seeder import RolesSeeder
+    from apps.permissions.seeders.permissions_seeder import RolePermissionsSeeder
+    RolesSeeder().run()
+    RolePermissionsSeeder().run()
+
+
 # ---------------------------------------------------------------------------
 # dashboard_home
 # ---------------------------------------------------------------------------
@@ -310,3 +324,58 @@ class TestSwitchStore:
         # a 404 from the URL resolver.
         res = client.get("/dashboard/switch-store/00000000-0000-0000-0000-000000000000/")
         assert res.status_code in (302, 404)
+
+# ---------------------------------------------------------------------------
+# Bug 1 (URL bypass) — dashboard.view permission must be enforced
+# ---------------------------------------------------------------------------
+@pytest.mark.django_db
+class TestDashboardPermissionEnforcement:
+    """A user whose role is missing ``dashboard.view`` (or has it explicitly
+    DENIED) must get 403 when typing the URL, not 200. The sidebar
+    already hides the menu; the view itself must agree.
+    """
+
+    def test_owner_with_deny_override_on_dashboard_view_is_blocked(
+        self, client, make_store,
+    ):
+        from apps.permissions.seeders.roles_seeder import RolesSeeder
+        from apps.permissions.seeders.permissions_seeder import RolePermissionsSeeder
+        from apps.permissions.models import (
+            Permission, Role, UserPermissionOverride,
+        )
+        RolesSeeder().run()
+        RolePermissionsSeeder().run()
+        owner_role = Role.objects.get(slug=ROLE_STORE_OWNER)
+        s = make_store("Fashion Hub")
+        u = _make_user("john@x.com")
+        StoreMembership.objects.create(
+            user=u, store=s, role=owner_role, is_active=True,
+        )
+        # Explicitly DENY dashboard.view for this user.
+        UserPermissionOverride.objects.create(
+            user=u, store=s,
+            permission=Permission.objects.get(code="dashboard.view"),
+            is_granted=False,
+        )
+        _login(client, u)
+        res = client.get(reverse("dashboard:home"))
+        assert res.status_code == 403, (
+            f"Expected 403 for owner with DENY override on dashboard.view, "
+            f"got {res.status_code} — URL bypass still present."
+        )
+
+    def test_viewer_role_with_no_membership_sees_onboarding_not_403(
+        self, client, make_store,
+    ):
+        """A user with no membership should see the onboarding card,
+        not get 403, because there is no store context to check against.
+        """
+        from apps.permissions.seeders.roles_seeder import RolesSeeder
+        RolesSeeder().run()
+        make_store("Orphan")
+        u = _make_user("lone@x.com")
+        _login(client, u)
+        res = client.get(reverse("dashboard:home"))
+        # No membership → onboarding state, not 403.
+        assert res.status_code == 200
+        assert res.context["user_has_no_store"] is True

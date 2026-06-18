@@ -20,10 +20,14 @@ Usage examples:
 
 from __future__ import annotations
 
+import logging
+
 from rest_framework.permissions import BasePermission
 
 from .resolver import PermissionResolver
 
+
+logger = logging.getLogger("apps.permissions")
 
 _resolver = PermissionResolver()
 
@@ -34,10 +38,15 @@ class HasPermission(BasePermission):
 
     Object-level: set ``view.object_permission_code = "orders.update"`` and
     the class will call ``resolver.check(user, store, code, obj=instance)``.
+
+    Fail-closed: if no permission code is configured (neither on the view
+    nor on the class), the check returns ``False`` and a WARNING is logged.
+    This catches the bug class "a view forgot to declare its code".
     """
 
     permission_code: str | None = None
     object_permission_code: str | None = None
+    message = "You do not have permission to perform this action."
 
     @classmethod
     def with_code(cls, code: str):
@@ -55,7 +64,13 @@ class HasPermission(BasePermission):
     def has_permission(self, request, view):
         code = self._view_code(view)
         if not code:
-            return True
+            logger.warning(
+                "rbac.no_code view=%s class=%s — HasPermission has no code "
+                "configured; failing closed.",
+                getattr(view, "__qualname__", repr(view)),
+                type(self).__name__,
+            )
+            return False
         return _resolver.check(
             request.user,
             getattr(request, "store", None),
@@ -65,7 +80,7 @@ class HasPermission(BasePermission):
     def has_object_permission(self, request, view, obj):
         code = self.object_permission_code or self._view_code(view)
         if not code:
-            return True
+            return False
         return _resolver.check(
             request.user,
             getattr(request, "store", None),
@@ -79,9 +94,13 @@ class HasPermission(BasePermission):
 
 
 class HasFeature(BasePermission):
-    """View-level: ``view.required_feature = "marketing_campaigns"``."""
+    """View-level: ``view.required_feature = "marketing_campaigns"``.
+
+    Fail-closed when no feature is configured.
+    """
 
     required_feature: str | None = None
+    message = "This feature is not available on your current plan."
 
     @classmethod
     def with_feature(cls, feature_code: str):
@@ -94,7 +113,13 @@ class HasFeature(BasePermission):
     def has_permission(self, request, view):
         feat = getattr(view, "required_feature", None) or self.required_feature
         if not feat:
-            return True
+            logger.warning(
+                "rbac.no_feature view=%s class=%s — HasFeature has no feature "
+                "configured; failing closed.",
+                getattr(view, "__qualname__", repr(view)),
+                type(self).__name__,
+            )
+            return False
         return _resolver.check_feature(
             request.user, getattr(request, "store", None), feat,
         )
@@ -108,6 +133,9 @@ class IsStoreMember(BasePermission):
     def has_permission(self, request, view):
         store = getattr(request, "store", None)
         if not store:
+            # Fail-closed: a store-scoped view without a resolved store
+            # cannot be safely authorized. Caller must use StoreContextMixin
+            # or @current_store to set request.store.
             return False
         if request.user.is_superuser:
             return True

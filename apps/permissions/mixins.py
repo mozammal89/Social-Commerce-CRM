@@ -1,6 +1,7 @@
 """
 CBV mixins for authorization.
 
+- ``StoreContextMixin``       — set ``request.store`` from kwarg/header/session.
 - ``PermissionRequiredMixin`` — gate a CBV by a permission code.
 - ``FeatureRequiredMixin``   — gate a CBV by a plan feature.
 - ``StoreAccessMixin``       — require an active store membership.
@@ -10,6 +11,8 @@ CBV mixins for authorization.
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
@@ -18,6 +21,57 @@ from django.template.loader import render_to_string
 from .resolver import PermissionResolver
 
 
+logger = logging.getLogger("apps.permissions")
+
+
+# ---------------------------------------------------------------------------
+# Store context resolution (for DRF CBVs)
+# ---------------------------------------------------------------------------
+class StoreContextMixin:
+    """
+    Resolve ``request.store`` in ``initial()`` (before DRF permission
+    checks run). Resolution order: URL kwarg → header → session.
+
+    Fail-closed when a store is required but unresolvable.
+
+    Set ``store_kwarg`` (default ``"store_id"``), ``store_header``
+    (default ``"X-Store-Id"``), ``store_session_key`` (default
+    ``"current_store_id"``) and ``store_required`` (default ``True``).
+    """
+
+    store_kwarg: str = "store_id"
+    store_header: str = "X-Store-Id"
+    store_session_key: str = "current_store_id"
+    store_required: bool = True
+
+    def initial(self, request, *args, **kwargs):
+        from .models import Store
+
+        raw = kwargs.get(self.store_kwarg)
+        if not raw:
+            raw = request.headers.get(self.store_header)
+        if not raw:
+            raw = request.session.get(self.store_session_key)
+
+        store = (
+            Store.objects.filter(id=raw, is_deleted=False).first()
+            if raw else None
+        )
+        request.store = store
+
+        if store is None and self.store_required:
+            logger.info(
+                "rbac.store_ctx_missing view=%s path=%s",
+                type(self).__name__, request.path,
+            )
+            # Defer the raise to permission checks so DRF returns a
+            # structured 403 rather than a 500.
+        super().initial(request, *args, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Permission gating
+# ---------------------------------------------------------------------------
 class PermissionRequiredMixin(LoginRequiredMixin):
     """
     Gate a CBV by a permission code.
@@ -46,6 +100,10 @@ class PermissionRequiredMixin(LoginRequiredMixin):
             request.user, store, self.permission_required, obj=obj,
         )
         if not ok:
+            logger.info(
+                "rbac.denied view=%s user=%s code=%s",
+                type(self).__name__, request.user.pk, self.permission_required,
+            )
             return self._deny(request)
         return super().dispatch(request, *args, **kwargs)
 
@@ -60,7 +118,7 @@ class PermissionRequiredMixin(LoginRequiredMixin):
 
 
 class FeatureRequiredMixin(LoginRequiredMixin):
-    """Gate a CBV by a plan feature. Set ``required_feature = 'marketing_campaigns'``."""
+    """Gate a CBV by a plan feature. Set ``required_feature = 'marketing_campaigns'`."""
 
     required_feature: str | None = None
 
@@ -74,7 +132,11 @@ class FeatureRequiredMixin(LoginRequiredMixin):
 
 
 class StoreAccessMixin(LoginRequiredMixin):
-    """Require an active membership in the current store."""
+    """Require an active membership in the current store.
+
+    Anonymous → login redirect.
+    Authenticated but no active membership → 403 (not login redirect).
+    """
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:

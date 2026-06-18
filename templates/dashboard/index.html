@@ -124,13 +124,20 @@
                     </div>
                     Total Revenue
                 </div>
-                {% if kpis.revenue is None %}
+                {% if kpis.revenue == "unavailable" %}
+                <span class="kpi-card-trend kpi-card-trend--muted">
+                    <i class="bi bi-hourglass-split"></i> Coming soon
+                </span>
+                {% elif kpis.revenue is None %}
                 <span class="kpi-card-trend kpi-card-trend--muted">
                     <i class="bi bi-lock"></i> Locked
                 </span>
                 {% endif %}
             </div>
-            {% if kpis.revenue is not None %}
+            {% if kpis.revenue == "unavailable" %}
+            <div class="kpi-card-value text-muted">—</div>
+            <div class="kpi-card-footer">Orders module coming soon</div>
+            {% elif kpis.revenue is not None %}
             <div class="kpi-card-value">${{ kpis.revenue|floatformat:0 }}</div>
             <div class="kpi-card-footer">vs last month</div>
             {% else %}
@@ -148,13 +155,20 @@
                     </div>
                     Total Orders
                 </div>
-                {% if kpis.orders_count is None %}
+                {% if kpis.orders_count == "unavailable" %}
+                <span class="kpi-card-trend kpi-card-trend--muted">
+                    <i class="bi bi-hourglass-split"></i> Coming soon
+                </span>
+                {% elif kpis.orders_count is None %}
                 <span class="kpi-card-trend kpi-card-trend--muted">
                     <i class="bi bi-lock"></i> Locked
                 </span>
                 {% endif %}
             </div>
-            {% if kpis.orders_count is not None %}
+            {% if kpis.orders_count == "unavailable" %}
+            <div class="kpi-card-value text-muted">—</div>
+            <div class="kpi-card-footer">Orders module coming soon</div>
+            {% elif kpis.orders_count is not None %}
             <div class="kpi-card-value">{{ kpis.orders_count }}</div>
             <div class="kpi-card-footer">vs last month</div>
             {% else %}
@@ -172,13 +186,20 @@
                     </div>
                     Total Customers
                 </div>
-                {% if kpis.customers_count is None %}
+                {% if kpis.customers_count == "unavailable" %}
+                <span class="kpi-card-trend kpi-card-trend--muted">
+                    <i class="bi bi-hourglass-split"></i> Coming soon
+                </span>
+                {% elif kpis.customers_count is None %}
                 <span class="kpi-card-trend kpi-card-trend--muted">
                     <i class="bi bi-lock"></i> Locked
                 </span>
                 {% endif %}
             </div>
-            {% if kpis.customers_count is not None %}
+            {% if kpis.customers_count == "unavailable" %}
+            <div class="kpi-card-value text-muted">—</div>
+            <div class="kpi-card-footer">Customers module coming soon</div>
+            {% elif kpis.customers_count is not None %}
             <div class="kpi-card-value">{{ kpis.customers_count }}</div>
             <div class="kpi-card-footer">all-time</div>
             {% else %}
@@ -196,13 +217,20 @@
                     </div>
                     Low Stock Items
                 </div>
-                {% if kpis.low_stock_count is None %}
+                {% if kpis.low_stock_count == "unavailable" %}
+                <span class="kpi-card-trend kpi-card-trend--muted">
+                    <i class="bi bi-hourglass-split"></i> Coming soon
+                </span>
+                {% elif kpis.low_stock_count is None %}
                 <span class="kpi-card-trend kpi-card-trend--muted">
                     <i class="bi bi-lock"></i> Locked
                 </span>
                 {% endif %}
             </div>
-            {% if kpis.low_stock_count is not None %}
+            {% if kpis.low_stock_count == "unavailable" %}
+            <div class="kpi-card-value text-muted">—</div>
+            <div class="kpi-card-footer">Products module coming soon</div>
+            {% elif kpis.low_stock_count is not None %}
             <div class="kpi-card-value">{{ kpis.low_stock_count }}</div>
             <div class="kpi-card-footer">need restocking</div>
             {% else %}

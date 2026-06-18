@@ -656,3 +656,265 @@ class TestRbacExceptionHandler:
         )
         assert response is not None
         assert response.status_code == 401
+
+# ---------------------------------------------------------------------------
+# @current_store decorator (Bug 7)
+# ---------------------------------------------------------------------------
+from apps.permissions.decorators import current_store as current_store_deco
+
+
+@pytest.mark.django_db
+class TestCurrentStoreDecorator:
+    """Tests for the ``@current_store`` decorator.
+
+    Resolves ``request.store`` from URL kwarg → header → session, and
+    enforces active membership (superuser bypasses).
+    """
+
+    def _make_request(self, rf, user, **kwargs):
+        request = rf.get("/", **kwargs)
+        request.user = user
+        request.store = None
+        return request
+
+    def _fresh_store(self):
+        from apps.stores.models import Store
+        return Store.objects.create(name="CS Test Store", status="active")
+
+    def _seed_role(self):
+        from apps.permissions.seeders.roles_seeder import RolesSeeder
+        RolesSeeder().run()
+        from apps.permissions.models import Role
+        return Role.objects.get(slug="manager", store=None)
+
+    def test_resolves_store_from_url_kwarg(self, db, django_user_model):
+        rf = RequestFactory()
+        user = django_user_model.objects.create_user(
+            email="cs-url@example.com", password="x",
+        )
+        store = self._fresh_store()
+        role = self._seed_role()
+        from apps.permissions.models import StoreMembership
+        StoreMembership.objects.create(
+            user=user, store=store, role=role, is_active=True,
+        )
+
+        @current_store_deco
+        def my_view(request, store_id=None):
+            return HttpResponse("ok")
+
+        request = self._make_request(rf, user)
+        response = my_view(request, store_id=str(store.id))
+        assert response.status_code == 200
+        assert str(request.store.id) == str(store.id)
+
+    def test_resolves_store_from_header(self, db, django_user_model):
+        rf = RequestFactory()
+        user = django_user_model.objects.create_user(
+            email="cs-hdr@example.com", password="x",
+        )
+        store = self._fresh_store()
+        role = self._seed_role()
+        from apps.permissions.models import StoreMembership
+        StoreMembership.objects.create(
+            user=user, store=store, role=role, is_active=True,
+        )
+
+        @current_store_deco
+        def my_view(request, store_id=None):
+            return HttpResponse("ok")
+
+        request = rf.get("/", HTTP_X_STORE_ID=str(store.id))
+        request.user = user
+        request.store = None
+        response = my_view(request)
+        assert response.status_code == 200
+        assert str(request.store.id) == str(store.id)
+
+    def test_resolves_store_from_session(self, db, django_user_model):
+        rf = RequestFactory()
+        user = django_user_model.objects.create_user(
+            email="cs-sess@example.com", password="x",
+        )
+        store = self._fresh_store()
+        role = self._seed_role()
+        from apps.permissions.models import StoreMembership
+        StoreMembership.objects.create(
+            user=user, store=store, role=role, is_active=True,
+        )
+
+        @current_store_deco
+        def my_view(request, store_id=None):
+            return HttpResponse("ok")
+
+        from django.contrib.sessions.middleware import SessionMiddleware
+        request = rf.get("/")
+        request.user = user
+        request.store = None
+        middleware = SessionMiddleware(lambda r: None)
+        middleware.process_request(request)
+        request.session["current_store_id"] = str(store.id)
+        request.session.save()
+
+        response = my_view(request)
+        assert response.status_code == 200
+        assert str(request.store.id) == str(store.id)
+
+    def test_unauthenticated_redirects_to_login(self, db):
+        rf = RequestFactory()
+        store = self._fresh_store()
+
+        @current_store_deco
+        def my_view(request, store_id=None):
+            return HttpResponse("ok")
+
+        request = self._make_request(rf, AnonymousUser())
+        response = my_view(request, store_id=str(store.id))
+        # Anonymous → login redirect (302)
+        assert response.status_code == 302
+
+    def test_non_member_raises_permission_denied(
+        self, db, django_user_model,
+    ):
+        rf = RequestFactory()
+        user = django_user_model.objects.create_user(
+            email="cs-nm@example.com", password="x",
+        )
+        store = self._fresh_store()
+
+        @current_store_deco
+        def my_view(request, store_id=None):
+            return HttpResponse("ok")
+
+        request = self._make_request(rf, user)
+        with pytest.raises(PermissionDenied):
+            my_view(request, store_id=str(store.id))
+
+    def test_inactive_member_is_treated_as_non_member(
+        self, db, django_user_model,
+    ):
+        rf = RequestFactory()
+        user = django_user_model.objects.create_user(
+            email="cs-ia@example.com", password="x",
+        )
+        store = self._fresh_store()
+        role = self._seed_role()
+        from apps.permissions.models import StoreMembership
+        StoreMembership.objects.create(
+            user=user, store=store, role=role, is_active=False,
+        )
+
+        @current_store_deco
+        def my_view(request, store_id=None):
+            return HttpResponse("ok")
+
+        request = self._make_request(rf, user)
+        with pytest.raises(PermissionDenied):
+            my_view(request, store_id=str(store.id))
+
+    def test_superuser_bypasses_membership(
+        self, db, django_user_model,
+    ):
+        rf = RequestFactory()
+        su = django_user_model.objects.create_superuser(
+            email="cs-su@example.com", password="x",
+        )
+        store = self._fresh_store()
+
+        @current_store_deco
+        def my_view(request, store_id=None):
+            return HttpResponse("ok")
+
+        request = self._make_request(rf, su)
+        response = my_view(request, store_id=str(store.id))
+        assert response.status_code == 200
+
+    def test_soft_deleted_store_rejected(self, db, django_user_model):
+        rf = RequestFactory()
+        user = django_user_model.objects.create_user(
+            email="cs-sd@example.com", password="x",
+        )
+        store = self._fresh_store()
+        role = self._seed_role()
+        from apps.permissions.models import StoreMembership
+        StoreMembership.objects.create(
+            user=user, store=store, role=role, is_active=True,
+        )
+        store.soft_delete(deleted_by=user)
+
+        @current_store_deco
+        def my_view(request, store_id=None):
+            return HttpResponse("ok")
+
+        request = self._make_request(rf, user)
+        with pytest.raises(PermissionDenied):
+            my_view(request, store_id=str(store.id))
+
+    def test_missing_store_raises_when_required(self, db, django_user_model):
+        rf = RequestFactory()
+        user = django_user_model.objects.create_user(
+            email="cs-ms@example.com", password="x",
+        )
+
+        @current_store_deco
+        def my_view(request, store_id=None):
+            return HttpResponse("ok")
+
+        request = self._make_request(rf, user)
+        with pytest.raises(PermissionDenied):
+            my_view(request)
+
+    def test_missing_store_allowed_when_not_required(
+        self, db, django_user_model,
+    ):
+        rf = RequestFactory()
+        user = django_user_model.objects.create_user(
+            email="cs-opt@example.com", password="x",
+        )
+
+        @current_store_deco(required=False)
+        def my_view(request, store_id=None):
+            return HttpResponse("ok")
+
+        request = self._make_request(rf, user)
+        response = my_view(request)
+        assert response.status_code == 200
+        assert request.store is None
+
+
+# ---------------------------------------------------------------------------
+# Bug 5: authenticated-but-denied returns 403 (not a login redirect)
+# ---------------------------------------------------------------------------
+@pytest.mark.django_db
+class TestAuthenticatedButDeniedReturns403:
+    def test_permission_required_authenticated_denied_returns_403(
+        self, manager_membership, permissions,
+    ):
+        rf = RequestFactory()
+        user, store, _ = manager_membership
+
+        @permission_required("customers.delete")  # manager lacks this
+        def my_view(request):
+            return HttpResponse("ok")
+
+        request = rf.get("/")
+        request.user = user
+        request.store = store
+        with pytest.raises(PermissionDenied):
+            my_view(request)
+
+    def test_feature_required_authenticated_denied_returns_403(
+        self, manager_membership,
+    ):
+        rf = RequestFactory()
+        user, store, _ = manager_membership
+
+        @feature_required("marketing_campaigns")
+        def my_view(request):
+            return HttpResponse("ok")
+
+        request = rf.get("/")
+        request.user = user
+        request.store = store
+        with pytest.raises(PermissionDenied):
+            my_view(request)

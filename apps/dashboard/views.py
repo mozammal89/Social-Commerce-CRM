@@ -25,6 +25,13 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Sum
 from django.shortcuts import redirect, render
 
+
+# Sentinel for KPI cards whose supporting model hasn't been implemented
+# yet (e.g. ``apps.orders.models.Order`` is missing because that app only
+# ships urls.py). The template renders a "Coming soon" state for these,
+# instead of the misleading "Locked, require orders.view" message.
+KPI_UNAVAILABLE = "unavailable"
+
 from apps.permissions.models import Permission, StoreMembership
 from apps.permissions.resolver import PermissionResolver
 from apps.permissions.services import (
@@ -63,6 +70,20 @@ def dashboard_home(request):
 
     user_stores = _user_stores(user, is_superuser)
     current_store = _resolve_current_store(request, user_stores)
+
+    # Bug 1 (URL bypass on the dashboard itself): enforce
+    # ``dashboard.view`` *after* we have resolved a store so the
+    # resolver has the right context. Superusers always pass.
+    # Regular users with no active membership get the onboarding
+    # state, which is allowed even without ``dashboard.view`` so
+    # they see a useful page.
+    if (
+        not is_superuser
+        and current_store is not None
+        and not user_has_permission(user, current_store, "dashboard.view")
+    ):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied
 
     context: dict[str, Any] = {
         "user": user,
@@ -198,7 +219,7 @@ def _safe_revenue(user, store, is_superuser):
     try:
         from apps.orders.models import Order
     except Exception:
-        return None
+        return KPI_UNAVAILABLE
     agg = Order.objects.filter(store=store).aggregate(total=Sum("total"))
     return agg["total"] or 0
 
@@ -207,7 +228,8 @@ def _safe_count(user, store, code: str, is_superuser):
     if not _can_view(user, store, code, is_superuser):
         return None
     # Map the permission code to a model. If the app's models.py isn't
-    # installed yet, return None so the template renders a locked state.
+    # installed yet, return KPI_UNAVAILABLE so the template renders a
+    # "Coming soon" state instead of misleadingly saying "Locked".
     model_map = {
         "orders.view": ("orders", "Order"),
         "customers.view": ("customers", "Customer"),
@@ -218,7 +240,7 @@ def _safe_count(user, store, code: str, is_superuser):
         from django.apps import apps
         model = apps.get_model(app_label, model_name)
     except LookupError:
-        return None
+        return KPI_UNAVAILABLE
     qs = model.objects.all()
     if hasattr(model, "store") and store is not None:
         qs = qs.filter(store=store)
@@ -231,8 +253,8 @@ def _safe_low_stock(user, store, is_superuser):
 
     The product schema isn't fully built yet (apps/products only has
     urls.py), so this helper degrades gracefully:
-      * If ``apps.products.models.Product`` is unavailable → ``None``.
-      * If the schema lacks a stock field at all → ``None``.
+      * If ``apps.products.models.Product`` is unavailable → ``KPI_UNAVAILABLE``.
+      * If the schema lacks a stock field at all → ``KPI_UNAVAILABLE``.
       * If there's no ``store`` FK on the product model → count globally.
     """
     if not _can_view(user, store, "inventory.view", is_superuser):
@@ -241,7 +263,7 @@ def _safe_low_stock(user, store, is_superuser):
         from django.apps import apps
         Product = apps.get_model("products", "Product")
     except LookupError:
-        return None
+        return KPI_UNAVAILABLE
 
     field_names = {f.name for f in Product._meta.get_fields()}
     stock_field = next(
@@ -249,7 +271,7 @@ def _safe_low_stock(user, store, is_superuser):
         None,
     )
     if stock_field is None:
-        return None
+        return KPI_UNAVAILABLE
 
     qs = Product.objects.all()
     if "store" in field_names and store is not None:

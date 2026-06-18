@@ -6,8 +6,13 @@ Idempotent: running it twice has no effect.
 
 from __future__ import annotations
 
+import logging
+
 from apps.core.seeders.base import BaseSeeder
 from apps.permissions.models import Role
+
+
+logger = logging.getLogger(__name__)
 
 
 SYSTEM_ROLES: list[tuple[str, str, int, str]] = [
@@ -35,7 +40,7 @@ class RolesSeeder(BaseSeeder):
 
     def run(self) -> None:
         for slug, name, level, desc in SYSTEM_ROLES:
-            Role.objects.update_or_create(
+            _, created = Role.objects.update_or_create(
                 slug=slug,
                 store=None,
                 defaults={
@@ -45,4 +50,10 @@ class RolesSeeder(BaseSeeder):
                     "is_system": True,
                     "is_active": True,
                 },
+            )
+            logger.info(
+                "%s role %r (level=%s)",
+                "created" if created else "updated",
+                slug,
+                level,
             )

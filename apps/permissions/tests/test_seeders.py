@@ -293,3 +293,62 @@ class TestPatchHelpers:
         assert ok is False
         feat_ok = PermissionResolver().check_feature(anon, None, "any")
         assert feat_ok is False
+
+
+@pytest.mark.django_db
+class TestDenyMatrix:
+    """Bug 13: the deny matrix is applied after the GRANT pass and must
+    prevent roles from exercising privileges they would otherwise have via
+    wildcard ``"*"`` grants.
+    """
+
+    def test_admin_role_cannot_delete_roles(self, db):
+        RolesSeeder(verbosity=0).run()
+        RolePermissionsSeeder(verbosity=0).run()
+        admin = Role.objects.get(slug="admin", store=None)
+        perm = Permission.objects.get(code="roles.delete")
+        rp = RolePermission.objects.get(role=admin, permission=perm)
+        from apps.permissions.constants import MODIFIER_DENY
+        assert rp.modifier == MODIFIER_DENY
+
+    def test_manager_role_cannot_delete_roles(self, db):
+        RolesSeeder(verbosity=0).run()
+        RolePermissionsSeeder(verbosity=0).run()
+        manager = Role.objects.get(slug="manager", store=None)
+        perm = Permission.objects.get(code="roles.delete")
+        rp = RolePermission.objects.get(role=manager, permission=perm)
+        from apps.permissions.constants import MODIFIER_DENY
+        assert rp.modifier == MODIFIER_DENY
+
+    def test_store_owner_has_no_denies(self, db):
+        RolesSeeder(verbosity=0).run()
+        RolePermissionsSeeder(verbosity=0).run()
+        owner = Role.objects.get(slug="store-owner", store=None)
+        from apps.permissions.constants import MODIFIER_DENY
+        denied = RolePermission.objects.filter(role=owner, modifier=MODIFIER_DENY)
+        assert denied.count() == 0
+
+    def test_deny_matrix_overrides_wildcard_grant(self, db):
+        """An ``admin`` role has ``*`` grants (wildcard). The deny matrix
+        writes a DENY row that replaces the GRANT (via ``update_or_create``).
+        The resolver's DENY-wins guard must win.
+        """
+        RolesSeeder(verbosity=0).run()
+        RolePermissionsSeeder(verbosity=0).run()
+        admin = Role.objects.get(slug="admin", store=None)
+        perm = Permission.objects.get(code="roles.delete")
+        from apps.permissions.constants import MODIFIER_DENY
+        # Only one row per (role, permission). DENY replaced the GRANT.
+        rows = RolePermission.objects.filter(role=admin, permission=perm)
+        assert rows.count() == 1
+        assert rows.first().modifier == MODIFIER_DENY
+
+    def test_seeder_does_not_use_print(self):
+        import apps.permissions.seeders.permissions_seeder as mod
+        import apps.permissions.seeders.roles_seeder as roles_mod
+        import inspect
+        src_perms = inspect.getsource(mod)
+        src_roles = inspect.getsource(roles_mod)
+        # Bug 12: no ``print(`` calls in the seeder source.
+        assert "print(" not in src_perms
+        assert "print(" not in src_roles

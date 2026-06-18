@@ -108,23 +108,36 @@ class StoreStaffSerializer(serializers.Serializer):
             raise serializers.ValidationError("User not found.")
 
     def validate(self, attrs):
-        """Validate store access."""
+        """Validate store access.
+
+        Bug 8: this now consults ``StoreMembership`` (active rows) instead
+        of the legacy ``Store.owners/managers/staff`` M2M, matching the
+        write path in ``manage_store_staff``.
+        """
         store = self.context["store"]
         user_id = attrs["user_id"]
 
         from apps.accounts.models import User
+        from apps.permissions.models import StoreMembership
 
         user = User.objects.get(id=user_id)
 
+        active = StoreMembership.objects.filter(
+            user=user, store=store, is_active=True,
+        )
+        owner_role = store.owners.filter(id=user_id).exists()
+
         if attrs["action"] == "add":
-            if store.owners.filter(id=user_id).exists():
+            if owner_role:
                 raise serializers.ValidationError("User is already an owner.")
-            if store.managers.filter(id=user_id).exists():
+            if active.filter(role__slug="manager").exists():
                 raise serializers.ValidationError("User is already a manager.")
-            if store.staff.filter(id=user_id).exists():
+            if active.filter(role__slug="viewer").exists():
                 raise serializers.ValidationError("User is already a staff member.")
         elif attrs["action"] == "remove":
-            if store.owners.filter(id=user_id).exists():
-                raise serializers.ValidationError("Cannot remove store owners via this endpoint.")
+            if owner_role:
+                raise serializers.ValidationError(
+                    "Cannot remove store owners via this endpoint.",
+                )
 
         return attrs
