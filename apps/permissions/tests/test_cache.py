@@ -45,24 +45,29 @@ class TestCacheHelpers:
         assert new == 2
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 class TestCacheInvalidationSignals:
     def test_role_permission_change_bumps_user(
-        self, db, system_roles, manager_membership, resources,
+        self, transactional_db, system_roles, manager_membership, resources,
     ):
+        from django.db import transaction
         user, store, _ = manager_membership
         perm = RolePermission(
             role=Role.objects.get(slug=ROLE_MANAGER),
             permission=Permission.objects.get(code="orders.create"),
         )
         version_before = get_user_version(user.id)
-        perm.save()
+        # Wrap in atomic so the on_commit hook fires and the bump happens
+        # before we read get_user_version() again.
+        with transaction.atomic():
+            perm.save()
         # The user-version stamp must have been bumped.
         assert get_user_version(user.id) > version_before
 
     def test_membership_change_bumps_user_and_store(
-        self, db, system_roles, viewer_role,
+        self, transactional_db, system_roles, viewer_role,
     ):
+        from django.db import transaction
         from tests.factories import UserFactory
         from apps.stores.models import Store
         u = UserFactory()
@@ -70,18 +75,23 @@ class TestCacheInvalidationSignals:
 
         u_before = get_user_version(u.id)
         s_before = get_store_plan_version(s.id)
-        StoreMembership.objects.create(user=u, store=s, role=viewer_role, is_active=True)
+        with transaction.atomic():
+            StoreMembership.objects.create(
+                user=u, store=s, role=viewer_role, is_active=True,
+            )
         assert get_user_version(u.id) > u_before
         assert get_store_plan_version(s.id) > s_before
 
     def test_user_override_change_bumps_user(
-        self, db, system_roles, viewer_membership, resources,
+        self, transactional_db, system_roles, viewer_membership, resources,
     ):
+        from django.db import transaction
         user, store, _ = viewer_membership
         u_before = get_user_version(user.id)
-        UserPermissionOverride.objects.create(
-            user=user, store=store,
-            permission=Permission.objects.get(code="orders.create"),
-            is_granted=True,
-        )
+        with transaction.atomic():
+            UserPermissionOverride.objects.create(
+                user=user, store=store,
+                permission=Permission.objects.get(code="orders.create"),
+                is_granted=True,
+            )
         assert get_user_version(user.id) > u_before

@@ -24,6 +24,7 @@ import logging
 from typing import Any
 
 from django.core.management import call_command
+from django.db import transaction
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.forms.models import model_to_dict
 
@@ -102,34 +103,41 @@ def _bump_store_plan(store_id) -> None:
 # ---- RBAC change signals --------------------------------------------------
 
 def _on_role_permission_change(sender, instance, **kwargs):
-    _bump_users_for_role(instance.role_id)
+    role_id = instance.role_id
+    transaction.on_commit(lambda: _bump_users_for_role(role_id))
 
 
 def _on_membership_change(sender, instance, **kwargs):
-    _bump_user(instance.user_id)
-    _bump_store_plan(instance.store_id)
+    user_id = instance.user_id
+    store_id = instance.store_id
+    transaction.on_commit(lambda: _bump_user(user_id))
+    transaction.on_commit(lambda: _bump_store_plan(store_id))
 
 
 def _on_override_change(sender, instance, **kwargs):
-    _bump_user(instance.user_id)
+    user_id = instance.user_id
+    transaction.on_commit(lambda: _bump_user(user_id))
 
 
 def _on_subscription_change(sender, instance, **kwargs):
-    _bump_store_plan(instance.store_id)
+    store_id = instance.store_id
+    transaction.on_commit(lambda: _bump_store_plan(store_id))
 
 
 def _on_plan_change(sender, instance, **kwargs):
-    # Plan changes affect every store on that plan. Simpler approach:
-    # bump all stores' plan versions. For now we only bump the affected
-    # plan's stores.
-    try:
-        from .models import Subscription
-        for sid in Subscription.objects.filter(plan=instance).values_list(
-            "store_id", flat=True
-        ):
-            _bump_store_plan(sid)
-    except Exception:
-        logger.exception("Plan change bump failed")
+    # Plan changes affect every store on that plan. Defer to post-commit
+    # to avoid transaction issues when querying Subscription table.
+    def bump_plan_stores():
+        try:
+            from .models import Subscription
+            for sid in Subscription.objects.filter(plan=instance).values_list(
+                "store_id", flat=True
+            ):
+                _bump_store_plan(sid)
+        except Exception:
+            logger.exception("Plan change bump failed")
+
+    transaction.on_commit(bump_plan_stores)
 
 
 # ---------------------------------------------------------------------------
@@ -168,24 +176,36 @@ def _log(action: str, target_type: str, instance, before=None, after=None):
     ctx = current_request_context()
     if ctx is None:
         return  # No user-initiated request; skip audit.
+
     instance_store_id = getattr(instance, "store_id", None)
     ctx_store_id = ctx.get("store_id")
-    try:
-        AuditLog.objects.create(
-            actor=ctx.get("user"),
-            store_id=instance_store_id if instance_store_id is not None else ctx_store_id,
-            action=action,
-            target_type=target_type,
-            target_id=str(getattr(instance, "pk", "")),
-            before=before,
-            after=after,
-            ip_address=ctx.get("ip"),
-            user_agent=(ctx.get("ua") or "")[:512],
-            request_id=ctx.get("request_id") or "",
-        )
-    except Exception:
-        # Audit must never break the save.
-        logger.exception("Failed to write AuditLog row for %s", action)
+    target_id = str(getattr(instance, "pk", ""))
+
+    # Defer AuditLog creation to after the transaction commits.
+    # This prevents transaction errors if the AuditLog creation fails.
+    def create_audit_log():
+        try:
+            AuditLog.objects.create(
+                actor=ctx.get("user"),
+                store_id=instance_store_id if instance_store_id is not None else ctx_store_id,
+                action=action,
+                target_type=target_type,
+                target_id=target_id,
+                before=before,
+                after=after,
+                ip_address=ctx.get("ip"),
+                user_agent=(ctx.get("ua") or "")[:512],
+                request_id=ctx.get("request_id") or "",
+            )
+        except Exception:
+            # Audit must never break the save.
+            logger.exception("Failed to write AuditLog row for %s", action)
+
+    # Use on_commit if we're in a transaction, otherwise create immediately
+    if transaction.get_connection().in_atomic_block:
+        transaction.on_commit(create_audit_log)
+    else:
+        create_audit_log()
 
 
 def _pre_capture(sender, instance, **kwargs):

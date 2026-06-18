@@ -1,27 +1,121 @@
 {% extends 'layouts/dashboard.html' %}
+{% load rbac %}
 
 {% block title %}Dashboard - {{ APP_NAME }}{% endblock %}
 
 {% block content %}
-<!-- Dashboard Container -->
 <div class="dashboard-container">
+
+    {# ============================================================ #}
+    {#  Empty-state onboarding card                                  #}
+    {#  Renders when the user has no active StoreMembership          #}
+    {#  (or no stores exist yet for superusers).                     #}
+    {# ============================================================ #}
+    {% if user_has_no_store %}
+    <div class="dashboard-section">
+        <div class="card border-0 shadow-sm" style="border-radius: var(--radius-lg);">
+            <div class="card-body text-center" style="padding: var(--space-10) var(--space-6);">
+                <div style="width: 80px; height: 80px; margin: 0 auto var(--space-5); display: flex; align-items: center; justify-content: center; background: var(--brand-50); border-radius: 50%; color: var(--brand-600);">
+                    <i class="bi bi-shop" style="font-size: 2.5rem;"></i>
+                </div>
+                <h1 class="section-title mb-3">
+                    {% if is_superuser %}
+                        Welcome, Super Admin
+                    {% else %}
+                        You don't belong to any store yet
+                    {% endif %}
+                </h1>
+                <p class="section-subtitle mb-4" style="max-width: 540px; margin-left: auto; margin-right: auto;">
+                    {% if is_superuser %}
+                        Create your first store to start managing customers, products, and orders. As a super admin you'll automatically have full access to every store you create.
+                    {% else %}
+                        Once a store admin invites you and assigns you a role, you'll see your dashboard here. Ask the store owner to send you an invite, or contact support if you believe this is a mistake.
+                    {% endif %}
+                </p>
+                {% if is_superuser %}
+                <a href="{% url 'admin:stores_store_add' %}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-plus-lg me-2"></i>Create Your First Store
+                </a>
+                {% else %}
+                <a href="{% url 'help:support' %}" class="btn btn-secondary btn-lg">
+                    <i class="bi bi-life-preserver me-2"></i>Contact Support
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+
+    {# ============================================================ #}
+    {#  Regular dashboard (member has at least one store)            #}
+    {# ============================================================ #}
+
     <!-- Page Header -->
     <div class="section-header">
         <div>
-            <h1 class="section-title">Welcome back, {{ user.first_name }}!</h1>
-            <p class="section-subtitle">Here's what's happening with your store today</p>
+            <h1 class="section-title">
+                Welcome back, {{ user.first_name }}!
+                {% if is_superuser %}
+                <span class="badge bg-warning text-dark ms-2" style="font-size: 0.6em; vertical-align: middle;">
+                    <i class="bi bi-shield-check me-1"></i>Super Admin
+                </span>
+                {% endif %}
+            </h1>
+            <p class="section-subtitle">
+                {% if current_store %}
+                    Here's what's happening in <strong>{{ current_store.name }}</strong> today
+                {% else %}
+                    Select a store from the top navigation to see your dashboard
+                {% endif %}
+            </p>
         </div>
         <div class="section-actions">
+            {% if current_store %}
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#quickAddModal">
-                <i class="bi bi-plus-lg"></i>
-                Quick Add
+                <i class="bi bi-plus-lg"></i> Quick Add
             </button>
+            {% endif %}
         </div>
     </div>
 
-    <!-- KPI Cards -->
+    {# RBAC status pill row — role + plan + permission count #}
+    {% if current_store %}
+    <div class="dashboard-section">
+        <div class="d-flex flex-wrap gap-3 align-items-center" style="padding: var(--space-3) 0;">
+            {% if top_role %}
+            <span class="badge bg-brand-50 text-brand-700" style="padding: var(--space-2) var(--space-3); font-size: var(--font-size-sm);">
+                <i class="bi bi-person-badge me-1"></i>
+                Role: <strong>{{ top_role.name }}</strong>
+                {% if role_names and role_names|length > top_role.name|length %}
+                    ({{ role_names }})
+                {% endif %}
+            </span>
+            {% endif %}
+            {% if plan %}
+            <span class="badge bg-info-subtle text-info-emphasis" style="padding: var(--space-2) var(--space-3); font-size: var(--font-size-sm);">
+                <i class="bi bi-stars me-1"></i>
+                Plan: <strong>{{ plan.name }}</strong>
+            </span>
+            {% endif %}
+            <span class="badge bg-light text-dark border" style="padding: var(--space-2) var(--space-3); font-size: var(--font-size-sm);">
+                <i class="bi bi-key me-1"></i>
+                {{ perm_count }} permission{{ perm_count|pluralize }}
+            </span>
+            {% if max_users %}
+            <span class="badge bg-light text-dark border" style="padding: var(--space-2) var(--space-3); font-size: var(--font-size-sm);">
+                <i class="bi bi-people me-1"></i>
+                Seat cap: {{ max_users }}
+            </span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- KPI Cards — each gated by a permission code -->
+    {% if current_store %}
     <div class="kpi-grid kpi-grid-4 dashboard-section">
-        <!-- Revenue Card -->
+
+        {# Revenue — requires orders.view #}
         <div class="kpi-card">
             <div class="kpi-card-header">
                 <div class="kpi-card-label">
@@ -30,16 +124,22 @@
                     </div>
                     Total Revenue
                 </div>
-                <span class="kpi-card-trend kpi-card-trend--positive">
-                    <i class="bi bi-arrow-up-short"></i>
-                    12%
+                {% if kpis.revenue is None %}
+                <span class="kpi-card-trend kpi-card-trend--muted">
+                    <i class="bi bi-lock"></i> Locked
                 </span>
+                {% endif %}
             </div>
-            <div class="kpi-card-value">$12,450</div>
+            {% if kpis.revenue is not None %}
+            <div class="kpi-card-value">${{ kpis.revenue|floatformat:0 }}</div>
             <div class="kpi-card-footer">vs last month</div>
+            {% else %}
+            <div class="kpi-card-value text-muted">—</div>
+            <div class="kpi-card-footer">Requires <code>orders.view</code></div>
+            {% endif %}
         </div>
 
-        <!-- Orders Card -->
+        {# Orders — requires orders.view #}
         <div class="kpi-card">
             <div class="kpi-card-header">
                 <div class="kpi-card-label">
@@ -48,34 +148,46 @@
                     </div>
                     Total Orders
                 </div>
-                <span class="kpi-card-trend kpi-card-trend--positive">
-                    <i class="bi bi-arrow-up-short"></i>
-                    8%
+                {% if kpis.orders_count is None %}
+                <span class="kpi-card-trend kpi-card-trend--muted">
+                    <i class="bi bi-lock"></i> Locked
                 </span>
+                {% endif %}
             </div>
-            <div class="kpi-card-value">156</div>
+            {% if kpis.orders_count is not None %}
+            <div class="kpi-card-value">{{ kpis.orders_count }}</div>
             <div class="kpi-card-footer">vs last month</div>
+            {% else %}
+            <div class="kpi-card-value text-muted">—</div>
+            <div class="kpi-card-footer">Requires <code>orders.view</code></div>
+            {% endif %}
         </div>
 
-        <!-- Customers Card -->
+        {# Customers — requires customers.view #}
         <div class="kpi-card">
             <div class="kpi-card-header">
                 <div class="kpi-card-label">
                     <div class="kpi-card-icon kpi-card-icon--info">
                         <i class="bi bi-people"></i>
                     </div>
-                    New Customers
+                    Total Customers
                 </div>
-                <span class="kpi-card-trend kpi-card-trend--positive">
-                    <i class="bi bi-arrow-up-short"></i>
-                    15%
+                {% if kpis.customers_count is None %}
+                <span class="kpi-card-trend kpi-card-trend--muted">
+                    <i class="bi bi-lock"></i> Locked
                 </span>
+                {% endif %}
             </div>
-            <div class="kpi-card-value">42</div>
-            <div class="kpi-card-footer">vs last month</div>
+            {% if kpis.customers_count is not None %}
+            <div class="kpi-card-value">{{ kpis.customers_count }}</div>
+            <div class="kpi-card-footer">all-time</div>
+            {% else %}
+            <div class="kpi-card-value text-muted">—</div>
+            <div class="kpi-card-footer">Requires <code>customers.view</code></div>
+            {% endif %}
         </div>
 
-        <!-- Low Stock Card -->
+        {# Low Stock — requires inventory.view #}
         <div class="kpi-card">
             <div class="kpi-card-header">
                 <div class="kpi-card-label">
@@ -84,20 +196,29 @@
                     </div>
                     Low Stock Items
                 </div>
-                <span class="kpi-card-trend kpi-card-trend--negative">
-                    <i class="bi bi-arrow-down-short"></i>
-                    5
+                {% if kpis.low_stock_count is None %}
+                <span class="kpi-card-trend kpi-card-trend--muted">
+                    <i class="bi bi-lock"></i> Locked
                 </span>
+                {% endif %}
             </div>
-            <div class="kpi-card-value">8</div>
-            <div class="kpi-card-footer">from last week</div>
+            {% if kpis.low_stock_count is not None %}
+            <div class="kpi-card-value">{{ kpis.low_stock_count }}</div>
+            <div class="kpi-card-footer">need restocking</div>
+            {% else %}
+            <div class="kpi-card-value text-muted">—</div>
+            <div class="kpi-card-footer">Requires <code>inventory.view</code></div>
+            {% endif %}
         </div>
     </div>
+    {% endif %}
 
     <!-- Main Content Grid -->
     <div class="row g-5">
         <!-- Recent Activity (8 columns) -->
         <div class="col-lg-8">
+            {% can_any "orders.view" "customers.view" "inventory.view" as show_activity %}
+            {% if show_activity %}
             <div class="card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h2 class="card-title">Recent Activity</h2>
@@ -105,7 +226,7 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="activity-feed" style="padding: var(--space-6);">
-                        <!-- Activity Item 1 -->
+                        {% can "orders.view" %}
                         <div class="activity-item">
                             <div class="activity-icon activity-icon--success">
                                 <i class="bi bi-cart-check"></i>
@@ -116,8 +237,8 @@
                                 <div class="activity-time">2 minutes ago</div>
                             </div>
                         </div>
-
-                        <!-- Activity Item 2 -->
+                        {% endcan %}
+                        {% can "customers.view" %}
                         <div class="activity-item">
                             <div class="activity-icon activity-icon--info">
                                 <i class="bi bi-person-plus"></i>
@@ -128,8 +249,8 @@
                                 <div class="activity-time">15 minutes ago</div>
                             </div>
                         </div>
-
-                        <!-- Activity Item 3 -->
+                        {% endcan %}
+                        {% can "inventory.view" %}
                         <div class="activity-item">
                             <div class="activity-icon activity-icon--warning">
                                 <i class="bi bi-exclamation-triangle"></i>
@@ -140,82 +261,114 @@
                                 <div class="activity-time">1 hour ago</div>
                             </div>
                         </div>
-
-                        <!-- Activity Item 4 -->
-                        <div class="activity-item">
-                            <div class="activity-icon activity-icon--success">
-                                <i class="bi bi-credit-card"></i>
-                            </div>
-                            <div class="activity-content">
-                                <div class="activity-title">Payment Received</div>
-                                <div class="activity-description">Payment of $1,234.50 received for order #ORD-1230</div>
-                                <div class="activity-time">3 hours ago</div>
-                            </div>
-                        </div>
+                        {% endcan %}
                     </div>
                 </div>
             </div>
+            {% else %}
+            <div class="card h-100">
+                <div class="card-body text-center" style="padding: var(--space-10) var(--space-6);">
+                    <div style="width: 64px; height: 64px; margin: 0 auto var(--space-4); display: flex; align-items: center; justify-content: center; background: var(--gray-100); border-radius: 50%; color: var(--text-muted);">
+                        <i class="bi bi-shield-lock" style="font-size: 1.75rem;"></i>
+                    </div>
+                    <h3 class="card-title">Activity feed locked</h3>
+                    <p class="text-muted mb-0">
+                        Your current role doesn't include access to orders, customers, or inventory.
+                        Talk to a store admin if you think this is wrong.
+                    </p>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Sidebar (4 columns) -->
         <div class="col-lg-4">
             <div class="d-flex flex-column gap-5">
-                <!-- Quick Actions -->
+
+                <!-- Quick Actions — each wrapped in a permission check -->
+                {% can_any "customers.create" "products.create" "orders.view" "reports.view" as has_quick_action %}
                 <div class="card">
                     <div class="card-header">
                         <h2 class="card-title">Quick Actions</h2>
                     </div>
                     <div class="card-body">
+                        {% if has_quick_action %}
                         <div class="d-grid gap-3">
+                            {% can "customers.create" %}
                             <a href="{% url 'customers:create' %}" class="btn btn-secondary text-start">
                                 <i class="bi bi-person-plus"></i>
                                 <span>Add Customer</span>
                             </a>
+                            {% endcan %}
+                            {% can "products.create" %}
                             <a href="{% url 'products:create' %}" class="btn btn-secondary text-start">
                                 <i class="bi bi-plus-circle"></i>
                                 <span>Add Product</span>
                             </a>
+                            {% endcan %}
+                            {% can "orders.view" %}
                             <a href="{% url 'orders:list' %}" class="btn btn-secondary text-start">
                                 <i class="bi bi-cart3"></i>
                                 <span>View Orders</span>
                             </a>
+                            {% endcan %}
+                            {% can "reports.view" %}
                             <a href="{% url 'reports:sales' %}" class="btn btn-secondary text-start">
                                 <i class="bi bi-file-bar-graph"></i>
                                 <span>View Reports</span>
                             </a>
+                            {% endcan %}
                         </div>
+                        {% else %}
+                        <div class="text-muted text-center small py-3">
+                            <i class="bi bi-info-circle me-1"></i>
+                            No quick actions are available for your role.
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
 
-                <!-- Store Status -->
+                <!-- RBAC Status Card -->
+                {% if current_store %}
                 <div class="card">
                     <div class="card-header">
-                        <h2 class="card-title">Store Status</h2>
+                        <h2 class="card-title">Access</h2>
                     </div>
                     <div class="card-body">
+                        {% if top_role %}
                         <div class="d-flex justify-content-between mb-3">
-                            <span style="color: var(--text-secondary);">Products</span>
-                            <span style="font-weight: var(--font-weight-semibold); color: var(--text-primary);">248</span>
+                            <span style="color: var(--text-secondary);">Role</span>
+                            <span style="font-weight: var(--font-weight-semibold); color: var(--text-primary);">{{ top_role.name }}</span>
                         </div>
+                        {% endif %}
+                        {% if plan %}
                         <div class="d-flex justify-content-between mb-3">
-                            <span style="color: var(--text-secondary);">Customers</span>
-                            <span style="font-weight: var(--font-weight-semibold); color: var(--text-primary);">1,234</span>
+                            <span style="color: var(--text-secondary);">Plan</span>
+                            <span style="font-weight: var(--font-weight-semibold); color: var(--text-primary);">{{ plan.name }}</span>
                         </div>
+                        {% endif %}
                         <div class="d-flex justify-content-between mb-3">
-                            <span style="color: var(--text-secondary);">Orders Today</span>
-                            <span style="font-weight: var(--font-weight-semibold); color: var(--text-primary);">23</span>
+                            <span style="color: var(--text-secondary);">Permissions</span>
+                            <span style="font-weight: var(--font-weight-semibold); color: var(--text-primary);">{{ perm_count }}</span>
                         </div>
+                        {% if max_users %}
                         <div class="d-flex justify-content-between">
-                            <span style="color: var(--text-secondary);">Revenue Today</span>
-                            <span style="font-weight: var(--font-weight-semibold); color: var(--text-primary);">$3,450.00</span>
+                            <span style="color: var(--text-secondary);">Seat cap</span>
+                            <span style="font-weight: var(--font-weight-semibold); color: var(--text-primary);">{{ max_users }}</span>
                         </div>
+                        {% endif %}
                     </div>
                 </div>
+                {% endif %}
+
             </div>
         </div>
     </div>
+
+    {% endif %}
 </div>
 
+{% if current_store %}
 <!-- Quick Add Modal -->
 <div class="modal fade" id="quickAddModal" tabindex="-1" aria-labelledby="quickAddModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -228,6 +381,7 @@
             </div>
             <div class="modal-body">
                 <div class="d-grid gap-3">
+                    {% can "customers.create" %}
                     <a href="{% url 'customers:create' %}" class="btn btn-secondary text-start" style="padding: var(--space-4); text-align: left;">
                         <div class="d-flex align-items-center gap-3">
                             <div style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--brand-50); border-radius: var(--radius); color: var(--brand-600);">
@@ -239,6 +393,8 @@
                             </div>
                         </div>
                     </a>
+                    {% endcan %}
+                    {% can "products.create" %}
                     <a href="{% url 'products:create' %}" class="btn btn-secondary text-start" style="padding: var(--space-4); text-align: left;">
                         <div class="d-flex align-items-center gap-3">
                             <div style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--brand-50); border-radius: var(--radius); color: var(--brand-600);">
@@ -250,6 +406,8 @@
                             </div>
                         </div>
                     </a>
+                    {% endcan %}
+                    {% can "orders.create" %}
                     <a href="{% url 'orders:create' %}" class="btn btn-secondary text-start" style="padding: var(--space-4); text-align: left;">
                         <div class="d-flex align-items-center gap-3">
                             <div style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--brand-50); border-radius: var(--radius); color: var(--brand-600);">
@@ -261,9 +419,11 @@
                             </div>
                         </div>
                     </a>
+                    {% endcan %}
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}

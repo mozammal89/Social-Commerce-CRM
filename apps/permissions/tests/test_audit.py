@@ -29,11 +29,12 @@ def _reset_audit_context():
     middleware._req_ctx.set(None)
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 class TestAuditLogging:
     def test_role_create_creates_audit_log(
-        self, db, system_roles,
+        self, transactional_db, system_roles,
     ):
+        from django.db import transaction
         from tests.factories import UserFactory
         from apps.stores.models import Store
         actor = UserFactory()
@@ -42,9 +43,10 @@ class TestAuditLogging:
             user=actor, store_id=s.id,
             ip="127.0.0.1", ua="pytest", request_id="abc123",
         )
-        role = Role.objects.create(
-            name="Custom Role", slug="custom-role", store=s,
-        )
+        with transaction.atomic():
+            role = Role.objects.create(
+                name="Custom Role", slug="custom-role", store=s,
+            )
         log = AuditLog.objects.filter(action=AUDIT_ROLE_CREATE).first()
         assert log is not None
         assert log.target_type == "Role"
@@ -54,27 +56,30 @@ class TestAuditLogging:
         assert log.request_id == "abc123"
 
     def test_role_permission_delete_creates_audit_log(
-        self, db, system_roles, manager_role,
+        self, transactional_db, system_roles, manager_role,
     ):
+        from django.db import transaction
         from tests.factories import UserFactory
         from apps.stores.models import Store
         actor = UserFactory()
         s = Store.objects.create(name="X", status="active")
         set_request_context(user=actor, store_id=s.id, ip="127.0.0.1",
                             ua="pytest", request_id="def")
-        rp = RolePermission.objects.create(
-            role=manager_role,
-            permission=Permission.objects.get(code="orders.create"),
-        )
-        rp_id = str(rp.id)
-        rp.delete()
+        with transaction.atomic():
+            rp = RolePermission.objects.create(
+                role=manager_role,
+                permission=Permission.objects.get(code="orders.create"),
+            )
+            rp_id = str(rp.id)
+            rp.delete()
         log = AuditLog.objects.filter(action=AUDIT_ROLE_PERMISSION_DELETE).first()
         assert log is not None
         assert log.target_id == rp_id
 
     def test_membership_create_creates_audit_log(
-        self, db, system_roles, viewer_role,
+        self, transactional_db, system_roles, viewer_role,
     ):
+        from django.db import transaction
         from tests.factories import UserFactory
         from apps.stores.models import Store
         actor = UserFactory()
@@ -82,12 +87,13 @@ class TestAuditLogging:
         set_request_context(user=actor, store_id=s.id, ip="127.0.0.1",
                             ua="pytest", request_id="ghi")
         u = UserFactory()
-        StoreMembership.objects.create(user=u, store=s, role=viewer_role)
+        with transaction.atomic():
+            StoreMembership.objects.create(user=u, store=s, role=viewer_role)
         log = AuditLog.objects.filter(action=AUDIT_MEMBERSHIP_CREATE).first()
         assert log is not None
         assert log.actor == actor
 
-    def test_audit_log_no_context_does_not_write(self, db):
+    def test_audit_log_no_context_does_not_write(self, transactional_db):
         # No set_request_context → no audit row written.
         Role.objects.create(name="NoCtxRole", slug="no-ctx-role")
         # Use a unique action sentinel to filter
@@ -97,13 +103,15 @@ class TestAuditLogging:
         # isolate, but the absence of error is the main signal.
         assert audit_rows is not None
 
-    def test_audit_log_is_append_only(self, db, system_roles):
+    def test_audit_log_is_append_only(self, transactional_db, system_roles):
+        from django.db import transaction
         from apps.permissions.middleware import set_request_context
         from tests.factories import UserFactory
 
         actor = UserFactory()
         set_request_context(user=actor, ip="127.0.0.1", ua="t", request_id="r")
-        Role.objects.create(name="R", slug="r")
+        with transaction.atomic():
+            Role.objects.create(name="R", slug="r")
         log = AuditLog.objects.filter(action=AUDIT_ROLE_CREATE).first()
         assert log is not None
         # log has been saved once. The _saved flag is now True.
