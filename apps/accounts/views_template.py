@@ -42,13 +42,14 @@ class LoginView(DjangoLoginView):
 
 
 class LogoutView(DjangoLogoutView):
-    """Custom logout view with template rendering."""
-    template_name = 'auth/login.html'
-    
+    """Custom logout view with GET method support."""
+    next_page = 'accounts:login'
+    http_method_names = ['get', 'post']
+
     def get(self, request, *args, **kwargs):
         logout(request)
         messages.success(request, 'You have been logged out successfully.')
-        return redirect('accounts:login')
+        return redirect(self.next_page)
 
 
 class RegistrationView(DjangoPasswordResetDoneView):
