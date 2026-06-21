@@ -1,0 +1,192 @@
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+{% block title %}Checkout - {{ plan.name }} - Social Commerce CRM{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-4xl">
+    <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Complete Your Subscription</h1>
+        <p class="text-gray-600">You're subscribing to the {{ plan.name }} plan</p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-lg p-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Plan Summary -->
+            <div class="space-y-6">
+                <div class="bg-gray-50 rounded-lg p-6">
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">{{ plan.name }} Plan</h2>
+                    
+                    <div class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Price:</span>
+                            <span class="font-semibold text-gray-900">{{ plan.currency }}{{ total_amount }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Billing Period:</span>
+                            <span class="font-semibold text-gray-900 capitalize">{{ billing_period }}</span>
+                        </div>
+                        {% if start_trial and plan.trial_days > 0 %}
+                        <div class="flex justify-between text-green-600">
+                            <span>Free Trial:</span>
+                            <span class="font-semibold">{{ plan.trial_days }} days</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="bg-blue-50 rounded-lg p-4">
+                    <h3 class="font-semibold text-gray-900 mb-2">What's Included:</h3>
+                    <ul class="space-y-2 text-sm text-gray-700">
+                        <li>✓ {{ plan.max_stores }} Store{{ plan.max_stores|pluralize }}</li>
+                        <li>✓ {{ plan.max_users }} Team Members</li>
+                        <li>✓ {{ plan.max_products }} Products</li>
+                        <li>✓ {{ plan.max_orders_per_month }} Orders/Month</li>
+                        {% for feature in plan.features.all %}
+                        <li>✓ {{ feature.name }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Payment Information -->
+            <div class="space-y-6">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">Payment Method</h2>
+                    {% if start_trial %}
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div class="flex items-center">
+                            <svg class="w-6 h-6 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <div>
+                                <h3 class="font-semibold text-green-800">Free Trial - No Payment Required</h3>
+                                <p class="text-sm text-green-700">Your trial starts today. You can upgrade anytime during or after your trial.</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="space-y-4">
+                        <div class="border rounded-lg p-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-12 h-8 bg-blue-600 rounded flex items-center justify-center">
+                                    <span class="text-white font-bold text-xs">AAMAR</span>
+                                </div>
+                                <div>
+                                    <div class="font-semibold text-gray-900">Aamarpay</div>
+                                    <div class="text-sm text-gray-600">Bangladeshi payment gateway</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <p class="text-sm text-gray-600">
+                            After clicking "Complete Subscription", you'll be redirected to Aamarpay secure payment page to complete your purchase.
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- User Information -->
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">Your Information</h2>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between py-2 border-b">
+                            <span class="text-gray-600">Name:</span>
+                            <span class="font-medium text-gray-900">{{ user.get_full_name }}</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b">
+                            <span class="text-gray-600">Email:</span>
+                            <span class="font-medium text-gray-900">{{ user.email }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terms and Conditions -->
+        <div class="mt-8 pt-6 border-t">
+            <label class="flex items-start space-x-3">
+                <input type="checkbox" id="terms" class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" required>
+                <span class="text-sm text-gray-600">
+                    I agree to the <a href="/terms/" class="text-indigo-600 hover:underline">Terms of Service</a> and 
+                    <a href="/privacy/" class="text-indigo-600 hover:underline">Privacy Policy</a>. 
+                    I understand that my subscription will automatically renew unless canceled.
+                </span>
+            </label>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="mt-6 space-y-3">
+            <form method="POST" id="subscription-form">
+                {% csrf_token %}
+                <input type="hidden" name="plan_slug" value="{{ plan.slug }}">
+                <input type="hidden" name="billing_period" value="{{ billing_period }}">
+                <input type="hidden" name="start_trial" value="{{ start_trial|lower }}">
+                
+                {% if start_trial %}
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-lg transition-colors duration-200 text-lg">
+                    Start Your Free Trial
+                </button>
+                <p class="text-center text-sm text-gray-600">
+                    No credit card required. Cancel anytime.
+                </p>
+                {% else %}
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-lg transition-colors duration-200 text-lg">
+                    Pay {{ plan.currency }}{{ total_amount }}
+                </button>
+                <div class="text-center">
+                    <a href="{% url 'subscriptions:checkout' plan.slug %}?trial=true" class="text-sm text-indigo-600 hover:underline">
+                        Start with free trial instead
+                    </a>
+                </div>
+                {% endif %}
+            </form>
+
+            <a href="{% url 'subscriptions:plans' %}" class="block w-full text-center text-gray-600 hover:text-gray-800 py-3">
+                ← Back to plans
+            </a>
+        </div>
+
+        <!-- Security Badge -->
+        <div class="mt-6 text-center">
+            <div class="flex items-center justify-center space-x-2 text-sm text-gray-500">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+                <span>Secure checkout powered by Aamarpay</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- FAQ Section -->
+    <div class="mt-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6 text-center">Frequently Asked Questions</h2>
+        <div class="space-y-4">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="font-semibold text-gray-900 mb-2">Can I change my plan later?</h3>
+                <p class="text-gray-600">Yes! You can upgrade or downgrade your plan at any time from your dashboard. Changes take effect immediately.</p>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="font-semibold text-gray-900 mb-2">What happens after my trial ends?</h3>
+                <p class="text-gray-600">After your trial ends, you can choose to subscribe to a paid plan or your account will be limited to read-only access.</p>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="font-semibold text-gray-900 mb-2">How do I cancel my subscription?</h3>
+                <p class="text-gray-600">You can cancel anytime from your subscription settings. Your access continues until the end of your current billing period.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('subscription-form').addEventListener('submit', function(e) {
+    const termsCheckbox = document.getElementById('terms');
+    if (!termsCheckbox.checked) {
+        e.preventDefault();
+        alert('Please agree to the Terms of Service and Privacy Policy');
+    }
+});
+</script>
+{% endblock %}

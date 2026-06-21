@@ -108,6 +108,18 @@ DEFAULT_FEATURES: tuple[str, ...] = (
 )
 
 # ---------------------------------------------------------------------------
+# Subscription event types
+# ---------------------------------------------------------------------------
+EVENT_TRIAL_EXPIRED = "trial.expired"
+EVENT_PERIOD_EXPIRED = "period.expired"
+EVENT_PAYMENT_FAILED = "payment.failed"
+EVENT_CANCELED = "subscription.canceled"
+EVENT_REACTIVATED = "subscription.reactivated"
+EVENT_RENEWED = "subscription.renewed"
+EVENT_CREATED = "subscription.created"
+EVENT_PLAN_CHANGED = "plan.changed"
+
+# ---------------------------------------------------------------------------
 # Audit action names.
 # Convention: "<entity>.<verb>"
 # ---------------------------------------------------------------------------

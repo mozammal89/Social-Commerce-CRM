@@ -40,7 +40,7 @@ from apps.permissions.services import (
     remove_member,
     assert_within_plan_limit,
 )
-from apps.permissions.models import Role
+from apps.permissions.models import Role, StoreMembership
 
 
 logger = logging.getLogger("apps.stores")
@@ -88,17 +88,22 @@ class StoreListView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         """Save store with plan-limit guard (Bug 9)."""
         user = self.request.user
-        current_count = Store.objects.filter(
-            memberships__user=user,
-            memberships__is_active=True,
-            is_deleted=False,
-        ).distinct().count()
+        current_count = (
+            Store.objects.filter(
+                memberships__user=user,
+                memberships__is_active=True,
+                is_deleted=False,
+            )
+            .distinct()
+            .count()
+        )
 
         # Determine cap. For new users we may not have a subscription yet,
         # so fall back to a generous default plan cap.
         cap = _resolve_max_stores_cap(user)
         if current_count >= cap:
             from apps.permissions.exceptions import PlanLimitExceeded
+
             raise PlanLimitExceeded("max_stores", current_count, cap)
 
         store = serializer.save()
@@ -206,6 +211,20 @@ def manage_store_staff(request, store_id=None):
         )
 
     if serializer.validated_data["action"] == "add":
+        # max_users enforcement: only count when this is a new membership.
+        existing = StoreMembership.objects.filter(
+            user=target_user,
+            store=store,
+            role=role,
+        ).first()
+        if existing is None or not existing.is_active:
+            from apps.subscriptions.services import enforce_plan_limit
+
+            current_seats = StoreMembership.objects.filter(
+                store=store,
+                is_active=True,
+            ).count()
+            enforce_plan_limit(store, "max_users", current_seats)
         add_member(target_user, store, role, invited_by=user)
         message = f"User added as {role.name}"
     else:
@@ -232,11 +251,15 @@ class MyStoresView(generics.ListAPIView):
         user = self.request.user
         if getattr(user, "is_superuser", False):
             return Store.objects.filter(is_deleted=False).distinct()
-        return Store.objects.filter(
-            memberships__user=user,
-            memberships__is_active=True,
-            is_deleted=False,
-        ).distinct().order_by("name")
+        return (
+            Store.objects.filter(
+                memberships__user=user,
+                memberships__is_active=True,
+                is_deleted=False,
+            )
+            .distinct()
+            .order_by("name")
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +269,7 @@ def _resolve_max_stores_cap(user) -> int:
     """Return the max_stores cap from the highest active subscription the
     user has, falling back to DEFAULT_PLAN_MAX_STORES.
     """
-    from apps.permissions.models import Subscription, Plan
+    from apps.permissions.models import Subscription, SubscriptionPlan
 
     sub = (
         Subscription.objects.filter(
@@ -263,7 +286,7 @@ def _resolve_max_stores_cap(user) -> int:
 
     # Fallback: pick the public free/trial plan if any.
     free_plan = (
-        Plan.objects.filter(is_active=True, is_public=True)
+        SubscriptionPlan.objects.filter(is_active=True, is_public=True)
         .order_by("-max_stores")
         .first()
     )
