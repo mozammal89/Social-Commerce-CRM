@@ -20,7 +20,10 @@ that a misconfigured logging target cannot break a save.
 
 from __future__ import annotations
 
+import datetime as _dt
+import decimal as _decimal
 import logging
+import uuid as _uuid
 from typing import Any
 
 from django.core.management import call_command
@@ -148,7 +151,7 @@ def _safe_model_to_dict(instance) -> dict[str, Any]:
         d = model_to_dict(instance)
     except Exception:
         d = {"id": str(getattr(instance, "pk", ""))}
-    return _stringify_uuids(d)
+    return _json_safe(_stringify_uuids(d))
 
 
 def _stringify_uuids(d: dict[str, Any]) -> dict[str, Any]:
@@ -159,6 +162,45 @@ def _stringify_uuids(d: dict[str, Any]) -> dict[str, Any]:
         else:
             out[k] = v
     return out
+
+
+def _json_safe(value: Any) -> Any:
+    """Recursively coerce a value into something ``json.dumps`` can handle.
+
+    ``model_to_dict`` returns raw ``datetime``/``date``/``Decimal``/``UUID``/
+    ``bytes`` instances which the default ``json`` encoder cannot serialize.
+    PostgreSQL's ``JSONField`` adapter calls ``json.dumps`` on the dict and
+    raises ``TypeError: Object of type datetime is not JSON serializable``
+    if any of those slip through. The model layer also uses
+    ``DjangoJSONEncoder`` as a second line of defense, but we sanitize here
+    too so the signal path never depends on a particular field encoder
+    being configured.
+    """
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, _dt.datetime):
+        return value.isoformat()
+    if isinstance(value, _dt.date):
+        return value.isoformat()
+    if isinstance(value, _dt.time):
+        return value.isoformat()
+    if isinstance(value, _dt.timedelta):
+        return value.total_seconds()
+    if isinstance(value, _decimal.Decimal):
+        return str(value)
+    if isinstance(value, _uuid.UUID):
+        return str(value)
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return bytes(value).decode("utf-8", errors="replace")
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_json_safe(v) for v in value]
+    # Fallback: best-effort stringification so the audit row never crashes.
+    try:
+        return str(value)
+    except Exception:
+        return None
 
 
 def _log(action: str, target_type: str, instance, before=None, after=None):

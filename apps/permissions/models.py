@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import uuid
 
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -615,8 +616,13 @@ class AuditLog(UUIDModel):
     target_type = models.CharField(max_length=64, db_index=True)
     target_id = models.CharField(max_length=64, db_index=True)
 
-    before = models.JSONField(null=True, blank=True)
-    after = models.JSONField(null=True, blank=True)
+    # DjangoJSONEncoder is required because ``model_to_dict`` returns raw
+    # ``datetime``/``Decimal``/``UUID`` values which the default JSON
+    # encoder cannot serialize. Without this, AuditLog rows for any model
+    # that contains non-JSON-native fields (e.g. Subscription) would fail
+    # to persist whenever the row is updated.
+    before = models.JSONField(null=True, blank=True, encoder=DjangoJSONEncoder)
+    after = models.JSONField(null=True, blank=True, encoder=DjangoJSONEncoder)
 
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.CharField(max_length=512, blank=True)
