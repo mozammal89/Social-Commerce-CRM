@@ -35,7 +35,6 @@
     padding: 0;
     margin: 0;
     flex-wrap: nowrap;
-    gap: var(--space-4, 1rem);
 }
 
 /* 2. Sticky-top class — make the navbar actually stick */
@@ -46,22 +45,32 @@
 }
 
 /* 3. Constrain inner flex containers */
-.navbar .d-flex.align-items-center[style*="width: 100%"] {
+.navbar > .container-fluid > .d-flex.align-items-center {
     width: 100% !important;
     flex-wrap: nowrap !important;
-    gap: var(--space-4, 1rem);
+    /* Default flex-start (items start from left) */
+    justify-content: flex-start !important;
 }
 
-/* Center section (search) shrinks properly */
+/* Left section - logo and mobile toggle - never shrink */
+.navbar > .container-fluid > .d-flex > .d-flex.align-items-center:first-child {
+    flex-shrink: 0;
+}
+
+/* Center section (search) - takes available space */
 .navbar-search {
-    flex: 1 1 auto;
+    flex: 1 1 auto !important;
     min-width: 0;
     max-width: 420px;
+    /* Override Bootstrap's mx-4 margins */
+    margin-left: var(--space-3, 0.75rem) !important;
+    margin-right: var(--space-3, 0.75rem) !important;
 }
 
-/* Right section doesn't shrink */
-.navbar > .container-fluid > .d-flex.align-items-center.gap-3 {
-    flex-shrink: 0;
+/* Right section - push to the right with margin-left: auto */
+.navbar > .container-fluid > .d-flex.align-items-center > .d-flex.gap-2 {
+    margin-left: auto !important;
+    flex-shrink: 0 !important;
 }
 
 /* 4. Dropdown menus — Bootstrap 5 already handles this, but ensure

@@ -433,14 +433,6 @@ body {
     gap: var(--space-4);
 }
 
-.navbar .container-fluid {
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-}
-
 .navbar-sticky-top {
     position: sticky;
     top: 0;
@@ -449,18 +441,27 @@ body {
 }
 
 /* Navbar Left Section */
-.navbar > .container-fluid > .d-flex:first-child {
+.navbar > .container-fluid > .d-flex:first-child,
+.navbar > .container-fluid > .navbar-left {
     flex: 0 0 auto;
 }
 
 /* Navbar Right Section */
-.navbar > .container-fluid > .d-flex:last-child {
+.navbar > .container-fluid > .d-flex:last-child,
+.navbar > .container-fluid > .navbar-right {
     flex: 0 0 auto;
+    margin-left: auto;
 }
 
-/* Navbar Center Section (Search) */
+/* Navbar Center Section (Search)
+   The search sits between the (left, fixed) and (right, fixed) sections.
+   flex: 1 1 auto lets it consume the remaining space;
+   min-width: 0 lets it shrink inside a flex parent (the default min-width:auto
+   would prevent the input from being narrower than its placeholder text);
+   max-width caps it so it never pushes the right section off-screen. */
 .navbar-search {
     flex: 1 1 auto;
+    min-width: 0;
     max-width: 400px;
     margin: 0 var(--space-4);
 }
@@ -615,11 +616,12 @@ body {
     display: none;
 }
 
-/* Store dropdown menu positioning */
-.navbar-store-selector .dropdown-menu {
-    left: 0;
-    right: auto;
-}
+/* Store dropdown menu positioning.
+   The store menu in the template uses .dropdown-menu-end, so it is
+   right-aligned by default. The previous override (left:0; right:auto)
+   was forcing it to left-align, which caused it to extend off the left
+   edge of the viewport on small screens. We remove that override so
+   the menu respects .dropdown-menu-end and stays right-aligned. */
 
 /* Notification dropdown menu positioning */
 .navbar-notifications .dropdown-menu {
@@ -761,6 +763,14 @@ body {
         max-width: calc(100vw - 32px);
         left: auto !important;
         right: 0 !important;
+    }
+
+    /* Drop the 200px min-width so the store/user menus shrink to fit
+       the viewport instead of overflowing off the left edge. The
+       notifications menu already overrides this in its own block. */
+    .navbar-store-selector .dropdown-menu,
+    .navbar-user .dropdown-menu {
+        min-width: auto;
     }
 }
 
@@ -1944,6 +1954,105 @@ textarea.form-control {
 }
 
 /* =====================================================================
+   SMALL-SCREEN NAVBAR LAYOUT (< 576px)
+   On phones the navbar has to fit: hamburger, logo, mobile-search,
+   store, notifications, and user avatar — into ~320-380px. Strategy:
+     - Drop the store button down to icon-only (no text, no chevron).
+       The store name is still reachable from the dropdown.
+     - Tighten the right-section gap to 4px.
+     - Reduce navbar height to 56px so the logo + buttons fit cleanly.
+     - Cap the logo to 28px tall.
+     - Hide the notification badge on very small screens (the bell icon
+       is the affordance; the count is the user can see in the panel).
+   ===================================================================== */
+
+@media (max-width: 575.98px) {
+    /* Tighter container padding so we get more usable width. */
+    .navbar .container-fluid {
+        padding-left: var(--space-2);
+        padding-right: var(--space-2);
+        gap: var(--space-2);
+        min-width: 0;
+    }
+
+    /* Smaller navbar height to match the smaller logo + button.
+       NOTE: do NOT set overflow-x: hidden here. Doing so triggers
+       overflow-y: auto (per the CSS spec) and CLIPS the dropdown
+       menus that extend below the navbar — making them invisible or
+       requiring the user to scroll inside the navbar to see the
+       options. The children are explicitly sized below so horizontal
+       overflow cannot happen in the first place. */
+    .navbar {
+        height: 56px;
+        --navbar-height: 56px;
+    }
+
+    /* Logo: shrink the height, keep max-width tight. */
+    .navbar-brand-logo {
+        height: 28px;
+        max-width: 100px;
+    }
+
+    /* Right section: drop the gap to 4px so all 4 items fit. */
+    .navbar > .container-fluid > .d-flex:last-child,
+    .navbar > .container-fluid > .navbar-right {
+        gap: 4px !important;
+    }
+
+    /* Store button: icon-only, square 36x36 — no text, no chevron. */
+    .navbar-store-button {
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        justify-content: center;
+    }
+    .navbar-store-button .navbar-store-text,
+    .navbar-store-button .bi-chevron-down {
+        display: none !important;
+    }
+    .navbar-store-selector {
+        height: 36px;
+    }
+
+    /* Notification / mobile-search / user / hamburger buttons: 36x36. */
+    .navbar-notification-button,
+    .navbar-search-mobile-toggle,
+    .navbar-user-button,
+    .navbar .btn-icon {
+        width: 36px;
+        height: 36px;
+    }
+    .navbar-notifications,
+    .navbar-user,
+    .navbar-search-mobile-toggle {
+        height: 36px;
+    }
+
+    /* Avatar: 32x32 to keep the user button compact. */
+    .navbar-user-avatar,
+    .navbar-user-avatar-placeholder {
+        width: 32px;
+        height: 32px;
+    }
+
+    /* Notification badge: hide the count on very small screens; the
+       icon is the affordance and the count is reachable in the panel. */
+    .navbar-notification-badge {
+        display: none;
+    }
+
+    /* Mobile search panel: pin to the new navbar height (56px). */
+    .navbar-search-mobile-panel {
+        top: 56px;
+    }
+}
+
+/* Extra-small screens (< 380px): drop the user-name role text earlier
+   (Bootstrap's d-md-block means ≥768px, but on a 360px phone the user
+   name is already hidden by another rule, so nothing to do here).
+   We only need to ensure the hamburger is icon-only, which it already is. */
+
+/* =====================================================================
    SIDEBAR MOBILE IMPROVEMENTS
    ===================================================================== */
 
@@ -1998,20 +2107,11 @@ textarea.form-control {
 
 /* =====================================================================
    CONTAINER FLUID MOBILE PADDING
-   ===================================================================== */
-
-@media (max-width: 575.98px) {
-    .navbar .container-fluid {
-        padding-left: var(--space-3);
-        padding-right: var(--space-3);
-    }
-
-    /* Responsive logo sizing on mobile */
-    .navbar-brand-logo {
-        height: 32px;
-        max-width: 120px;
-    }
-}
+   =====================================================================
+   Note: the .navbar .container-fluid padding and .navbar-brand-logo
+   sizing for the < 576px and 576-768px ranges are now defined in the
+   "SMALL-SCREEN NAVBAR LAYOUT" block above. Do not re-declare them
+   here — later rules would override the tighter values. */
 
 @media (min-width: 576px) and (max-width: 767.98px) {
     .navbar-brand-logo {

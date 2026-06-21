@@ -2,209 +2,214 @@
 {% load static %}
 <!-- Modern Top Navigation Bar -->
 <nav class="navbar navbar-sticky-top">
-    <div class="container-fluid" style="padding: 0 var(--space-4);">
-        <div class="d-flex align-items-center" style="width: 100%; height: 100%;">
-            <!-- Left Section -->
-            <div class="d-flex align-items-center">
-                <!-- Mobile Menu Toggle -->
-                <button class="btn-icon d-lg-none" type="button" data-sidebar-toggle @click="$dispatch('sidebar-open')">
-                    <i class="bi bi-list" style="font-size: var(--font-size-xl);"></i>
+    <div class="container-fluid">
+        <!--
+            Direct-child layout. The design-system CSS targets:
+                .navbar > .container-fluid > .d-flex:first-child   (left,  flex: 0 0 auto)
+                .navbar > .container-fluid > .navbar-search        (center,flex: 1 1 auto; max-width: 400px)
+                .navbar > .container-fluid > .d-flex:last-child    (right, flex: 0 0 auto)
+            so the three sections must be direct children of .container-fluid.
+        -->
+        <!-- Left Section -->
+        <div class="d-flex align-items-center flex-shrink-0">
+            <!-- Mobile Menu Toggle -->
+            <button class="btn-icon d-lg-none" type="button" data-sidebar-toggle @click="$dispatch('sidebar-open')">
+                <i class="bi bi-list" style="font-size: var(--font-size-xl);"></i>
+            </button>
+
+            <!-- Logo -->
+            <a class="navbar-brand" href="{% url 'dashboard:home' %}">
+                <img src="{% static 'images/logo.svg' %}" alt="{{ APP_NAME }}" class="navbar-brand-logo">
+            </a>
+        </div>
+
+        <!-- Center Section - Search (Hidden on screens smaller than lg) -->
+        <div class="navbar-search d-none d-lg-block">
+            <div class="navbar-search-wrapper">
+                <i class="bi bi-search navbar-search-icon"></i>
+                <input type="text" class="navbar-search-input" placeholder="Search customers, products, orders...">
+                <button type="button" class="navbar-search-clear" style="display: none;">
+                    <i class="bi bi-x"></i>
                 </button>
-
-                <!-- Logo -->
-                <a class="navbar-brand" href="{% url 'dashboard:home' %}">
-                    <img src="{% static 'images/logo.svg' %}" alt="{{ APP_NAME }}" class="navbar-brand-logo">
-                </a>
             </div>
+        </div>
 
-            <!-- Center Section - Search (Hidden on mobile) -->
-            <div class="navbar-search flex-grow-1 mx-4 d-none d-md-block">
-                <div class="navbar-search-wrapper">
-                    <i class="bi bi-search navbar-search-icon"></i>
-                    <input type="text" class="navbar-search-input" placeholder="Search customers, products, orders...">
-                    <button type="button" class="navbar-search-clear" style="display: none;">
-                        <i class="bi bi-x"></i>
-                    </button>
-                </div>
-            </div>
+        <!-- Right Section -->
+        <div class="d-flex align-items-center gap-2 gap-md-3 flex-shrink-0">
+            <!-- Mobile Search Toggle (visible below lg; opens the slide-down search panel) -->
+            <button class="navbar-search-mobile-toggle d-lg-none" type="button" data-mobile-search-toggle aria-label="Toggle search">
+                <i class="bi bi-search" style="font-size: var(--font-size-lg);"></i>
+            </button>
 
-            <!-- Right Section -->
-            <div class="d-flex align-items-center gap-2 gap-md-3">
-                <!-- Mobile Search Toggle -->
-                <button class="navbar-search-mobile-toggle d-md-none" type="button" data-mobile-search-toggle aria-label="Toggle search">
-                    <i class="bi bi-search" style="font-size: var(--font-size-lg);"></i>
+            <!-- Store Selector -->
+            {% if user_stores or current_store %}
+            <div class="navbar-store-selector">
+                <button class="navbar-store-button dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-shop navbar-store-icon d-none d-sm-block"></i>
+                    {% if current_store %}
+                        <span class="navbar-store-text">{{ current_store.name }}</span>
+                    {% else %}
+                        <span class="navbar-store-text">Store</span>
+                    {% endif %}
+                    <i class="bi bi-chevron-down d-none d-md-block" style="font-size: var(--font-size-xs);"></i>
                 </button>
-
-                <!-- Store Selector -->
-                {% if user_stores or current_store %}
-                <div class="navbar-store-selector">
-                    <button class="navbar-store-button dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-shop navbar-store-icon d-none d-sm-block"></i>
-                        {% if current_store %}
-                            <span class="navbar-store-text">{{ current_store.name }}</span>
-                        {% else %}
-                            <span class="navbar-store-text">Store</span>
-                        {% endif %}
-                        <i class="bi bi-chevron-down d-none d-md-block" style="font-size: var(--font-size-xs);"></i>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        {% if user_stores %}
-                            {% for store in user_stores %}
-                            <li>
-                                <a class="dropdown-item d-flex align-items-center justify-content-between" href="{% url 'dashboard:switch_store' store.id %}">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <i class="bi bi-shop-window" style="color: var(--brand-600);"></i>
-                                        <span>{{ store.name }}</span>
-                                    </div>
-                                    {% if current_store.id == store.id %}
-                                        <i class="bi bi-check-circle" style="color: var(--success-500);"></i>
-                                    {% endif %}
-                                </a>
-                            </li>
-                            {% endfor %}
-                        {% else %}
-                            <li>
-                                <span class="dropdown-item text-muted">No stores available</span>
-                            </li>
-                        {% endif %}
-                        {% if current_store %}
-                            {% can_any "settings.view" "settings.update" as show_store_link %}
-                            {% if show_store_link %}
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <a class="dropdown-item" href="{% url 'settings:store' %}">
-                                    <i class="bi bi-gear me-2"></i>Manage Store
-                                </a>
-                            </li>
-                            {% endif %}
-                        {% endif %}
-                    </ul>
-                </div>
-                {% endif %}
-
-                <!-- Notifications -->
-                <div class="navbar-notifications">
-                    <button class="navbar-notification-button dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-bell" style="font-size: var(--font-size-lg);"></i>
-                        <span class="navbar-notification-badge">3</span>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li class="dropdown-header">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span>Notifications</span>
-                                <a href="#" class="btn btn-ghost btn-sm">Mark all read</a>
-                            </div>
-                        </li>
-                        <li><hr class="dropdown-divider"></li>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    {% if user_stores %}
+                        {% for store in user_stores %}
                         <li>
-                            <a class="dropdown-item p-0" href="#" style="display: block;">
-                                <div class="activity-item" style="padding: var(--space-4);">
-                                    <div class="activity-icon activity-icon--success">
-                                        <i class="bi bi-cart-check"></i>
-                                    </div>
-                                    <div class="activity-content">
-                                        <div class="activity-title">New Order #ORD-1234</div>
-                                        <div class="activity-description">John Smith placed an order for $234.50</div>
-                                        <div class="activity-time">2 minutes ago</div>
-                                    </div>
+                            <a class="dropdown-item d-flex align-items-center justify-content-between" href="{% url 'dashboard:switch_store' store.id %}">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-shop-window" style="color: var(--brand-600);"></i>
+                                    <span>{{ store.name }}</span>
                                 </div>
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item p-0" href="#" style="display: block;">
-                                <div class="activity-item" style="padding: var(--space-4);">
-                                    <div class="activity-icon activity-icon--warning">
-                                        <i class="bi bi-exclamation-triangle"></i>
-                                    </div>
-                                    <div class="activity-content">
-                                        <div class="activity-title">Low Stock Alert</div>
-                                        <div class="activity-description">"Premium Widget" is running low (3 items left)</div>
-                                        <div class="activity-time">1 hour ago</div>
-                                    </div>
-                                </div>
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item p-0" href="#" style="display: block;">
-                                <div class="activity-item" style="padding: var(--space-4);">
-                                    <div class="activity-icon activity-icon--info">
-                                        <i class="bi bi-person-plus"></i>
-                                    </div>
-                                    <div class="activity-content">
-                                        <div class="activity-title">New Customer</div>
-                                        <div class="activity-description">Sarah Johnson registered as a new customer</div>
-                                        <div class="activity-time">3 hours ago</div>
-                                    </div>
-                                </div>
-                            </a>
-                        </li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <a class="dropdown-item text-center" href="{% url 'dashboard:notifications' %}">
-                                View All Notifications
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-
-                <!-- User Menu -->
-                <div class="navbar-user">
-                    <button class="navbar-user-button dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        {% if user.avatar %}
-                            <img src="{{ user.avatar.url }}" alt="{{ user.email }}" class="navbar-user-avatar">
-                        {% else %}
-                            <div class="navbar-user-avatar-placeholder">{{ user.first_name|first }}{{ user.last_name|first }}</div>
-                        {% endif %}
-                        <div class="navbar-user-info d-none d-md-block">
-                            <div class="navbar-user-name">{{ user.get_full_name }}</div>
-                            <div class="navbar-user-role">
-                                {% if user.is_superuser %}
-                                    <span class="badge bg-warning text-dark" style="font-size: 0.85em;"><i class="bi bi-shield-check me-1"></i>Super Admin</span>
-                                {% else %}
-                                    {% user_role current_store %}
+                                {% if current_store.id == store.id %}
+                                    <i class="bi bi-check-circle" style="color: var(--success-500);"></i>
                                 {% endif %}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    {% else %}
+                        <li>
+                            <span class="dropdown-item text-muted">No stores available</span>
+                        </li>
+                    {% endif %}
+                    {% if current_store %}
+                        {% can_any "settings.view" "settings.update" as show_store_link %}
+                        {% if show_store_link %}
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="{% url 'settings:store' %}">
+                                <i class="bi bi-gear me-2"></i>Manage Store
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% endif %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <!-- Notifications -->
+            <div class="navbar-notifications">
+                <button class="navbar-notification-button dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-bell" style="font-size: var(--font-size-lg);"></i>
+                    <span class="navbar-notification-badge">3</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li class="dropdown-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>Notifications</span>
+                            <a href="#" class="btn btn-ghost btn-sm">Mark all read</a>
+                        </div>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item p-0" href="#" style="display: block;">
+                            <div class="activity-item" style="padding: var(--space-4);">
+                                <div class="activity-icon activity-icon--success">
+                                    <i class="bi bi-cart-check"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">New Order #ORD-1234</div>
+                                    <div class="activity-description">John Smith placed an order for $234.50</div>
+                                    <div class="activity-time">2 minutes ago</div>
+                                </div>
+                            </div>
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item p-0" href="#" style="display: block;">
+                            <div class="activity-item" style="padding: var(--space-4);">
+                                <div class="activity-icon activity-icon--warning">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">Low Stock Alert</div>
+                                    <div class="activity-description">"Premium Widget" is running low (3 items left)</div>
+                                    <div class="activity-time">1 hour ago</div>
+                                </div>
+                            </div>
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item p-0" href="#" style="display: block;">
+                            <div class="activity-item" style="padding: var(--space-4);">
+                                <div class="activity-icon activity-icon--info">
+                                    <i class="bi bi-person-plus"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">New Customer</div>
+                                    <div class="activity-description">Sarah Johnson registered as a new customer</div>
+                                    <div class="activity-time">3 hours ago</div>
+                                </div>
+                            </div>
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item text-center" href="{% url 'dashboard:notifications' %}">
+                            View All Notifications
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- User Menu -->
+            <div class="navbar-user">
+                <button class="navbar-user-button dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    {% if user.avatar %}
+                        <img src="{{ user.avatar.url }}" alt="{{ user.email }}" class="navbar-user-avatar">
+                    {% else %}
+                        <div class="navbar-user-avatar-placeholder">{{ user.first_name|first }}{{ user.last_name|first }}</div>
+                    {% endif %}
+                    <div class="navbar-user-info d-none d-md-block">
+                        <div class="navbar-user-name">{{ user.get_full_name }}</div>
+                        <div class="navbar-user-role">
+                            {% if user.is_superuser %}
+                                <span class="badge bg-warning text-dark" style="font-size: 0.85em;"><i class="bi bi-shield-check me-1"></i>Super Admin</span>
+                            {% else %}
+                                {% user_role current_store %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <i class="bi bi-chevron-down d-none d-md-block" style="font-size: var(--font-size-xs); color: var(--text-muted);"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <div class="dropdown-header">
+                            <div style="font-weight: var(--font-weight-semibold); color: var(--text-primary);">
+                                Signed in as
                             </div>
                         </div>
-                        <i class="bi bi-chevron-down d-none d-md-block" style="font-size: var(--font-size-xs); color: var(--text-muted);"></i>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li>
-                            <div class="dropdown-header">
-                                <div style="font-weight: var(--font-weight-semibold); color: var(--text-primary);">
-                                    Signed in as
-                                </div>
-                            </div>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="{% url 'accounts:profile' %}">
-                                <i class="bi bi-person me-3" style="color: var(--brand-600);"></i>
-                                My Profile
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="{% url 'accounts:change_password' %}">
-                                <i class="bi bi-key me-3" style="color: var(--brand-600);"></i>
-                                Change Password
-                            </a>
-                        </li>
-                        {% can_any "employees.view" "roles.view" as show_team_link %}
-                        {% if show_team_link %}
-                        <li>
-                            <a class="dropdown-item" href="{% url 'settings:team' %}">
-                                <i class="bi bi-people me-3" style="color: var(--brand-600);"></i>
-                                Team Settings
-                            </a>
-                        </li>
-                        {% endif %}
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <a class="dropdown-item" href="{% url 'accounts:logout' %}" style="color: var(--danger-600);">
-                                <i class="bi bi-box-arrow-right me-3"></i>
-                                <span>Logout</span>
-                            </a>
-                        </li>
-                    </ul>
-                </div>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="{% url 'accounts:profile' %}">
+                            <i class="bi bi-person me-3" style="color: var(--brand-600);"></i>
+                            My Profile
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="{% url 'accounts:change_password' %}">
+                            <i class="bi bi-key me-3" style="color: var(--brand-600);"></i>
+                            Change Password
+                        </a>
+                    </li>
+                    {% can_any "employees.view" "roles.view" as show_team_link %}
+                    {% if show_team_link %}
+                    <li>
+                        <a class="dropdown-item" href="{% url 'settings:team' %}">
+                            <i class="bi bi-people me-3" style="color: var(--brand-600);"></i>
+                            Team Settings
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item" href="{% url 'accounts:logout' %}" style="color: var(--danger-600);">
+                            <i class="bi bi-box-arrow-right me-3"></i>
+                            <span>Logout</span>
+                        </a>
+                    </li>
+                </ul>
             </div>
         </div>
     </div>
