@@ -7,6 +7,7 @@ urlpatterns = [
     # Template views
     path("plans/", views.subscription_plans, name="plans"),
     path("checkout/<slug:plan_slug>/", views.subscription_checkout, name="checkout"),
+    path("welcome/", views.subscription_welcome, name="welcome"),
     path("success/", views.subscription_success, name="success"),
     path("manage/", views.manage_subscription, name="manage"),
     # API views

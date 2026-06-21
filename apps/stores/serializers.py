@@ -69,10 +69,53 @@ class StoreCreateSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
-        """Create and return a new store."""
-        user = self.context["request"].user
+        """Create and return a new store with subscription if pending."""
+        from apps.permissions.services import add_member
+        from apps.permissions.models import Role
+        from apps.subscriptions.services import create_trial_subscription, create_paid_subscription
+
+        request = self.context["request"]
+        user = request.user
+
+        # Create store
         store = Store.objects.create(**validated_data)
-        store.add_owner(user)
+
+        # Add user as store owner
+        owner_role = Role.objects.get(slug="store-owner", store=None)
+        add_member(user, store, owner_role)
+
+        # Check if user has a pending subscription (from User model or session)
+        pending_plan_slug = getattr(user, 'pending_plan_slug', None) or request.session.get("pending_plan_slug")
+        pending_trial = getattr(user, 'pending_trial_start', True) if user.pending_plan_slug else request.session.get("pending_trial", True)
+
+        if pending_plan_slug:
+            from apps.permissions.models import SubscriptionPlan
+
+            try:
+                plan = SubscriptionPlan.objects.get(slug=pending_plan_slug, is_active=True)
+
+                # Create subscription for the store
+                if pending_trial and plan.trial_days > 0:
+                    create_trial_subscription(
+                        store, plan, actor=user, trial_days=plan.trial_days
+                    )
+                else:
+                    create_paid_subscription(store, plan, actor=user)
+
+                # Clear pending subscription data from User model
+                user.pending_plan_slug = None
+                user.pending_trial_start = False
+                user.pending_subscription_date = None
+                user.save(update_fields=["pending_plan_slug", "pending_trial_start", "pending_subscription_date"])
+
+                # Clear from session
+                request.session.pop("pending_plan_slug", None)
+                request.session.pop("pending_plan_name", None)
+                request.session.pop("pending_trial", None)
+
+            except SubscriptionPlan.DoesNotExist:
+                pass  # Plan not found, skip subscription creation
+
         return store
 
 

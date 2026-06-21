@@ -180,6 +180,7 @@ def subscription_plans(request):
 def subscription_checkout(request, plan_slug):
     """
     Handle subscription checkout process.
+    Records the plan choice and redirects to store setup.
     """
     user = request.user
 
@@ -188,40 +189,30 @@ def subscription_checkout(request, plan_slug):
     except SubscriptionPlan.DoesNotExist:
         return redirect("subscriptions:plans")
 
-    # Check if user already has subscription
+    # Check if user already has subscription (through store membership)
     if active_memberships(None).filter(user=user).exists():
         return redirect("dashboard:home")
 
-    # Handle POST - Create subscription
+    # Handle POST - Record plan choice and redirect to store setup
     if request.method == "POST":
+        from django.utils import timezone
         start_trial = request.POST.get("start_trial", "true").lower() == "true"
 
-        try:
-            with transaction.atomic():
-                # Create store first
-                store_name = f"{user.get_full_name() or user.username}'s Store"
-                store = Store.objects.create(name=store_name)
+        # Store pending subscription in User model (persists across sessions)
+        user.pending_plan_slug = plan.slug
+        user.pending_trial_start = start_trial
+        user.pending_subscription_date = timezone.now()
+        user.save(update_fields=["pending_plan_slug", "pending_trial_start", "pending_subscription_date"])
 
-                # Make the user the store owner
-                owner_role = Role.objects.get(slug="store-owner", store=None)
-                add_member(user, store, owner_role)
+        # Also store in session for immediate use
+        request.session["pending_plan_slug"] = plan.slug
+        request.session["pending_plan_name"] = plan.name
+        request.session["pending_trial"] = start_trial
+        request.session["subscription_plan"] = plan.name
+        request.session["trial_days"] = plan.trial_days if start_trial else 0
 
-                # Create subscription (trial or paid)
-                if start_trial and plan.trial_days > 0:
-                    subscription = create_trial_subscription(
-                        store, plan, actor=user, trial_days=plan.trial_days
-                    )
-                else:
-                    # For paid subscriptions, create as active
-                    # In production, you would integrate with payment gateway here
-                    subscription = create_paid_subscription(store, plan, actor=user)
-
-            # Redirect to success page or dashboard
-            return redirect("subscriptions:success")
-
-        except Exception as e:
-            # Handle error - you might want to show an error message
-            return redirect("subscriptions:plans")
+        # Redirect to welcome page where user will create their store
+        return redirect("subscriptions:welcome")
 
     # Handle GET - Display checkout page
     billing_period = request.GET.get("billing", BILLING_MONTHLY)
@@ -246,6 +237,36 @@ def subscription_success(request):
     Display success page after successful subscription.
     """
     return render(request, "subscriptions/success.html")
+
+
+@login_required
+def subscription_welcome(request):
+    """
+    Welcome page after successful subscription.
+    Guides users to set up their store.
+    """
+    user = request.user
+    subscription_plan = request.session.get("subscription_plan", "")
+    trial_days = request.session.get("trial_days", 0)
+
+    # Check if user has stores
+    has_stores = Store.objects.filter(
+        memberships__user=user,
+        memberships__is_active=True,
+        is_deleted=False
+    ).exists()
+
+    context = {
+        "subscription_plan": subscription_plan,
+        "trial_days": trial_days,
+        "has_stores": has_stores,
+    }
+
+    # Clear session data
+    request.session.pop("subscription_plan", None)
+    request.session.pop("trial_days", None)
+
+    return render(request, "subscriptions/welcome.html", context)
 
 
 @login_required

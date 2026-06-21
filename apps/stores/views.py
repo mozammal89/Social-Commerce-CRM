@@ -305,13 +305,28 @@ def create_store_template(request):
     try:
         from apps.permissions.models import Subscription
 
-        user_subscription = Subscription.objects.filter(
-            user=request.user, status__in=["trialing", "active"]
-        ).first()
+        # Check for pending subscription from User model (persists across sessions)
+        pending_plan_slug = request.user.pending_plan_slug or request.session.get("pending_plan_slug")
 
-        if not user_subscription:
+        # Find subscriptions through user's store memberships
+        user_subscription = Subscription.objects.filter(
+            store__memberships__user=request.user,
+            store__memberships__is_active=True,
+            status__in=["trialing", "active"]
+        ).select_related('plan').first()
+
+        # Allow store creation if user has active subscription OR pending plan from checkout
+        if not user_subscription and not pending_plan_slug:
             messages.warning(request, "You need an active subscription to create a store.")
             return redirect("subscriptions:plans")
+
+        # Determine which plan to use for limits
+        if pending_plan_slug:
+            from apps.permissions.models import SubscriptionPlan
+            plan = SubscriptionPlan.objects.get(slug=pending_plan_slug)
+            max_stores = plan.max_stores
+        else:
+            max_stores = user_subscription.plan.max_stores
 
         current_count = (
             Store.objects.filter(
@@ -323,7 +338,6 @@ def create_store_template(request):
             .count()
         )
 
-        max_stores = user_subscription.plan.max_stores
         remaining_stores = max_stores - current_count
 
         return render(

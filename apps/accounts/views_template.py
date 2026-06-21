@@ -20,6 +20,7 @@ from django.contrib.auth import get_user_model
 from django.contrib import messages
 from django.urls import reverse_lazy
 from django.http import HttpResponse
+from django.utils.functional import lazy
 
 from apps.accounts.forms import (
     CustomPasswordResetForm,
@@ -39,6 +40,31 @@ class LoginView(DjangoLoginView):
     template_name = 'auth/login.html'
     form_class = LoginForm
     redirect_authenticated_user = True
+
+    def get_success_url(self):
+        """Redirect based on user's subscription and store status."""
+        user = self.request.user
+
+        # Check if user has pending subscription (from User model or session)
+        pending_plan = getattr(user, 'pending_plan_slug', None) or self.request.session.get("pending_plan_slug")
+        if pending_plan:
+            return reverse_lazy('subscriptions:welcome')
+
+        # Check if user has stores
+        from apps.stores.models import Store
+        from apps.permissions.models import StoreMembership
+
+        has_stores = Store.objects.filter(
+            memberships__user=user,
+            memberships__is_active=True,
+            is_deleted=False
+        ).exists()
+
+        if has_stores:
+            return reverse_lazy('dashboard:home')
+
+        # If no stores and no pending subscription, redirect to plans
+        return reverse_lazy('subscriptions:plans')
 
 
 class LogoutView(DjangoLogoutView):

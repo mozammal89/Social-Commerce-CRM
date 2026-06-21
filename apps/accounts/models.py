@@ -134,6 +134,25 @@ class User(UUIDModel, TimeStampedModel, SoftDeleteModel, AbstractUser):
         _("login count"),
         default=0,
     )
+    # Pending subscription fields (for users who subscribed but haven't created store yet)
+    pending_plan_slug = models.CharField(
+        _("pending subscription plan"),
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text=_("Plan slug for pending subscription before store creation")
+    )
+    pending_trial_start = models.BooleanField(
+        _("pending trial start"),
+        default=False,
+        help_text=_("Whether the pending subscription should start as trial")
+    )
+    pending_subscription_date = models.DateTimeField(
+        _("pending subscription date"),
+        blank=True,
+        null=True,
+        help_text=_("When the user subscribed (before store creation)")
+    )
 
     objects = UserManager()
 

@@ -1,0 +1,225 @@
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+{% block title %}Welcome - {{ APP_NAME }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .welcome-section {
+        min-height: 100vh;
+        background: linear-gradient(135deg, var(--brand-600) 0%, var(--brand-800) 100%);
+        padding: var(--space-12) 0;
+    }
+
+    .welcome-card {
+        background: white;
+        border-radius: 24px;
+        padding: var(--space-8);
+        box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .success-icon {
+        width: 80px;
+        height: 80px;
+        background: var(--success-100);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto var(--space-4);
+        color: var(--success-600);
+        font-size: 40px;
+    }
+
+    .welcome-title {
+        text-align: center;
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: var(--space-2);
+    }
+
+    .welcome-subtitle {
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 1rem;
+        margin-bottom: var(--space-6);
+    }
+
+    .plan-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        background: var(--brand-50);
+        color: var(--brand-700);
+        padding: var(--space-2) var(--space-4);
+        border-radius: var(--radius);
+        font-size: var(--font-size-sm);
+        font-weight: 500;
+        margin-bottom: var(--space-6);
+    }
+
+    .steps-section {
+        background: var(--gray-50);
+        border-radius: var(--radius-lg);
+        padding: var(--space-5);
+        margin-bottom: var(--space-6);
+    }
+
+    .steps-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        margin-bottom: var(--space-4);
+        color: var(--text-primary);
+    }
+
+    .step-item {
+        display: flex;
+        gap: var(--space-3);
+        margin-bottom: var(--space-4);
+    }
+
+    .step-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .step-number {
+        width: 32px;
+        height: 32px;
+        background: var(--brand-600);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: var(--font-size-sm);
+        flex-shrink: 0;
+    }
+
+    .step-content h4 {
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        margin-bottom: 2px;
+        color: var(--text-primary);
+    }
+
+    .step-content p {
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+    }
+
+    .action-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+
+    .action-buttons .btn {
+        padding: var(--space-3);
+        font-weight: 600;
+        border-radius: var(--radius);
+    }
+
+    .trial-info {
+        text-align: center;
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        margin-top: var(--space-4);
+    }
+
+    @media (max-width: 768px) {
+        .welcome-card {
+            padding: var(--space-5);
+            margin: var(--space-4);
+        }
+
+        .welcome-title {
+            font-size: 1.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="welcome-section">
+    <div class="container">
+        <div class="welcome-card">
+            <div class="success-icon">
+                <i class="bi bi-check-lg"></i>
+            </div>
+
+            <h1 class="welcome-title">Welcome to {{ APP_NAME }}!</h1>
+            <p class="welcome-subtitle">
+                {% if trial_days > 0 %}
+                Your {{ trial_days }}-day free trial has started. Let's get your store set up!
+                {% else %}
+                Your subscription is now active. Let's get your store set up!
+                {% endif %}
+            </p>
+
+            {% if subscription_plan %}
+            <div style="text-align: center;">
+                <div class="plan-badge">
+                    <i class="bi bi-star-fill"></i>
+                    <span>{{ subscription_plan }} Plan</span>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="steps-section">
+                <h3 class="steps-title">What's Next?</h3>
+
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>Create Your Store</h4>
+                        <p>Set up your business profile and store details</p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>Add Your Products</h4>
+                        <p>Import or add products you want to sell</p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>Start Selling</h4>
+                        <p>Manage orders and grow your business</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                {% if not has_stores %}
+                <a href="{% url 'stores:create' %}" class="btn btn-primary">
+                    <i class="bi bi-plus-lg me-2"></i>Create Your Store
+                </a>
+                {% else %}
+                <a href="{% url 'stores:create' %}" class="btn btn-primary">
+                    <i class="bi bi-plus-lg me-2"></i>Add Another Store
+                </a>
+                {% endif %}
+
+                <a href="{% url 'dashboard:home' %}" class="btn btn-outline-primary">
+                    <i class="bi bi-speedometer2 me-2"></i>Go to Dashboard
+                </a>
+            </div>
+
+            {% if trial_days > 0 %}
+            <div class="trial-info">
+                <i class="bi bi-info-circle me-1"></i>
+                Your trial will expire on <strong>{{ trial_days }} day{{ trial_days|pluralize }}</strong> from now.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}

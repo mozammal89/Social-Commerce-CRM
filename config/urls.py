@@ -17,6 +17,7 @@ urlpatterns = [
     path("dashboard/", include("apps.dashboard.urls")),
     path("dashboard/roles/", include(("apps.permissions.ui.urls", "role_permission"))),
     path("subscriptions/", include("apps.subscriptions.urls")),
+    path("stores/", include("apps.stores.urls")),  # Store management
     path("auth/", include("apps.accounts.urls")),  # Template-based auth
     path("customers/", include("apps.customers.urls")),
     path("products/", include("apps.products.urls")),

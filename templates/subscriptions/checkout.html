@@ -13,11 +13,11 @@
 
     .checkout-header {
         text-align: center;
-        margin-bottom: var(--space-6);
+        margin-bottom: var(--space-8);
     }
 
     .checkout-header h1 {
-        font-size: 1.75rem;
+        font-size: 2rem;
         font-weight: 700;
         color: var(--text-primary);
         margin-bottom: var(--space-2);
@@ -25,15 +25,17 @@
 
     .checkout-header p {
         color: var(--text-secondary);
+        font-size: 1rem;
     }
 
-    /* Plan Summary Card - Compact */
-    .plan-summary-card {
+    /* Plan Summary - Compact */
+    .plan-summary {
         background: white;
         border: 2px solid var(--brand-600);
         border-radius: var(--radius-lg);
         overflow: hidden;
         position: relative;
+        margin-bottom: var(--space-4);
     }
 
     .plan-badge {
@@ -52,7 +54,6 @@
         background: linear-gradient(135deg, var(--brand-50) 0%, white 100%);
         padding: var(--space-5);
         text-align: center;
-        border-bottom: 1px solid var(--gray-100);
     }
 
     .plan-name {
@@ -63,7 +64,7 @@
     }
 
     .plan-price {
-        font-size: 2rem;
+        font-size: 2.5rem;
         font-weight: 800;
         color: var(--brand-600);
     }
@@ -73,39 +74,27 @@
         font-size: var(--font-size-sm);
     }
 
-    /* Features List */
-    .plan-features {
+    /* Trial Notice */
+    .trial-notice {
+        background: var(--success-50);
+        border-left: 4px solid var(--success-600);
+        border-radius: var(--radius);
         padding: var(--space-4);
+        margin-bottom: var(--space-4);
     }
 
-    .plan-features li {
-        padding: 6px 0;
-        font-size: var(--font-size-sm);
-        color: var(--text-secondary);
+    .trial-notice-header {
         display: flex;
         align-items: center;
-        gap: 8px;
-        border-bottom: 1px solid var(--gray-100);
-    }
-
-    .plan-features li:last-child {
-        border-bottom: none;
-    }
-
-    .plan-features li i {
-        color: var(--success-600);
-        flex-shrink: 0;
-        font-size: 14px;
-    }
-
-    .feature-label {
-        color: var(--text-secondary);
-    }
-
-    .feature-value {
+        gap: var(--space-2);
         font-weight: 600;
-        color: var(--text-primary);
-        margin-left: auto;
+        color: var(--success-800);
+        margin-bottom: var(--space-1);
+    }
+
+    .trial-notice-body {
+        color: var(--success-700);
+        font-size: var(--font-size-sm);
     }
 
     /* Info Cards */
@@ -124,48 +113,16 @@
         color: var(--text-primary);
     }
 
-    /* Trial Notice */
-    .trial-notice {
-        background: var(--success-50);
-        border: 1px solid var(--success-200);
-        border-radius: var(--radius);
-        padding: var(--space-3);
-        display: flex;
-        gap: var(--space-3);
-        align-items: center;
-        margin-bottom: var(--space-4);
-    }
-
-    .trial-notice-icon {
-        width: 32px;
-        height: 32px;
-        background: var(--success-100);
-        color: var(--success-600);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-    }
-
-    .trial-notice-content h4 {
-        font-size: var(--font-size-sm);
-        font-weight: 600;
-        color: var(--success-800);
-        margin-bottom: 2px;
-    }
-
-    .trial-notice-content p {
-        font-size: var(--font-size-sm);
-        color: var(--success-700);
-    }
-
-    /* User Info */
     .info-row {
         display: flex;
         justify-content: space-between;
         padding: 8px 0;
         font-size: var(--font-size-sm);
+        border-bottom: 1px solid var(--gray-100);
+    }
+
+    .info-row:last-child {
+        border-bottom: none;
     }
 
     .info-label {
@@ -177,31 +134,30 @@
         color: var(--text-primary);
     }
 
-    /* Payment Method */
-    .payment-method {
-        background: var(--gray-50);
-        border-radius: var(--radius);
-        padding: var(--space-3);
-        border: 2px solid var(--brand-600);
+    /* Features List */
+    .features-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
     }
 
-    .payment-method-header {
+    .features-list li {
+        padding: 8px 0;
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
         display: flex;
         align-items: center;
-        gap: var(--space-3);
+        gap: 8px;
+        border-bottom: 1px solid var(--gray-100);
     }
 
-    .payment-icon {
-        width: 48px;
-        height: 32px;
-        background: var(--brand-600);
-        border-radius: var(--radius);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: 700;
-        font-size: var(--font-size-xs);
+    .features-list li:last-child {
+        border-bottom: none;
+    }
+
+    .features-list li i {
+        color: var(--success-600);
+        flex-shrink: 0;
     }
 
     /* Checkbox */
@@ -225,7 +181,7 @@
         text-decoration: none;
     }
 
-    /* Buttons */
+    /* Actions */
     .action-buttons {
         display: flex;
         flex-direction: column;
@@ -233,7 +189,7 @@
     }
 
     .action-buttons .btn {
-        padding: var(--space-2) var(--space-3);
+        padding: var(--space-3);
         font-weight: 600;
         font-size: var(--font-size-sm);
         border-radius: var(--radius);
@@ -249,45 +205,9 @@
         margin-top: var(--space-3);
     }
 
-    /* FAQ */
-    .faq-section {
-        margin-top: var(--space-8);
-    }
-
-    .faq-section h2 {
-        text-align: center;
-        font-size: 1.25rem;
-        font-weight: 700;
-        margin-bottom: var(--space-4);
-    }
-
-    .faq-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: var(--space-3);
-    }
-
-    .faq-item {
-        background: white;
-        border-radius: var(--radius);
-        padding: var(--space-4);
-        border: 1px solid var(--gray-200);
-    }
-
-    .faq-question {
-        font-weight: 600;
-        margin-bottom: var(--space-2);
-        font-size: var(--font-size-sm);
-    }
-
-    .faq-answer {
-        color: var(--text-secondary);
-        font-size: var(--font-size-sm);
-    }
-
     @media (max-width: 768px) {
         .plan-price {
-            font-size: 1.75rem;
+            font-size: 2rem;
         }
     }
 </style>
@@ -301,69 +221,46 @@
             <p>You're subscribing to <strong>{{ plan.name }}</strong></p>
         </div>
 
-        <div class="row">
-            <div class="col-lg-5 mb-4">
-                <!-- Plan Summary -->
-                <div class="plan-summary-card">
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                {% if start_trial and plan.trial_days > 0 %}
+                <div class="trial-notice">
+                    <div class="trial-notice-header">
+                        <i class="bi bi-gift"></i>
+                        <span>{{ plan.trial_days }}-Day Free Trial</span>
+                    </div>
+                    <div class="trial-notice-body">
+                        Try all features risk-free. No credit card required.
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="plan-summary">
                     <div class="plan-badge">SELECTED PLAN</div>
                     <div class="plan-header">
                         <h2 class="plan-name">{{ plan.name }}</h2>
                         <p class="text-muted small mb-3">{{ plan.description|truncatewords:10 }}</p>
                         <div class="plan-price">{{ plan.currency }}{{ total_amount }}</div>
-                        <div class="plan-period">per {{ billing_period }}</div>
-                        {% if start_trial and plan.trial_days > 0 %}
-                        <div class="mt-2">
-                            <span class="badge bg-success">{{ plan.trial_days }}-day free trial</span>
+                        <div class="plan-period">per {{ billing_period }}
+                            {% if billing_period == 'yearly' %}
+                            <span class="text-success">(Save 20%)</span>
+                            {% endif %}
                         </div>
-                        {% endif %}
                     </div>
 
-                    <ul class="plan-features list-unstyled">
-                        <li>
-                            <i class="bi bi-check"></i>
-                            <span class="feature-label">Stores</span>
-                            <span class="feature-value">{{ plan.max_stores }}</span>
-                        </li>
-                        <li>
-                            <i class="bi bi-check"></i>
-                            <span class="feature-label">Team Members</span>
-                            <span class="feature-value">{{ plan.max_users }}</span>
-                        </li>
-                        <li>
-                            <i class="bi bi-check"></i>
-                            <span class="feature-label">Products</span>
-                            <span class="feature-value">{{ plan.max_products }}</span>
-                        </li>
-                        <li>
-                            <i class="bi bi-check"></i>
-                            <span class="feature-label">Orders/Month</span>
-                            <span class="feature-value">{{ plan.max_orders_per_month }}</span>
-                        </li>
-                        {% for feature in plan.features.all|slice:":3" %}
-                        <li>
-                            <i class="bi bi-check"></i>
-                            <span>{{ feature.name }}</span>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
-
-            <div class="col-lg-7">
-                <!-- Trial Notice -->
-                {% if start_trial and plan.trial_days > 0 %}
-                <div class="trial-notice">
-                    <div class="trial-notice-icon">
-                        <i class="bi bi-check"></i>
-                    </div>
-                    <div class="trial-notice-content">
-                        <h4>Free Trial - No Payment Required</h4>
-                        <p>Your {{ plan.trial_days }}-day trial starts today.</p>
+                    <div style="padding: var(--space-4);">
+                        <ul class="features-list">
+                            <li><i class="bi bi-check-lg"></i>{{ plan.max_stores }} Store{{ plan.max_stores|pluralize }}</li>
+                            <li><i class="bi bi-check-lg"></i>{{ plan.max_users }} Team Member{{ plan.max_users|pluralize }}</li>
+                            <li><i class="bi bi-check-lg"></i>{{ plan.max_products }} Products</li>
+                            <li><i class="bi bi-check-lg"></i>{{ plan.max_orders_per_month }} Orders/month</li>
+                            {% for feature in plan.features.all|slice:":3" %}
+                            <li><i class="bi bi-check-lg"></i>{{ feature.name }}</li>
+                            {% endfor %}
+                        </ul>
                     </div>
                 </div>
-                {% endif %}
 
-                <!-- Your Information -->
                 <div class="info-card">
                     <h3>Your Information</h3>
                     <div class="info-row">
@@ -376,92 +273,46 @@
                     </div>
                 </div>
 
-                <!-- Payment Method -->
-                <div class="info-card">
-                    <h3>Payment Method</h3>
-                    {% if start_trial %}
-                    <p class="text-muted small">No payment required for free trial.</p>
-                    {% else %}
-                    <div class="payment-method">
-                        <div class="payment-method-header">
-                            <div class="payment-icon">AAMAR</div>
-                            <div>
-                                <div class="fw-bold">Aamarpay</div>
-                                <div class="text-muted small">Bangladeshi payment gateway</div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-
-                <!-- Terms -->
                 <div class="info-card">
                     <label class="terms-checkbox">
                         <input type="checkbox" id="terms" required>
                         <span>
                             I agree to the <a href="/terms/">Terms of Service</a> and
-                            <a href="/privacy/">Privacy Policy</a>. I understand that my subscription will
-                            automatically renew unless canceled.
+                            <a href="/privacy/">Privacy Policy</a>.
                         </span>
                     </label>
                 </div>
 
-                <!-- Actions -->
-                <div class="action-buttons">
-                    <form method="POST" id="subscription-form">
-                        {% csrf_token %}
-                        <input type="hidden" name="plan_slug" value="{{ plan.slug }}">
-                        <input type="hidden" name="billing_period" value="{{ billing_period }}">
-                        <input type="hidden" name="start_trial" value="{{ start_trial|lower }}">
+                <form method="POST" id="subscription-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="plan_slug" value="{{ plan.slug }}">
+                    <input type="hidden" name="billing_period" value="{{ billing_period }}">
+                    <input type="hidden" name="start_trial" value="{{ start_trial|lower }}">
 
+                    <div class="action-buttons">
                         {% if start_trial %}
-                        <button type="submit" class="btn btn-primary w-100">
+                        <button type="submit" class="btn btn-primary">
                             <i class="bi bi-rocket me-2"></i>Start Your Free Trial
                         </button>
-                        <p class="text-center text-muted small mt-2">
+                        <p class="text-center text-muted small">
                             No credit card required. Cancel anytime.
                         </p>
                         {% else %}
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-lock me-2"></i>Pay {{ plan.currency }}{{ total_amount }}
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-lock me-2"></i>Complete Subscription
                         </button>
                         {% endif %}
-                    </form>
 
-                    <a href="{% url 'subscriptions:plans' %}" class="btn btn-outline-secondary w-100">
-                        <i class="bi bi-arrow-left me-2"></i>Back to plans
-                    </a>
+                        <a href="{% url 'subscriptions:plans' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left me-2"></i>Back to Plans
+                        </a>
 
-                    <div class="security-badge">
-                        <i class="bi bi-shield-lock"></i>
-                        <span>Secure checkout powered by Aamarpay</span>
+                        <div class="security-badge">
+                            <i class="bi bi-shield-lock"></i>
+                            <span>Secure subscription activation</span>
+                        </div>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- FAQ -->
-        <div class="faq-section">
-            <h2>Frequently Asked Questions</h2>
-            <div class="faq-grid">
-                <div class="faq-item">
-                    <div class="faq-question">Can I change my plan later?</div>
-                    <div class="faq-answer">
-                        Yes! You can upgrade or downgrade your plan at any time from your dashboard.
-                    </div>
-                </div>
-                <div class="faq-item">
-                    <div class="faq-question">What happens after my trial?</div>
-                    <div class="faq-answer">
-                        After your trial ends, you can choose to subscribe to a paid plan or your account will be limited.
-                    </div>
-                </div>
-                <div class="faq-item">
-                    <div class="faq-question">How do I cancel?</div>
-                    <div class="faq-answer">
-                        You can cancel anytime from your subscription settings. No cancellation fees.
-                    </div>
-                </div>
+                </form>
             </div>
         </div>
     </div>
@@ -477,6 +328,12 @@ document.getElementById('subscription-form')?.addEventListener('submit', functio
         alert('Please agree to the Terms of Service and Privacy Policy to continue.');
         return false;
     }
+
+    // Show loading state
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Processing...';
 });
 </script>
 {% endblock %}

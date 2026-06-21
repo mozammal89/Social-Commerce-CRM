@@ -60,6 +60,7 @@ def dashboard_home(request):
     * ``user_has_no_store``   — True when ``user_stores`` is empty
     * ``user_subscription``   — user's active subscription (or None)
     * ``needs_subscription``  — True if user needs to choose a plan
+    * ``has_pending_subscription`` — True if user subscribed but hasn't created store yet
     * ``kpis``                — permission-gated KPI dict
     * ``top_role`` / ``role_names`` — the user's roles in ``current_store``
     * ``plan``                — the active ``SubscriptionPlan`` (or None)
@@ -73,21 +74,29 @@ def dashboard_home(request):
     # Check user's subscription status
     user_subscription = None
     needs_subscription = False
+    has_pending_subscription = False
 
-    try:
-        from apps.permissions.models import Subscription
+    # Check if user has a pending subscription (subscribed but no store yet)
+    if user.pending_plan_slug:
+        has_pending_subscription = True
+    else:
+        # Try to find existing subscription through store memberships
+        try:
+            from apps.permissions.models import Subscription
 
-        user_subscription = Subscription.objects.filter(
-            user=user, status__in=["trialing", "active"]
-        ).first()
+            user_subscription = Subscription.objects.filter(
+                store__memberships__user=user,
+                store__memberships__is_active=True,
+                status__in=["trialing", "active"]
+            ).select_related('plan').first()
 
-        if not user_subscription:
+            if not user_subscription:
+                needs_subscription = True
+        except Exception:
             needs_subscription = True
-    except Exception:
-        pass
 
-    # If user needs subscription, redirect to plans page
-    if needs_subscription and not is_superuser:
+    # If user needs subscription and has no pending subscription, redirect to plans page
+    if needs_subscription and not has_pending_subscription and not is_superuser:
         from django.contrib import messages
 
         messages.info(request, "Welcome! Choose a subscription plan to get started.")
@@ -119,7 +128,17 @@ def dashboard_home(request):
         "user_has_no_store": not user_stores.exists(),
         "user_subscription": user_subscription,
         "needs_subscription": needs_subscription,
+        "has_pending_subscription": has_pending_subscription,
     }
+
+    # If user has pending subscription, get plan details
+    if has_pending_subscription and user.pending_plan_slug:
+        try:
+            from apps.permissions.models import SubscriptionPlan
+            pending_plan = SubscriptionPlan.objects.get(slug=user.pending_plan_slug)
+            context["pending_plan"] = pending_plan
+        except SubscriptionPlan.DoesNotExist:
+            pass
 
     if current_store is not None:
         context.update(_build_rbac_context(user, current_store, is_superuser))
