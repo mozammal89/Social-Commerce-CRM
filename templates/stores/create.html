@@ -1,5 +1,4 @@
 {% extends 'layouts/dashboard.html' %}
-{% load static %}
 
 {% block title %}Create Store - {{ APP_NAME }}{% endblock %}
 
@@ -29,44 +28,23 @@
                         </div>
 
                         <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label" for="storeEmail">Store Email *</label>
-                                <input type="email" id="storeEmail" name="email" class="form-control" placeholder="store@example.com" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="storePhone">Phone Number</label>
-                                <input type="tel" id="storePhone" name="phone" class="form-control" placeholder="+880 1XXX-XXXXXX">
-                            </div>
-                        </div>
-
-                        <div class="row g-3">
                             <div class="col-md-12">
-                                <label class="form-label" for="storeAddress">Address</label>
-                                <textarea id="storeAddress" name="address" class="form-control" rows="3" placeholder="Enter your business address"></textarea>
-                            </div>
-                        </div>
-
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label" for="storeCity">City</label>
-                                <input type="text" id="storeCity" name="city" class="form-control" placeholder="e.g., Dhaka">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="storeCountry">Country</label>
-                                <select id="storeCountry" name="country" class="form-control">
-                                    <option value="BD">Bangladesh</option>
-                                    <option value="US">United States</option>
-                                    <option value="UK">United Kingdom</option>
-                                    <option value="IN">India</option>
-                                    <option value="AE">United Arab Emirates</option>
-                                    <option value="OTHER">Other</option>
-                                </select>
+                                <label class="form-label" for="storeDescription">Description</label>
+                                <textarea id="storeDescription" name="description" class="form-control" rows="3" placeholder="Describe your store and what you sell..."></textarea>
+                                <small class="form-text text-muted">A brief description helps customers understand your business</small>
                             </div>
                         </div>
 
                         <div class="alert alert-info">
                             <i class="bi bi-info-circle me-2"></i>
-                            <strong>Your Plan:</strong> {{ user_subscription.plan.name }} ({{ user_subscription.plan.max_stores }} stores max)
+                            <strong>Your Plan:</strong>
+                            {% if user_subscription %}
+                                {{ user_subscription.plan.name }} ({{ user_subscription.plan.max_stores }} stores max)
+                            {% elif pending_plan %}
+                                {{ pending_plan.name }} ({{ pending_plan.max_stores }} stores max)
+                            {% else %}
+                                Current Plan
+                            {% endif %}
                             {% if remaining_stores > 0 %}
                                 <br>
                                 <small>You can create <strong>{{ remaining_stores }} more store{{ remaining_stores|pluralize }}</strong></small>
@@ -94,9 +72,11 @@
                 </div>
                 <div class="card-body">
                     <ol class="mb-0" style="padding-left: 1.5rem; line-height: 1.8;">
-                        <li>Fill in your store details</li>
+                        <li>Enter your store name</li>
+                        <li>Add a brief description (optional)</li>
                         <li>Click "Create Store" button</li>
                         <li>You'll be automatically assigned as the store owner</li>
+                        <li>Your subscription will be activated (if pending)</li>
                         <li>Start adding products and managing customers</li>
                     </ol>
                 </div>
@@ -130,78 +110,123 @@
                         <strong>Plan Limit Reached</strong><br>
                         <small>Upgrade your plan to create more stores</small>
                         <div class="mt-2">
-                            <a href="{% url 'subscriptions:plans' %}" class="btn btn-sm btn-warning">View Plans</a>
+                            <a href="{% url 'subscriptions:manage' %}" class="btn btn-sm btn-warning">Manage Subscription</a>
                         </div>
                     </div>
                     {% endif %}
                 </div>
             </div>
+
+            {% if pending_plan %}
+            <div class="card mt-4" style="border: 2px solid var(--brand-600);">
+                <div class="card-body text-center">
+                    <i class="bi bi-lightning-charge text-warning" style="font-size: 2rem;"></i>
+                    <h5 class="mt-2">Pending Subscription</h5>
+                    <p class="text-muted small">
+                        Your <strong>{{ pending_plan.name }}</strong> subscription will be activated when you create this store.
+                    </p>
+                    {% if pending_plan.trial_days > 0 %}
+                    <div class="badge bg-success">+ {{ pending_plan.trial_days }} days free trial</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
 
+{% csrf_token %}
 <script>
+// Get CSRF token from cookie or from the csrfmiddlewaretag input
+function getCSRFToken() {
+    // First try to get from the hidden input (Django template tag)
+    const csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    if (csrfInput) {
+        return csrfInput.value;
+    }
+
+    // Then try to get from cookie
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return decodeURIComponent(value);
+        }
+    }
+
+    return null;
+}
+
 document.getElementById('createStoreForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    
+
     const form = this;
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
-    
+
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Creating...';
-    
-    const formData = new FormData(form);
-    const data = Object.fromEntries(formData.entries());
-    
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creating...';
+
+    // Only send the fields that the serializer accepts
+    const name = form.querySelector('[name="name"]').value;
+    const description = form.querySelector('[name="description"]').value;
+
+    const data = {
+        name: name,
+        description: description || ''
+    };
+
+    const csrfToken = getCSRFToken();
+
     try {
-        const response = await fetch('/api/stores/', {
+        const response = await fetch('/api/v1/stores/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken'),
+                'X-CSRFToken': csrfToken,
             },
+            credentials: 'same-origin',
             body: JSON.stringify(data),
         });
-        
+
         const result = await response.json();
-        
+
         if (response.ok) {
-            window.location.href = "{% url 'dashboard:home' %}";
+            // Show success notification
+            if (typeof showNotification === 'function') {
+                showNotification('Store created successfully! Redirecting to dashboard...', 'success');
+            }
+            // Redirect after a short delay
+            setTimeout(() => {
+                window.location.href = "{% url 'dashboard:home' %}";
+            }, 1000);
         } else {
+            // Build error message
             let errorMessage = 'Failed to create store.';
             if (result.name) {
                 errorMessage += ' ' + result.name[0];
-            } else if (result.email) {
-                errorMessage += ' ' + result.email[0];
             } else if (result.detail) {
                 errorMessage += ' ' + result.detail;
+            } else if (result.error) {
+                errorMessage += ' ' + result.error;
             }
-            alert(errorMessage);
+
+            // Show error notification
+            if (typeof showNotification === 'function') {
+                showNotification(errorMessage, 'error');
+            }
             submitBtn.disabled = false;
             submitBtn.innerHTML = originalText;
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('An error occurred. Please try again.');
+        // Show error notification
+        if (typeof showNotification === 'function') {
+            showNotification('An error occurred. Please try again.', 'error');
+        }
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalText;
     }
 });
-
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
-        }
-    }
-    return cookieValue;
-}
 </script>
 {% endblock %}

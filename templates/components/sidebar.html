@@ -67,7 +67,7 @@
                         </div>
                         <span class="sidebar-nav-label">Manage Subscription</span>
                     </a>
-                    <a href="{% url 'stores:list' %}" class="sidebar-nav-item {% if 'stores' in request.resolver_match.url_name %}active{% endif %}">
+                    <a href="{% url 'stores:store_list' %}" class="sidebar-nav-item {% if 'stores' in request.resolver_match.url_name %}active{% endif %}">
                         <div class="sidebar-nav-icon">
                             <i class="bi bi-shop"></i>
                         </div>

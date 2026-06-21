@@ -101,6 +101,25 @@ class UserAdmin(BaseUserAdmin):
                 ),
             },
         ),
+        (
+            "Permissions",
+            {
+                "fields": (
+                    "user_permissions",
+                    "groups",
+                ),
+            },
+        ),
+        (
+            "Subscriptions",
+            {
+                "fields": (
+                    "pending_plan_slug",
+                    "pending_trial_start",
+                    "pending_subscription_date",
+                ),
+            },
+        )
     )
 
     add_fieldsets = (

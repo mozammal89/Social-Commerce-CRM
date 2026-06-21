@@ -303,10 +303,18 @@ def _resolve_max_stores_cap(user) -> int:
 def create_store_template(request):
     """Template view for creating a store."""
     try:
-        from apps.permissions.models import Subscription
+        from apps.permissions.models import Subscription, SubscriptionPlan
 
         # Check for pending subscription from User model (persists across sessions)
         pending_plan_slug = request.user.pending_plan_slug or request.session.get("pending_plan_slug")
+        pending_plan = None
+
+        # Get pending plan if exists
+        if pending_plan_slug:
+            try:
+                pending_plan = SubscriptionPlan.objects.get(slug=pending_plan_slug, is_active=True)
+            except SubscriptionPlan.DoesNotExist:
+                pass
 
         # Find subscriptions through user's store memberships
         user_subscription = Subscription.objects.filter(
@@ -316,15 +324,13 @@ def create_store_template(request):
         ).select_related('plan').first()
 
         # Allow store creation if user has active subscription OR pending plan from checkout
-        if not user_subscription and not pending_plan_slug:
+        if not user_subscription and not pending_plan:
             messages.warning(request, "You need an active subscription to create a store.")
             return redirect("subscriptions:plans")
 
         # Determine which plan to use for limits
-        if pending_plan_slug:
-            from apps.permissions.models import SubscriptionPlan
-            plan = SubscriptionPlan.objects.get(slug=pending_plan_slug)
-            max_stores = plan.max_stores
+        if pending_plan:
+            max_stores = pending_plan.max_stores
         else:
             max_stores = user_subscription.plan.max_stores
 
@@ -345,6 +351,7 @@ def create_store_template(request):
             "stores/create.html",
             {
                 "user_subscription": user_subscription,
+                "pending_plan": pending_plan,
                 "current_count": current_count,
                 "max_stores": max_stores,
                 "remaining_stores": remaining_stores,
