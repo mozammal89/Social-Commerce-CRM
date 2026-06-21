@@ -1,0 +1,207 @@
+{% extends 'layouts/dashboard.html' %}
+{% load static %}
+
+{% block title %}Create Store - {{ APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="section-header">
+        <div>
+            <h1 class="section-title">Create Your Store</h1>
+            <p class="section-subtitle">Set up your business to start managing customers, products, and orders</p>
+        </div>
+    </div>
+
+    <div class="row g-5">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Store Information</h2>
+                </div>
+                <div class="card-body">
+                    <form id="createStoreForm" class="d-flex flex-column gap-4">
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label class="form-label" for="storeName">Store Name *</label>
+                                <input type="text" id="storeName" name="name" class="form-control" placeholder="e.g., My Amazing Store" required>
+                                <small class="form-text text-muted">Choose a name that represents your business</small>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="storeEmail">Store Email *</label>
+                                <input type="email" id="storeEmail" name="email" class="form-control" placeholder="store@example.com" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="storePhone">Phone Number</label>
+                                <input type="tel" id="storePhone" name="phone" class="form-control" placeholder="+880 1XXX-XXXXXX">
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label class="form-label" for="storeAddress">Address</label>
+                                <textarea id="storeAddress" name="address" class="form-control" rows="3" placeholder="Enter your business address"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="storeCity">City</label>
+                                <input type="text" id="storeCity" name="city" class="form-control" placeholder="e.g., Dhaka">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="storeCountry">Country</label>
+                                <select id="storeCountry" name="country" class="form-control">
+                                    <option value="BD">Bangladesh</option>
+                                    <option value="US">United States</option>
+                                    <option value="UK">United Kingdom</option>
+                                    <option value="IN">India</option>
+                                    <option value="AE">United Arab Emirates</option>
+                                    <option value="OTHER">Other</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Your Plan:</strong> {{ user_subscription.plan.name }} ({{ user_subscription.plan.max_stores }} stores max)
+                            {% if remaining_stores > 0 %}
+                                <br>
+                                <small>You can create <strong>{{ remaining_stores }} more store{{ remaining_stores|pluralize }}</strong></small>
+                            {% else %}
+                                <br>
+                                <small class="text-danger">You've reached your store limit. Upgrade your plan to create more stores.</small>
+                            {% endif %}
+                        </div>
+
+                        <div class="d-flex gap-3">
+                            <button type="submit" class="btn btn-primary" {% if remaining_stores <= 0 %}disabled{% endif %}>
+                                <i class="bi bi-plus-lg me-2"></i>Create Store
+                            </button>
+                            <a href="{% url 'dashboard:home' %}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Quick Guide</h2>
+                </div>
+                <div class="card-body">
+                    <ol class="mb-0" style="padding-left: 1.5rem; line-height: 1.8;">
+                        <li>Fill in your store details</li>
+                        <li>Click "Create Store" button</li>
+                        <li>You'll be automatically assigned as the store owner</li>
+                        <li>Start adding products and managing customers</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Current Usage</h2>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Stores Created</span>
+                            <strong>{{ current_count }} / {{ max_stores }}</strong>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar" role="progressbar" style="width: {% widthratio current_count max_stores 100 %}%;" aria-valuenow="{{ current_count }}" aria-valuemin="0" aria-valuemax="{{ max_stores }}"></div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Remaining Stores</span>
+                            <strong>{{ remaining_stores }}</strong>
+                        </div>
+                    </div>
+
+                    {% if remaining_stores <= 0 %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Plan Limit Reached</strong><br>
+                        <small>Upgrade your plan to create more stores</small>
+                        <div class="mt-2">
+                            <a href="{% url 'subscriptions:plans' %}" class="btn btn-sm btn-warning">View Plans</a>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('createStoreForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const form = this;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Creating...';
+    
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+    
+    try {
+        const response = await fetch('/api/stores/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify(data),
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            window.location.href = "{% url 'dashboard:home' %}";
+        } else {
+            let errorMessage = 'Failed to create store.';
+            if (result.name) {
+                errorMessage += ' ' + result.name[0];
+            } else if (result.email) {
+                errorMessage += ' ' + result.email[0];
+            } else if (result.detail) {
+                errorMessage += ' ' + result.detail;
+            }
+            alert(errorMessage);
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }
+});
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

@@ -21,6 +21,9 @@ from __future__ import annotations
 import logging
 
 from django.db import models
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from rest_framework import generics, status, permissions, exceptions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -294,3 +297,47 @@ def _resolve_max_stores_cap(user) -> int:
         return int(free_plan.max_stores)
 
     return DEFAULT_PLAN_MAX_STORES
+
+
+@login_required
+def create_store_template(request):
+    """Template view for creating a store."""
+    try:
+        from apps.permissions.models import Subscription
+
+        user_subscription = Subscription.objects.filter(
+            user=request.user, status__in=["trialing", "active"]
+        ).first()
+
+        if not user_subscription:
+            messages.warning(request, "You need an active subscription to create a store.")
+            return redirect("subscriptions:plans")
+
+        current_count = (
+            Store.objects.filter(
+                memberships__user=request.user,
+                memberships__is_active=True,
+                is_deleted=False,
+            )
+            .distinct()
+            .count()
+        )
+
+        max_stores = user_subscription.plan.max_stores
+        remaining_stores = max_stores - current_count
+
+        return render(
+            request,
+            "stores/create.html",
+            {
+                "user_subscription": user_subscription,
+                "current_count": current_count,
+                "max_stores": max_stores,
+                "remaining_stores": remaining_stores,
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Error in create_store_template: {str(e)}")
+        messages.error(request, "An error occurred. Please try again.")
+        return redirect("dashboard:home")

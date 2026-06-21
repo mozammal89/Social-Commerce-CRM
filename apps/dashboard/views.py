@@ -48,7 +48,7 @@ from apps.stores.models import Store
 @login_required
 def dashboard_home(request):
     """
-    Dashboard home.
+    Dashboard home with intelligent onboarding flow.
 
     Context keys:
 
@@ -58,6 +58,8 @@ def dashboard_home(request):
                                 for regular users; all stores for superusers)
     * ``current_store``       — the active store (or ``None``)
     * ``user_has_no_store``   — True when ``user_stores`` is empty
+    * ``user_subscription``   — user's active subscription (or None)
+    * ``needs_subscription``  — True if user needs to choose a plan
     * ``kpis``                — permission-gated KPI dict
     * ``top_role`` / ``role_names`` — the user's roles in ``current_store``
     * ``plan``                — the active ``SubscriptionPlan`` (or None)
@@ -67,6 +69,29 @@ def dashboard_home(request):
     """
     user = request.user
     is_superuser = user.is_superuser
+
+    # Check user's subscription status
+    user_subscription = None
+    needs_subscription = False
+
+    try:
+        from apps.permissions.models import Subscription
+
+        user_subscription = Subscription.objects.filter(
+            user=user, status__in=["trialing", "active"]
+        ).first()
+
+        if not user_subscription:
+            needs_subscription = True
+    except Exception:
+        pass
+
+    # If user needs subscription, redirect to plans page
+    if needs_subscription and not is_superuser:
+        from django.contrib import messages
+
+        messages.info(request, "Welcome! Choose a subscription plan to get started.")
+        return redirect("subscriptions:plans")
 
     user_stores = _user_stores(user, is_superuser)
     current_store = _resolve_current_store(request, user_stores)
@@ -83,6 +108,7 @@ def dashboard_home(request):
         and not user_has_permission(user, current_store, "dashboard.view")
     ):
         from django.core.exceptions import PermissionDenied
+
         raise PermissionDenied
 
     context: dict[str, Any] = {
@@ -91,6 +117,8 @@ def dashboard_home(request):
         "user_stores": user_stores,
         "current_store": current_store,
         "user_has_no_store": not user_stores.exists(),
+        "user_subscription": user_subscription,
+        "needs_subscription": needs_subscription,
     }
 
     if current_store is not None:
@@ -120,7 +148,9 @@ def switch_store(request, store_id):
 
     if not user.is_superuser:
         is_member = StoreMembership.objects.filter(
-            user=user, store=store, is_active=True,
+            user=user,
+            store=store,
+            is_active=True,
         ).exists()
         if not is_member:
             messages.error(
@@ -143,7 +173,8 @@ def _user_stores(user, is_superuser: bool):
     if is_superuser:
         return qs.order_by("name")
     member_store_ids = StoreMembership.objects.filter(
-        user=user, is_active=True,
+        user=user,
+        is_active=True,
     ).values_list("store_id", flat=True)
     return qs.filter(id__in=list(member_store_ids)).order_by("name")
 
@@ -177,7 +208,10 @@ def _build_rbac_context(user, store, is_superuser: bool) -> dict[str, Any]:
         "revenue": _safe_revenue(user, store, is_superuser),
         "orders_count": _safe_count(user, store, "orders.view", is_superuser),
         "customers_count": _safe_count(
-            user, store, "customers.view", is_superuser,
+            user,
+            store,
+            "customers.view",
+            is_superuser,
         ),
         "low_stock_count": _safe_low_stock(user, store, is_superuser),
     }
@@ -206,6 +240,7 @@ def _build_rbac_context(user, store, is_superuser: bool) -> dict[str, Any]:
 # Each helper returns ``None`` when the user lacks the relevant permission
 # (or the supporting model is unavailable in this build). Superusers always
 # get a real value because the resolver bypasses their check.
+
 
 def _can_view(user, store, code: str, is_superuser: bool) -> bool:
     if is_superuser:
@@ -238,6 +273,7 @@ def _safe_count(user, store, code: str, is_superuser):
     app_label, model_name = model_map[code]
     try:
         from django.apps import apps
+
         model = apps.get_model(app_label, model_name)
     except LookupError:
         return KPI_UNAVAILABLE
@@ -261,6 +297,7 @@ def _safe_low_stock(user, store, is_superuser):
         return None
     try:
         from django.apps import apps
+
         Product = apps.get_model("products", "Product")
     except LookupError:
         return KPI_UNAVAILABLE
@@ -282,9 +319,7 @@ def _safe_low_stock(user, store, is_superuser):
         # Pull the comparison values in Python to avoid dialect-specific F().
         items = list(qs.values(stock_field, "reorder_level"))
         return sum(
-            1
-            for row in items
-            if (row[stock_field] or 0) <= (row["reorder_level"] or threshold)
+            1 for row in items if (row[stock_field] or 0) <= (row["reorder_level"] or threshold)
         )
 
     return qs.filter(**{f"{stock_field}__lte": threshold}).count()

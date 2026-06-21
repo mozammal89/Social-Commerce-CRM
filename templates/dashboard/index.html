@@ -7,39 +7,139 @@
 <div class="dashboard-container">
 
     {# ============================================================ #}
+    {#  Onboarding Progress Section                                  #}
+    {# ============================================================ #}
+    {% if user_subscription %}
+    <div class="dashboard-section">
+        <div class="card border-0" style="border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--brand-50) 0%, var(--info-50) 100%);">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-4">
+                    <div>
+                        <h2 class="h4 mb-1">Welcome to {{ APP_NAME }}! 👋</h2>
+                        <p class="text-muted mb-0">Let's get your business set up in 3 simple steps</p>
+                    </div>
+                    {% if user_subscription.plan %}
+                    <div class="badge bg-white text-dark" style="padding: var(--space-2) var(--space-3);">
+                        <i class="bi bi-stars me-1"></i>{{ user_subscription.plan.name }} Plan
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="row g-4">
+                    {# Step 1: Complete (Subscription) #}
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-start gap-3">
+                            <div style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--success-600); color: white; border-radius: 50%; flex-shrink: 0;">
+                                <i class="bi bi-check-lg"></i>
+                            </div>
+                            <div>
+                                <h3 class="h6 mb-1">1. Choose Your Plan</h3>
+                                <p class="text-muted small mb-0">You're subscribed to {{ user_subscription.plan.name }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {# Step 2: Create Store (In Progress) #}
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-start gap-3">
+                            <div style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; {% if user_has_no_store %}background: var(--brand-600); color: white;{% else %}background: var(--success-600); color: white;{% endif %} border-radius: 50%; flex-shrink: 0;">
+                                {% if user_has_no_store %}
+                                    <i class="bi bi-2"></i>
+                                {% else %}
+                                    <i class="bi bi-check-lg"></i>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <h3 class="h6 mb-1">2. Create Your Store</h3>
+                                {% if user_has_no_store %}
+                                    <p class="text-muted small mb-2">Set up your business profile</p>
+                                    <a href="{% url 'stores:create' %}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-plus-lg me-1"></i>Create Store
+                                    </a>
+                                {% else %}
+                                    <p class="text-muted small mb-0">Store created successfully!</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {# Step 3: Start Using (Pending) #}
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-start gap-3">
+                            <div style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; {% if not user_has_no_store %}background: var(--success-600); color: white;{% else %}background: var(--gray-300); color: var(--gray-600);{% endif %} border-radius: 50%; flex-shrink: 0;">
+                                {% if not user_has_no_store %}
+                                    <i class="bi bi-check-lg"></i>
+                                {% else %}
+                                    <i class="bi bi-3"></i>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <h3 class="h6 mb-1">3. Start Managing</h3>
+                                {% if not user_has_no_store %}
+                                    <p class="text-muted small mb-0">Add products, customers & orders</p>
+                                {% else %}
+                                    <p class="text-muted small mb-0">Complete step 2 first</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ============================================================ #}
     {#  Empty-state onboarding card                                  #}
-    {#  Renders when the user has no active StoreMembership          #}
-    {#  (or no stores exist yet for superusers).                     #}
+    {#  Renders when the user needs to complete onboarding steps     #}
     {# ============================================================ #}
     {% if user_has_no_store %}
     <div class="dashboard-section">
         <div class="card border-0 shadow-sm" style="border-radius: var(--radius-lg);">
             <div class="card-body text-center" style="padding: var(--space-10) var(--space-6);">
+                
+                {% if is_superuser %}
+                {# Superuser onboarding flow #}
                 <div style="width: 80px; height: 80px; margin: 0 auto var(--space-5); display: flex; align-items: center; justify-content: center; background: var(--brand-50); border-radius: 50%; color: var(--brand-600);">
                     <i class="bi bi-shop" style="font-size: 2.5rem;"></i>
                 </div>
-                <h1 class="section-title mb-3">
-                    {% if is_superuser %}
-                        Welcome, Super Admin
-                    {% else %}
-                        You don't belong to any store yet
-                    {% endif %}
-                </h1>
+                <h1 class="section-title mb-3">Welcome, Super Admin</h1>
                 <p class="section-subtitle mb-4" style="max-width: 540px; margin-left: auto; margin-right: auto;">
-                    {% if is_superuser %}
-                        Create your first store to start managing customers, products, and orders. As a super admin you'll automatically have full access to every store you create.
-                    {% else %}
-                        Once a store admin invites you and assigns you a role, you'll see your dashboard here. Ask the store owner to send you an invite, or contact support if you believe this is a mistake.
-                    {% endif %}
+                    Create your first store to start managing customers, products, and orders. As a super admin you'll automatically have full access to every store you create.
                 </p>
-                {% if is_superuser %}
                 <a href="{% url 'admin:stores_store_add' %}" class="btn btn-primary btn-lg">
                     <i class="bi bi-plus-lg me-2"></i>Create Your First Store
                 </a>
+                
+                {% elif user_subscription %}
+                {# User has subscription but no store - guide to create store #}
+                <div style="width: 80px; height: 80px; margin: 0 auto var(--space-5); display: flex; align-items: center; justify-content: center; background: var(--brand-50); border-radius: 50%; color: var(--brand-600);">
+                    <i class="bi bi-shop" style="font-size: 2.5rem;"></i>
+                </div>
+                <h1 class="section-title mb-3">Create Your Store</h1>
+                <p class="section-subtitle mb-4" style="max-width: 540px; margin-left: auto; margin-right: auto;">
+                    Great! You're subscribed to <strong>{{ user_subscription.plan.name }}</strong>. Now create your first store to start managing your business.
+                </p>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="{% url 'stores:create' %}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-plus-lg me-2"></i>Create Your First Store
+                    </a>
+                </div>
+                
                 {% else %}
-                <a href="{% url 'help:support' %}" class="btn btn-secondary btn-lg">
-                    <i class="bi bi-life-preserver me-2"></i>Contact Support
-                </a>
+                {# User has no subscription - this shouldn't happen due to redirect, but show CTA #}
+                <div style="width: 80px; height: 80px; margin: 0 auto var(--space-5); display: flex; align-items: center; justify-content: center; background: var(--warning-50); border-radius: 50%; color: var(--warning-600);">
+                    <i class="bi bi-stars" style="font-size: 2.5rem;"></i>
+                </div>
+                <h1 class="section-title mb-3">Choose Your Plan</h1>
+                <p class="section-subtitle mb-4" style="max-width: 540px; margin-left: auto; margin-right: auto;">
+                    Start your journey with our free Starter plan or upgrade to unlock more features for your business.
+                </p>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="{% url 'subscriptions:plans' %}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-stars me-2"></i>View Subscription Plans
+                    </a>
+                </div>
                 {% endif %}
             </div>
         </div>
