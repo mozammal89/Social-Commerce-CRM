@@ -9,10 +9,10 @@ from django.views.generic import RedirectView
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 # Template Views
-from apps.core.views_template import home
+from apps.core.views import landing_home as home
 
 urlpatterns = [
-    path("", home, name="home"),  # Home page (template-based)
+    path("", home, name="home"),  # Landing page
     path("admin/", admin.site.urls),
     path("dashboard/", include("apps.dashboard.urls")),
     path("dashboard/roles/", include(("apps.permissions.ui.urls", "role_permission"))),

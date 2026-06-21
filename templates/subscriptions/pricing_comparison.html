@@ -1,0 +1,710 @@
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+{% block title %}Pricing Plans - {{ APP_NAME }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Modern Pricing Cards */
+    .pricing-section {
+        background: #f8f9fa;
+        padding: var(--space-12) 0;
+    }
+
+    .pricing-header-section {
+        text-align: center;
+        margin-bottom: var(--space-8);
+    }
+
+    .pricing-header-section h1 {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: var(--space-3);
+    }
+
+    .pricing-header-section p {
+        font-size: 1.125rem;
+        color: var(--text-secondary);
+    }
+
+    /* Filter Toggle Bar */
+    .filter-bar {
+        display: flex;
+        justify-content: center;
+        gap: var(--space-3);
+        margin-bottom: var(--space-8);
+        flex-wrap: wrap;
+    }
+
+    .filter-group {
+        display: flex;
+        gap: var(--space-2);
+        background: white;
+        padding: var(--space-1);
+        border-radius: var(--radius);
+        border: 1px solid var(--gray-200);
+    }
+
+    .filter-btn {
+        padding: var(--space-2) var(--space-4);
+        border: none;
+        background: transparent;
+        border-radius: var(--radius);
+        cursor: pointer;
+        font-size: var(--font-size-sm);
+        font-weight: 500;
+        color: var(--text-secondary);
+        transition: all 0.3s ease;
+    }
+
+    .filter-btn:hover {
+        background: var(--gray-100);
+    }
+
+    .filter-btn.active {
+        background: var(--brand-600);
+        color: white;
+    }
+
+    /* Pricing Cards */
+    .pricing-card {
+        background: white;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        transition: all 0.3s ease;
+        position: relative;
+        height: 100%;
+    }
+
+    .pricing-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+        border-color: var(--brand-300);
+    }
+
+    .pricing-card.featured {
+        border: 2px solid var(--brand-600);
+        transform: scale(1.03);
+        z-index: 10;
+    }
+
+    .pricing-card.featured:hover {
+        transform: scale(1.03) translateY(-8px);
+        box-shadow: 0 16px 48px rgba(0,123,255,0.2);
+    }
+
+    /* Popular Badge */
+    .popular-badge {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: var(--brand-600);
+        color: white;
+        padding: var(--space-1) var(--space-3);
+        border-radius: var(--radius);
+        font-size: var(--font-size-xs);
+        font-weight: 600;
+        z-index: 10;
+    }
+
+    /* Card Header */
+    .pricing-card-header {
+        padding: var(--space-6);
+        text-align: center;
+        border-bottom: 1px solid var(--gray-100);
+    }
+
+    .pricing-card.featured .pricing-card-header {
+        background: linear-gradient(135deg, var(--brand-50) 0%, white 100%);
+    }
+
+    .plan-name {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: var(--space-1);
+    }
+
+    .plan-subtitle {
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        margin-bottom: var(--space-4);
+    }
+
+    /* Price Section */
+    .price-section {
+        text-align: center;
+        padding: var(--space-4) 0;
+    }
+
+    .current-price {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        line-height: 1;
+    }
+
+    .price-currency {
+        font-size: 1.5rem;
+        vertical-align: super;
+    }
+
+    .price-period {
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+    }
+
+    .original-price {
+        font-size: 1rem;
+        color: var(--text-secondary);
+        text-decoration: line-through;
+        margin-left: var(--space-2);
+    }
+
+    .save-badge {
+        display: inline-block;
+        background: var(--success-100);
+        color: var(--success-700);
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius);
+        font-size: var(--font-size-xs);
+        font-weight: 500;
+        margin-top: var(--space-2);
+    }
+
+    /* Specs List */
+    .specs-list {
+        padding: var(--space-4) var(--space-6);
+    }
+
+    .spec-item {
+        display: flex;
+        justify-content: space-between;
+        padding: var(--space-2) 0;
+        border-bottom: 1px solid var(--gray-100);
+        font-size: var(--font-size-sm);
+    }
+
+    .spec-item:last-child {
+        border-bottom: none;
+    }
+
+    .spec-label {
+        color: var(--text-secondary);
+        font-weight: 400;
+    }
+
+    .spec-value {
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+
+    /* Features List */
+    .features-list {
+        padding: 0 var(--space-6);
+        margin-bottom: var(--space-4);
+    }
+
+    .features-list li {
+        padding: var(--space-2) 0;
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .features-list li i {
+        color: var(--success-600);
+        flex-shrink: 0;
+    }
+
+    /* Trial Badge */
+    .trial-badge {
+        display: inline-block;
+        background: var(--success-100);
+        color: var(--success-700);
+        padding: var(--space-2) var(--space-3);
+        border-radius: var(--radius);
+        font-size: var(--font-size-xs);
+        font-weight: 500;
+        margin-top: var(--space-2);
+    }
+
+    /* Card CTA */
+    .pricing-card-cta {
+        padding: var(--space-4) var(--space-6);
+        text-align: center;
+    }
+
+    .pricing-card-cta .btn {
+        width: 100%;
+        padding: var(--space-3) var(--space-4);
+        font-weight: 600;
+        border-radius: var(--radius);
+        transition: all 0.3s ease;
+    }
+
+    .pricing-card.featured .btn-primary {
+        background: var(--brand-600);
+        border-color: var(--brand-600);
+    }
+
+    .pricing-card.featured .btn-primary:hover {
+        background: var(--brand-700);
+        border-color: var(--brand-700);
+    }
+
+    /* Comparison Table */
+    .comparison-section {
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: var(--space-6);
+        margin-top: var(--space-8);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    .comparison-section h2 {
+        text-align: center;
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: var(--space-4);
+        color: var(--text-primary);
+    }
+
+    .comparison-section p {
+        text-align: center;
+        color: var(--text-secondary);
+        margin-bottom: var(--space-6);
+    }
+
+    .comparison-table-wrapper {
+        overflow-x: auto;
+    }
+
+    .comparison-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+        padding: var(--space-3) var(--space-4);
+        text-align: center;
+        border-bottom: 1px solid var(--gray-200);
+    }
+
+    .comparison-table th:first-child,
+    .comparison-table td:first-child {
+        text-align: left;
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+
+    .comparison-table th {
+        background: var(--gray-50);
+        font-weight: 600;
+        color: var(--text-primary);
+        position: relative;
+    }
+
+    .comparison-table th.featured-col {
+        background: var(--brand-50);
+        border-left: 2px solid var(--brand-600);
+        border-right: 2px solid var(--brand-600);
+    }
+
+    .comparison-table td.featured-col {
+        background: rgba(0, 123, 255, 0.02);
+        border-left: 2px solid var(--brand-600);
+        border-right: 2px solid var(--brand-600);
+    }
+
+    .comparison-table .check-icon {
+        color: var(--success-600);
+        font-size: 1.25rem;
+    }
+
+    .comparison-table .cross-icon {
+        color: var(--danger-600);
+        font-size: 1.25rem;
+    }
+
+    /* FAQ Section */
+    .faq-section {
+        margin-top: var(--space-12);
+    }
+
+    .faq-section h2 {
+        text-align: center;
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: var(--space-4);
+        color: var(--text-primary);
+    }
+
+    .faq-section > p {
+        text-align: center;
+        color: var(--text-secondary);
+        margin-bottom: var(--space-6);
+    }
+
+    @media (max-width: 768px) {
+        .pricing-header-section h1 {
+            font-size: 1.75rem;
+        }
+
+        .current-price {
+            font-size: 2rem;
+        }
+
+        .pricing-card.featured {
+            transform: none;
+        }
+
+        .pricing-card.featured:hover {
+            transform: translateY(-4px);
+        }
+
+        .filter-bar {
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .filter-group {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="pricing-section">
+    <div class="container">
+        <div class="pricing-header-section">
+            <h1>Simple, Transparent Pricing</h1>
+            <p>Choose the perfect plan for your business. All plans include core features, 24/7 support, and regular updates.</p>
+        </div>
+
+        <div class="filter-bar">
+            <div class="filter-group">
+                <button class="filter-btn active" id="monthlyBtn" onclick="toggleBilling('monthly')">Monthly Billing</button>
+                <button class="filter-btn" id="yearlyBtn" onclick="toggleBilling('yearly')">
+                    Yearly Billing <span class="badge bg-success ms-1" style="background: #28a745 !important;">Save 20%</span>
+                </button>
+            </div>
+        </div>
+
+        {# Pricing Cards Grid #}
+        <div class="row g-4 mb-5" id="pricingPlans">
+            {% for plan in plans %}
+            <div class="col-lg-3 col-md-6">
+                <div class="pricing-card {% if plan.slug == 'growth' %}featured{% endif %}">
+                    {% if plan.slug == 'growth' %}
+                    <div class="popular-badge">MOST POPULAR</div>
+                    {% endif %}
+
+                    <div class="pricing-card-header">
+                        <h3 class="plan-name">{{ plan.name }}</h3>
+                        <p class="plan-subtitle">{{ plan.description }}</p>
+
+                        <div class="price-section">
+                            <div class="monthly-price-block">
+                                <span class="current-price">
+                                    <span class="price-currency">৳</span>{{ plan.price_monthly }}
+                                </span>
+                                <span class="price-period">/mo</span>
+                            </div>
+                            <div class="yearly-price-block" style="display: none;">
+                                <span class="current-price">
+                                    <span class="price-currency">৳</span>{{ plan.price_yearly }}
+                                </span>
+                                <span class="original-price">৳{{ plan.price_yearly|floatformat:0|add:0 }}</span>
+                                <div class="save-badge">Save 20%</div>
+                                <span class="price-period">/yr</span>
+                            </div>
+                            {% if plan.trial_days > 0 %}
+                            <div class="trial-badge">{{ plan.trial_days }} days free trial</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="specs-list">
+                        <div class="spec-item">
+                            <span class="spec-label">Stores</span>
+                            <span class="spec-value">{{ plan.max_stores }}</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">Team Members</span>
+                            <span class="spec-value">{{ plan.max_users }}</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">Products</span>
+                            <span class="spec-value">{{ plan.max_products }}</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">Orders/Month</span>
+                            <span class="spec-value">{{ plan.max_orders_per_month }}</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">Warehouses</span>
+                            <span class="spec-value">{{ plan.max_warehouses }}</span>
+                        </div>
+                    </div>
+
+                    {% if plan.features.all %}
+                    <ul class="features-list list-unstyled">
+                        {% for feature in plan.features.all %}
+                        <li>
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>{{ feature.name }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+
+                    <div class="pricing-card-cta">
+                        {% if request.user.is_authenticated %}
+                        <a href="{% url 'subscriptions:checkout' plan.slug %}"
+                           class="btn {% if plan.slug == 'growth' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            {% if plan.trial_days > 0 %}Start Free Trial{% else %}Get Started{% endif %}
+                        </a>
+                        {% else %}
+                        <a href="{% url 'accounts:register' %}"
+                           class="btn {% if plan.slug == 'growth' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            {% if plan.trial_days > 0 %}Start Free Trial{% else %}Get Started{% endif %}
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Comparison Table #}
+        <div class="comparison-section">
+            <h2>Compare All Plans</h2>
+            <p>Detailed feature comparison across all subscription tiers</p>
+
+            <div class="comparison-table-wrapper">
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 30%;">Features</th>
+                            {% for plan in plans %}
+                            <th {% if plan.slug == 'growth' %}class="featured-col"{% endif %}>
+                                <strong>{{ plan.name }}</strong><br>
+                                <small class="text-muted">{{ plan.price_monthly }}৳/mo</small>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Stores</strong></td>
+                            {% for plan in plans %}
+                            <td {% if plan.slug == 'growth' %}class="featured-col"{% endif %}>
+                                {{ plan.max_stores }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <td><strong>Team Members</strong></td>
+                            {% for plan in plans %}
+                            <td {% if plan.slug == 'growth' %}class="featured-col"{% endif %}>
+                                {{ plan.max_users }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <td><strong>Products</strong></td>
+                            {% for plan in plans %}
+                            <td {% if plan.slug == 'growth' %}class="featured-col"{% endif %}>
+                                {{ plan.max_products }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <td><strong>Orders per Month</strong></td>
+                            {% for plan in plans %}
+                            <td {% if plan.slug == 'growth' %}class="featured-col"{% endif %}>
+                                {{ plan.max_orders_per_month }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <td><strong>Warehouses</strong></td>
+                            {% for plan in plans %}
+                            <td {% if plan.slug == 'growth' %}class="featured-col"{% endif %}>
+                                {{ plan.max_warehouses }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <td><strong>Free Trial</strong></td>
+                            {% for plan in plans %}
+                            <td {% if plan.slug == 'growth' %}class="featured-col"{% endif %}>
+                                {% if plan.trial_days > 0 %}
+                                <span class="text-success"><i class="bi bi-check-circle-fill"></i> {{ plan.trial_days }} days</span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% for feature in all_features %}
+                        <tr>
+                            <td>{{ feature.name }}</td>
+                            {% for plan in plans %}
+                            <td {% if plan.slug == 'growth' %}class="featured-col"{% endif %}>
+                                {% if feature in plan.features.all %}
+                                <i class="bi bi-check-circle-fill check-icon"></i>
+                                {% else %}
+                                <i class="bi bi-x-circle-fill cross-icon"></i>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {# Help Section #}
+        <div class="text-center mt-5">
+            <div class="card bg-light border-0">
+                <div class="card-body py-5">
+                    <h4 class="h5 mb-3">Need Help Choosing?</h4>
+                    <p class="text-muted mb-4">
+                        Our team can help you find the perfect plan for your business needs and budget.
+                    </p>
+                    <div class="d-flex justify-content-center gap-3 flex-wrap">
+                        <a href="/contact/" class="btn btn-outline-primary">
+                            <i class="bi bi-chat-dots me-2"></i>Contact Sales
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Enterprise Section #}
+        <div class="text-center mt-5">
+            <h4 class="h5 mb-3">Enterprise & Custom Solutions</h4>
+            <p class="text-muted mb-3">
+                Looking for a custom solution or need more than 50 stores? Contact us for enterprise pricing and dedicated support.
+            </p>
+            <a href="mailto:enterprise@{{ APP_NAME|lower }}.com" class="btn btn-primary">
+                <i class="bi bi-building me-2"></i>Contact Enterprise Sales
+            </a>
+        </div>
+    </div>
+</section>
+
+{# FAQ Section #}
+<section class="py-16 bg-light">
+    <div class="container">
+        <div class="faq-section">
+            <h2>Frequently Asked Questions</h2>
+            <p>Find answers to common questions about our pricing</p>
+
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="accordion" id="faqAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                    Can I change my plan later?
+                                </button>
+                            </h2>
+                            <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    Yes! You can upgrade or downgrade your plan at any time. When upgrading, you'll get immediate access to new features. When downgrading, changes take effect at the end of your current billing period.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                    What payment methods do you accept?
+                                </button>
+                            </h2>
+                            <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    We accept all major credit cards (Visa, MasterCard, American Express), bKash, Nagad, Rocket, and bank transfers. All payments are processed securely through our payment partners.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                    Is there a free trial?
+                                </button>
+                            </h2>
+                            <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    Yes! Most plans offer a free trial period (7-14 days) where you can explore all features without any commitment. No credit card is required to start your trial.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                                    Can I cancel my subscription?
+                                </button>
+                            </h2>
+                            <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    Yes, you can cancel your subscription at any time. Your access will continue until the end of your current billing period. We also offer the option to cancel at the end of the billing period to avoid immediate service interruption.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                                    What happens if I exceed my plan limits?
+                                </button>
+                            </h2>
+                            <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    We'll notify you when you're approaching your plan limits. You can either upgrade your plan or purchase additional capacity. We never hard-block your business - we'll work with you to find the best solution.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleBilling(period) {
+    const monthlyBtn = document.getElementById('monthlyBtn');
+    const yearlyBtn = document.getElementById('yearlyBtn');
+    const monthlyPriceBlocks = document.querySelectorAll('.monthly-price-block');
+    const yearlyPriceBlocks = document.querySelectorAll('.yearly-price-block');
+
+    if (period === 'monthly') {
+        monthlyBtn.classList.add('active');
+        yearlyBtn.classList.remove('active');
+        monthlyPriceBlocks.forEach(el => el.style.display = 'block');
+        yearlyPriceBlocks.forEach(el => el.style.display = 'none');
+    } else {
+        monthlyBtn.classList.remove('active');
+        yearlyBtn.classList.add('active');
+        monthlyPriceBlocks.forEach(el => el.style.display = 'none');
+        yearlyPriceBlocks.forEach(el => el.style.display = 'block');
+    }
+}
+</script>
+{% endblock %}

@@ -1,16 +1,15 @@
 """
-Health check views for monitoring application status.
-
-This module provides health check endpoints for monitoring the
-application, database, Redis, and Celery status.
+Views for landing page.
 """
 
+from django.shortcuts import render
 from django.db import connections
 from django.http import JsonResponse
 from django.core.cache import cache
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from decimal import Decimal
 
 
 def health_check(request):
@@ -119,3 +118,26 @@ class DetailedHealthCheckView(APIView):
                 "healthy": False,
                 "message": f"Celery check failed: {str(e)}",
             }
+
+
+def landing_home(request):
+    """
+    Landing page with all sections and features.
+    """
+    from apps.permissions.models import SubscriptionPlan
+
+    # Separate monthly and yearly plans
+    monthly_plans = SubscriptionPlan.objects.filter(
+        is_active=True, is_public=True, billing_period="monthly"
+    ).order_by("sort_order", "price")
+
+    yearly_plans = SubscriptionPlan.objects.filter(
+        is_active=True, is_public=True, billing_period="yearly"
+    ).order_by("sort_order", "price")
+
+    context = {
+        "monthly_plans": monthly_plans,
+        "yearly_plans": yearly_plans,
+    }
+
+    return render(request, "landing/home.html", context)

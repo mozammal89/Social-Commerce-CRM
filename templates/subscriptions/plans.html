@@ -3,125 +3,477 @@
 
 {% block title %}Choose Your Plan - Social Commerce CRM{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Compact Pricing Cards */
+    .pricing-section {
+        background: #f8f9fa;
+        padding: var(--space-12) 0 var(--space-16);
+        min-height: 100vh;
+    }
+
+    .pricing-header-section {
+        text-align: center;
+        margin-bottom: var(--space-6);
+    }
+
+    .pricing-header-section h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: var(--space-2);
+    }
+
+    .pricing-header-section p {
+        font-size: 1rem;
+        color: var(--text-secondary);
+    }
+
+    /* Filter Toggle Bar */
+    .filter-bar {
+        display: flex;
+        justify-content: center;
+        margin-bottom: var(--space-6);
+    }
+
+    .filter-group {
+        display: inline-flex;
+        gap: 2px;
+        background: white;
+        padding: 4px;
+        border-radius: var(--radius);
+        border: 1px solid var(--gray-200);
+    }
+
+    .filter-btn {
+        padding: var(--space-2) var(--space-4);
+        border: none;
+        background: transparent;
+        border-radius: var(--radius);
+        cursor: pointer;
+        font-size: var(--font-size-sm);
+        font-weight: 500;
+        color: var(--text-secondary);
+        transition: all 0.2s ease;
+    }
+
+    .filter-btn:hover {
+        background: var(--gray-100);
+    }
+
+    .filter-btn.active {
+        background: var(--brand-600);
+        color: white;
+    }
+
+    /* Compact Pricing Cards */
+    .pricing-card {
+        background: white;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius-lg);
+        transition: all 0.3s ease;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .pricing-card:hover {
+        border-color: var(--brand-500);
+        box-shadow: 0 4px 20px rgba(0,123,255,0.15);
+    }
+
+    .pricing-card.featured {
+        border: 2px solid var(--brand-600);
+    }
+
+    .pricing-card.featured:hover {
+        box-shadow: 0 8px 30px rgba(0,123,255,0.2);
+    }
+
+    /* Popular Badge */
+    .popular-badge {
+        position: absolute;
+        top: -1px;
+        right: 16px;
+        background: var(--brand-600);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 0 0 var(--radius) var(--radius);
+        font-size: var(--font-size-xs);
+        font-weight: 600;
+        z-index: 10;
+    }
+
+    /* Card Body */
+    .pricing-card-body {
+        padding: var(--space-5);
+        text-align: center;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .plan-name {
+        font-size: 1.125rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: var(--space-1);
+    }
+
+    .plan-subtitle {
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        margin-bottom: var(--space-3);
+        line-height: 1.4;
+    }
+
+    /* Price */
+    .plan-price {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: var(--brand-600);
+        margin-bottom: var(--space-1);
+    }
+
+    .plan-period {
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        margin-bottom: var(--space-3);
+    }
+
+    /* Compact Features List */
+    .plan-features {
+        list-style: none;
+        padding: 0;
+        margin: 0 auto var(--space-4);
+        text-align: left;
+    }
+
+    .plan-features li {
+        padding: 6px 0;
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .plan-features li i {
+        color: var(--success-600);
+        flex-shrink: 0;
+        font-size: 14px;
+    }
+
+    /* Trial Badge */
+    .trial-badge {
+        display: inline-block;
+        background: var(--success-50);
+        color: var(--success-700);
+        padding: 4px 10px;
+        border-radius: var(--radius);
+        font-size: var(--font-size-xs);
+        font-weight: 500;
+        margin-bottom: var(--space-3);
+    }
+
+    /* Card Footer with Button */
+    .pricing-card-footer {
+        padding: var(--space-4) var(--space-5);
+        border-top: 1px solid var(--gray-100);
+        text-align: center;
+    }
+
+    .pricing-card-footer .btn {
+        width: 100%;
+        padding: var(--space-2) var(--space-3);
+        font-weight: 600;
+        font-size: var(--font-size-sm);
+        border-radius: var(--radius);
+    }
+
+    .pricing-card.featured .btn-primary {
+        background: var(--brand-600);
+        border-color: var(--brand-600);
+    }
+
+    .pricing-card.featured .btn-primary:hover {
+        background: var(--brand-700);
+        border-color: var(--brand-700);
+    }
+
+    /* Info Section */
+    .info-section {
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: var(--space-6);
+        margin-top: var(--space-8);
+        border: 1px solid var(--gray-200);
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: var(--space-4);
+    }
+
+    .info-item {
+        display: flex;
+        gap: var(--space-3);
+    }
+
+    .info-icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--brand-50);
+        color: var(--brand-600);
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    /* FAQ Section */
+    .faq-section {
+        margin-top: var(--space-12);
+    }
+
+    .faq-section h2 {
+        text-align: center;
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: var(--space-6);
+        color: var(--text-primary);
+    }
+
+    .faq-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: var(--space-3);
+    }
+
+    .faq-item {
+        background: white;
+        border-radius: var(--radius);
+        padding: var(--space-4);
+        border: 1px solid var(--gray-200);
+    }
+
+    .faq-question {
+        font-weight: 600;
+        margin-bottom: var(--space-2);
+        color: var(--text-primary);
+        font-size: var(--font-size-sm);
+    }
+
+    .faq-answer {
+        color: var(--text-secondary);
+        font-size: var(--font-size-sm);
+        line-height: 1.5;
+    }
+
+    @media (max-width: 768px) {
+        .pricing-header-section h1 {
+            font-size: 1.5rem;
+        }
+
+        .pricing-card {
+            margin-bottom: var(--space-4);
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container mx-auto px-4 py-8">
-    <div class="text-center mb-12">
-        <h1 class="text-4xl font-bold text-gray-900 mb-4">Choose Your Perfect Plan</h1>
-        <p class="text-xl text-gray-600 max-w-2xl mx-auto">
-            Start with a 14-day free trial. No credit card required. Upgrade anytime.
-        </p>
-    </div>
+<section class="pricing-section">
+    <div class="container">
+        <div class="pricing-header-section">
+            <h1>Choose Your Plan</h1>
+            <p>Start with a free trial. No credit card required.</p>
+        </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
-        {% for plan in plans %}
-        <div class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 border-2 
-            {% if forloop.counter == 2 %}border-indigo-500{% else %}border-gray-200{% endif %}">
-            {% if forloop.counter == 2 %}
-            <div class="bg-indigo-600 text-white text-center py-2 font-semibold">
-                Most Popular
+        {# Filter Toggle Bar #}
+        <div class="filter-bar">
+            <div class="filter-group">
+                <button class="filter-btn active" id="monthlyBtn" onclick="toggleBilling('monthly')">Monthly</button>
+                <button class="filter-btn" id="yearlyBtn" onclick="toggleBilling('yearly')">Yearly <span class="text-success" style="font-size: 11px;">(Save 20%)</span></button>
             </div>
-            {% endif %}
-            
-            <div class="p-8">
-                <h2 class="text-2xl font-bold text-gray-900 mb-2">{{ plan.name }}</h2>
-                <p class="text-gray-600 mb-6 h-12">{{ plan.description|truncatewords:15 }}</p>
-                
-                <div class="mb-6">
-                    <span class="text-4xl font-bold text-gray-900">{{ plan.currency }}{{ plan.price }}</span>
-                    <span class="text-gray-600">/{{ plan.billing_period }}</span>
-                    {% if plan.trial_days > 0 %}
-                    <div class="text-sm text-green-600 mt-2">
-                        <span class="font-semibold">{{ plan.trial_days }}-day free trial</span>
-                    </div>
+        </div>
+
+        {# Monthly Plans #}
+        <div class="row g-4 mb-5" id="monthlyPlans">
+            {% for plan in monthly_plans %}
+            <div class="col-lg-3 col-md-6">
+                <div class="pricing-card {% if forloop.counter == 2 %}featured{% endif %}">
+                    {% if forloop.counter == 2 %}
+                    <div class="popular-badge">POPULAR</div>
                     {% endif %}
+
+                    <div class="pricing-card-body">
+                        <h3 class="plan-name">{{ plan.name }}</h3>
+                        <p class="plan-subtitle">{{ plan.description|truncatewords:12 }}</p>
+
+                        {% if plan.trial_days > 0 %}
+                        <div class="trial-badge">{{ plan.trial_days }} days free</div>
+                        {% endif %}
+
+                        <div class="plan-price">৳{{ plan.price }}</div>
+                        <div class="plan-period">per month</div>
+
+                        <ul class="plan-features">
+                            <li><i class="bi bi-check"></i>{{ plan.max_stores }} Store{{ plan.max_stores|pluralize }}</li>
+                            <li><i class="bi bi-check"></i>{{ plan.max_users }} Team Member{{ plan.max_users|pluralize }}</li>
+                            <li><i class="bi bi-check"></i>{{ plan.max_products }} Products</li>
+                            <li><i class="bi bi-check"></i>{{ plan.max_orders_per_month }} Orders/mo</li>
+                            {% for feature in plan.features.all|slice:":3" %}
+                            <li><i class="bi bi-check"></i>{{ feature.name }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="pricing-card-footer">
+                        <a href="{% url 'subscriptions:checkout' plan.slug %}?trial=true"
+                           class="btn {% if forloop.counter == 2 %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            {% if plan.trial_days > 0 %}Start Free Trial{% else %}Choose Plan{% endif %}
+                        </a>
+                    </div>
                 </div>
+            </div>
+            {% endfor %}
+        </div>
 
-                <a href="{% url 'subscriptions:checkout' plan.slug %}?trial=true" 
-                   class="block w-full bg-indigo-600 hover:bg-indigo-700 text-white text-center font-semibold py-3 px-6 rounded-lg transition-colors duration-200 mb-6">
-                    Start Free Trial
-                </a>
-
-                <a href="{% url 'subscriptions:checkout' plan.slug %}?trial=false" 
-                   class="block w-full border-2 border-indigo-600 text-indigo-600 hover:bg-indigo-50 text-center font-semibold py-3 px-6 rounded-lg transition-colors duration-200 mb-6">
-                    Get Started Now
-                </a>
-
-                <div class="space-y-3">
-                    <h3 class="font-semibold text-gray-900 mb-4">Includes:</h3>
-                    
-                    <div class="flex items-center text-gray-700">
-                        <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                        </svg>
-                        <span>{{ plan.max_stores }} Store{{ plan.max_stores|pluralize }}</span>
-                    </div>
-                    
-                    <div class="flex items-center text-gray-700">
-                        <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                        </svg>
-                        <span>{{ plan.max_users }} Team Members</span>
-                    </div>
-                    
-                    <div class="flex items-center text-gray-700">
-                        <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                        </svg>
-                        <span>{{ plan.max_products }} Products</span>
-                    </div>
-                    
-                    <div class="flex items-center text-gray-700">
-                        <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                        </svg>
-                        <span>{{ plan.max_orders_per_month }} Orders/Month</span>
-                    </div>
-                    
-                    {% if plan.features.all %}
-                    <div class="pt-4 border-t border-gray-200">
-                        <h3 class="font-semibold text-gray-900 mb-3">Features:</h3>
-                        {% for feature in plan.features.all %}
-                        <div class="flex items-center text-gray-700 mb-2">
-                            <svg class="w-4 h-4 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            <span class="text-sm">{{ feature.name }}</span>
-                        </div>
-                        {% endfor %}
-                    </div>
+        {# Yearly Plans (hidden by default) #}
+        <div class="row g-4 mb-5" id="yearlyPlans" style="display: none;">
+            {% for plan in yearly_plans %}
+            <div class="col-lg-4 col-md-6">
+                <div class="pricing-card {% if forloop.counter == 2 %}featured{% endif %}">
+                    {% if forloop.counter == 2 %}
+                    <div class="popular-badge">POPULAR</div>
                     {% endif %}
+
+                    <div class="pricing-card-body">
+                        <h3 class="plan-name">{{ plan.name }}</h3>
+                        <p class="plan-subtitle">{{ plan.description|truncatewords:12 }}</p>
+
+                        {% if plan.trial_days > 0 %}
+                        <div class="trial-badge">{{ plan.trial_days }} days free</div>
+                        {% endif %}
+
+                        <div class="plan-price">৳{{ plan.price }}</div>
+                        <div class="plan-period">per year <span class="text-success">(Save 20%)</span></div>
+
+                        <ul class="plan-features">
+                            <li><i class="bi bi-check"></i>{{ plan.max_stores }} Store{{ plan.max_stores|pluralize }}</li>
+                            <li><i class="bi bi-check"></i>{{ plan.max_users }} Team Member{{ plan.max_users|pluralize }}</li>
+                            <li><i class="bi bi-check"></i>{{ plan.max_products }} Products</li>
+                            <li><i class="bi bi-check"></i>{{ plan.max_orders_per_month }} Orders/mo</li>
+                            {% for feature in plan.features.all|slice:":3" %}
+                            <li><i class="bi bi-check"></i>{{ feature.name }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="pricing-card-footer">
+                        <a href="{% url 'subscriptions:checkout' plan.slug %}?trial=true"
+                           class="btn {% if forloop.counter == 2 %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            {% if plan.trial_days > 0 %}Start Free Trial{% else %}Choose Plan{% endif %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Info Section #}
+        <div class="info-section">
+            <h3 class="h5 mb-4">Why Choose {{ APP_NAME }}?</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-icon">
+                        <i class="bi bi-rocket"></i>
+                    </div>
+                    <div>
+                        <h5 class="h6 mb-1">Fast Setup</h5>
+                        <p class="text-muted small mb-0">Get started in minutes with our easy onboarding</p>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-icon">
+                        <i class="bi bi-shield-check"></i>
+                    </div>
+                    <div>
+                        <h5 class="h6 mb-1">Secure</h5>
+                        <p class="text-muted small mb-0">Enterprise-grade security for your data</p>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-icon">
+                        <i class="bi bi-headset"></i>
+                    </div>
+                    <div>
+                        <h5 class="h6 mb-1">24/7 Support</h5>
+                        <p class="text-muted small mb-0">Our team is always here to help</p>
+                    </div>
                 </div>
             </div>
         </div>
-        {% endfor %}
-    </div>
 
-    <div class="mt-16 text-center">
-        <div class="max-w-3xl mx-auto bg-gray-50 rounded-xl p-8">
-            <h3 class="text-xl font-bold text-gray-900 mb-4">Why Choose Our Platform?</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-                <div>
-                    <div class="text-4xl mb-2">🚀</div>
-                    <h4 class="font-semibold text-gray-900 mb-2">Fast Setup</h4>
-                    <p class="text-gray-600 text-sm">Get started in minutes with our easy onboarding process</p>
+        {# FAQ Section #}
+        <div class="faq-section">
+            <h2>Frequently Asked Questions</h2>
+            <div class="faq-grid">
+                <div class="faq-item">
+                    <div class="faq-question">Can I change my plan later?</div>
+                    <div class="faq-answer">
+                        Yes! You can upgrade or downgrade your plan at any time from your dashboard.
+                    </div>
                 </div>
-                <div>
-                    <div class="text-4xl mb-2">🔒</div>
-                    <h4 class="font-semibold text-gray-900 mb-2">Secure</h4>
-                    <p class="text-gray-600 text-sm">Enterprise-grade security to protect your business data</p>
+
+                <div class="faq-item">
+                    <div class="faq-question">What happens after my trial?</div>
+                    <div class="faq-answer">
+                        After your trial ends, you can choose to subscribe to a paid plan or your account will be limited to read-only access.
+                    </div>
                 </div>
-                <div>
-                    <div class="text-4xl mb-2">💬</div>
-                    <h4 class="font-semibold text-gray-900 mb-2">24/7 Support</h4>
-                    <p class="text-gray-600 text-sm">Our dedicated team is always here to help you succeed</p>
+
+                <div class="faq-item">
+                    <div class="faq-question">How do I cancel?</div>
+                    <div class="faq-answer">
+                        You can cancel anytime from your subscription settings. No cancellation fees.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">Payment methods?</div>
+                    <div class="faq-answer">
+                        We accept all major credit cards, bKash, Nagad, Rocket, and bank transfers.
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+</section>
+{% endblock %}
 
-    <div class="mt-12 text-center text-gray-600">
-        <p>All plans include a 14-day free trial. No credit card required until you decide to upgrade.</p>
-        <p class="mt-2">Questions? <a href="/help/" class="text-indigo-600 hover:underline">Contact our support team</a></p>
-    </div>
-</div>
+{% block extra_js %}
+<script>
+function toggleBilling(period) {
+    const monthlyBtn = document.getElementById('monthlyBtn');
+    const yearlyBtn = document.getElementById('yearlyBtn');
+    const monthlyPlans = document.getElementById('monthlyPlans');
+    const yearlyPlans = document.getElementById('yearlyPlans');
+
+    if (period === 'monthly') {
+        monthlyBtn.classList.add('active');
+        yearlyBtn.classList.remove('active');
+        monthlyPlans.style.display = 'flex';
+        yearlyPlans.style.display = 'none';
+    } else {
+        monthlyBtn.classList.remove('active');
+        yearlyBtn.classList.add('active');
+        monthlyPlans.style.display = 'none';
+        yearlyPlans.style.display = 'flex';
+    }
+}
+</script>
 {% endblock %}

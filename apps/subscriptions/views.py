@@ -152,14 +152,19 @@ def subscription_plans(request):
         # User already has access to stores
         return redirect("dashboard:home")
 
-    # Get available plans
-    plans = SubscriptionPlan.objects.filter(is_active=True, is_public=True).order_by(
-        "sort_order", "price"
-    )
+    # Separate monthly and yearly plans
+    monthly_plans = SubscriptionPlan.objects.filter(
+        is_active=True, is_public=True, billing_period="monthly"
+    ).order_by("sort_order", "price")
+
+    yearly_plans = SubscriptionPlan.objects.filter(
+        is_active=True, is_public=True, billing_period="yearly"
+    ).order_by("sort_order", "price")
 
     context = {
         "user": user,
-        "plans": plans,
+        "monthly_plans": monthly_plans,
+        "yearly_plans": yearly_plans,
         "current_subscription": current_subscription,
         "current_store": current_store,
         "billing_periods": {

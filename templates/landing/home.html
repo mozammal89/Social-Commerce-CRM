@@ -1,0 +1,1176 @@
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+{% block title %}{{ APP_NAME }} - Social Commerce CRM Platform{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hero-section {
+        background: linear-gradient(135deg, var(--brand-600) 0%, var(--brand-800) 100%);
+        color: white;
+        padding: var(--space-16) 0;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .hero-section::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+
+    .hero-content {
+        position: relative;
+        z-index: 1;
+    }
+
+    .feature-card {
+        transition: all 0.3s ease;
+        border: 1px solid var(--gray-200);
+    }
+
+    .feature-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        border-color: var(--brand-300);
+    }
+
+    .feature-icon {
+        width: 60px;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--brand-50);
+        border-radius: var(--radius);
+        color: var(--brand-600);
+        font-size: 1.5rem;
+        margin-bottom: var(--space-4);
+    }
+
+    .screenshot-container {
+        background: var(--gray-100);
+        border-radius: var(--radius-lg);
+        padding: var(--space-4);
+        box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+    }
+
+    .screenshot-container img {
+        border-radius: var(--radius);
+        width: 100%;
+        height: auto;
+    }
+
+    .testimonial-card {
+        background: var(--gray-50);
+        border-radius: var(--radius-lg);
+        padding: var(--space-6);
+        border-left: 4px solid var(--brand-600);
+    }
+
+    .faq-item {
+        border-bottom: 1px solid var(--gray-200);
+        padding: var(--space-4) 0;
+    }
+
+    .faq-question {
+        font-weight: var(--font-weight-semibold);
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .faq-answer {
+        margin-top: var(--space-3);
+        color: var(--text-secondary);
+        display: none;
+    }
+
+    .faq-item.active .faq-answer {
+        display: block;
+    }
+
+    .faq-item.active .faq-question i {
+        transform: rotate(180deg);
+    }
+
+    /* Compact Pricing Cards */
+    .pricing-section {
+        background: #f8f9fa;
+        padding: var(--space-12) 0 var(--space-16);
+    }
+
+    .pricing-header-section {
+        text-align: center;
+        margin-bottom: var(--space-6);
+    }
+
+    .pricing-header-section h2 {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: var(--space-2);
+    }
+
+    .pricing-header-section p {
+        font-size: 1rem;
+        color: var(--text-secondary);
+    }
+
+    /* Filter Toggle Bar */
+    .filter-bar {
+        display: flex;
+        justify-content: center;
+        margin-bottom: var(--space-6);
+    }
+
+    .filter-group {
+        display: inline-flex;
+        gap: 2px;
+        background: white;
+        padding: 4px;
+        border-radius: var(--radius);
+        border: 1px solid var(--gray-200);
+    }
+
+    .filter-btn {
+        padding: var(--space-2) var(--space-4);
+        border: none;
+        background: transparent;
+        border-radius: var(--radius);
+        cursor: pointer;
+        font-size: var(--font-size-sm);
+        font-weight: 500;
+        color: var(--text-secondary);
+        transition: all 0.2s ease;
+    }
+
+    .filter-btn:hover {
+        background: var(--gray-100);
+    }
+
+    .filter-btn.active {
+        background: var(--brand-600);
+        color: white;
+    }
+
+    /* Compact Pricing Cards */
+    .pricing-card {
+        background: white;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius-lg);
+        transition: all 0.3s ease;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .pricing-card:hover {
+        border-color: var(--brand-500);
+        box-shadow: 0 4px 20px rgba(0,123,255,0.15);
+    }
+
+    .pricing-card.featured {
+        border: 2px solid var(--brand-600);
+    }
+
+    .pricing-card.featured:hover {
+        box-shadow: 0 8px 30px rgba(0,123,255,0.2);
+    }
+
+    /* Popular Badge */
+    .popular-badge {
+        position: absolute;
+        top: -1px;
+        right: 16px;
+        background: var(--brand-600);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 0 0 var(--radius) var(--radius);
+        font-size: var(--font-size-xs);
+        font-weight: 600;
+        z-index: 10;
+    }
+
+    /* Card Body */
+    .pricing-card-body {
+        padding: var(--space-5);
+        text-align: center;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .plan-name {
+        font-size: 1.125rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: var(--space-1);
+    }
+
+    .plan-subtitle {
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        margin-bottom: var(--space-3);
+        line-height: 1.4;
+    }
+
+    /* Price */
+    .plan-price {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: var(--brand-600);
+        margin-bottom: var(--space-1);
+    }
+
+    .plan-period {
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        margin-bottom: var(--space-3);
+    }
+
+    /* Compact Features List */
+    .plan-features {
+        list-style: none;
+        padding: 0;
+        margin: 0 auto var-4;
+        text-align: left;
+    }
+
+    .plan-features li {
+        padding: 6px 0;
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .plan-features li i {
+        color: var(--success-600);
+        flex-shrink: 0;
+        font-size: 14px;
+    }
+
+    /* Trial Badge */
+    .trial-badge {
+        display: inline-block;
+        background: var(--success-50);
+        color: var(--success-700);
+        padding: 4px 10px;
+        border-radius: var(--radius);
+        font-size: var(--font-size-xs);
+        font-weight: 500;
+        margin-bottom: var(--space-3);
+    }
+
+    /* Card Footer with Button */
+    .pricing-card-footer {
+        padding: var(--space-4) var(--space-5);
+        border-top: 1px solid var(--gray-100);
+        text-align: center;
+    }
+
+    .pricing-card-footer .btn {
+        width: 100%;
+        padding: var(--space-2) var(--space-3);
+        font-weight: 600;
+        font-size: var(--font-size-sm);
+        border-radius: var(--radius);
+    }
+
+    .pricing-card.featured .btn-primary {
+        background: var(--brand-600);
+        border-color: var(--brand-600);
+    }
+
+    .pricing-card.featured .btn-primary:hover {
+        background: var(--brand-700);
+        border-color: var(--brand-700);
+    }
+
+    @media (max-width: 768px) {
+        .pricing-header-section h2 {
+            font-size: 1.5rem;
+        }
+
+        .pricing-card {
+            margin-bottom: var(--space-4);
+        }
+    }
+
+    .cta-section {
+        background: linear-gradient(135deg, var(--brand-600) 0%, var(--brand-800) 100%);
+        color: white;
+        padding: var(--space-12) 0;
+        text-align: center;
+    }
+
+    .stat-number {
+        font-size: 3rem;
+        font-weight: var(--font-weight-bold);
+        color: var(--brand-600);
+    }
+
+    .benefit-item {
+        display: flex;
+        gap: var(--space-4);
+        margin-bottom: var(--space-4);
+    }
+
+    .benefit-icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--success-100);
+        color: var(--success-600);
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    @media (max-width: 768px) {
+        .hero-section {
+            padding: var(--space-12) 0;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+        }
+
+        .pricing-price {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{# ============================================================ #}
+{#  Hero Section                                                  #}
+{# ============================================================ #}
+<section class="hero-section">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-6 hero-content">
+                <div class="badge bg-white text-dark mb-3" style="display: inline-block; padding: var(--space-2) var(--space-3);">
+                    🚀 The Future of Commerce Management
+                </div>
+                <h1 class="display-4 fw-bold mb-4" style="line-height: 1.2;">
+                    Manage Your Social Commerce Business in One Place
+                </h1>
+                <p class="lead mb-4" style="opacity: 0.9;">
+                    Streamline your operations, boost sales, and delight customers with our all-in-one CRM platform built for social commerce businesses.
+                </p>
+                <div class="d-flex gap-3 flex-wrap">
+                    <a href="#pricing" class="btn btn-light btn-lg px-4">
+                        <i class="bi bi-rocket me-2"></i>Start Free Trial
+                    </a>
+                    <a href="#features" class="btn btn-outline-light btn-lg px-4">
+                        <i class="bi bi-play-circle me-2"></i>See How It Works
+                    </a>
+                </div>
+                <div class="mt-4 d-flex gap-4">
+                    <div>
+                        <div class="h3 mb-0">10K+</div>
+                        <small>Active Users</small>
+                    </div>
+                    <div>
+                        <div class="h3 mb-0">50K+</div>
+                        <small>Orders Processed</small>
+                    </div>
+                    <div>
+                        <div class="h3 mb-0">99.9%</div>
+                        <small>Uptime</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6 hero-content">
+                <div class="screenshot-container">
+                    <img src="{% static 'images/dashboard-preview.png' %}" alt="Dashboard Preview" onerror="this.style.display='none'">
+                    <div style="text-align: center; padding: var(--space-8);">
+                        <i class="bi bi-graph-up-arrow" style="font-size: 8rem; color: var(--brand-600);"></i>
+                        <p class="mt-3 text-muted">Dashboard Preview</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ============================================================ #}
+{#  Product Overview                                              #}
+{# ============================================================ #}
+<section class="py-16">
+    <div class="container">
+        <div class="text-center mb-12">
+            <h2 class="display-5 fw-bold mb-3">Everything You Need to Succeed</h2>
+            <p class="lead text-muted" style="max-width: 700px; margin: 0 auto;">
+                Our comprehensive platform helps you manage every aspect of your social commerce business from customer relationships to order fulfillment.
+            </p>
+        </div>
+
+        <div class="row g-5">
+            <div class="col-lg-6">
+                <h3 class="h4 mb-4">Why Choose {{ APP_NAME }}?</h3>
+                <div class="benefit-item">
+                    <div class="benefit-icon">
+                        <i class="bi bi-check-lg"></i>
+                    </div>
+                    <div>
+                        <h4 class="h5 mb-1">All-in-One Solution</h4>
+                        <p class="text-muted mb-0">Manage customers, products, orders, and inventory from a single dashboard.</p>
+                    </div>
+                </div>
+                <div class="benefit-item">
+                    <div class="benefit-icon">
+                        <i class="bi bi-check-lg"></i>
+                    </div>
+                    <div>
+                        <h4 class="h5 mb-1">Built for Social Commerce</h4>
+                        <p class="text-muted mb-0">Optimized for Facebook, Instagram, and other social media sales channels.</p>
+                    </div>
+                </div>
+                <div class="benefit-item">
+                    <div class="benefit-icon">
+                        <i class="bi bi-check-lg"></i>
+                    </div>
+                    <div>
+                        <h4 class="h5 mb-1">Scale Your Business</h4>
+                        <p class="text-muted mb-0">Flexible plans that grow with your business from startup to enterprise.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="screenshot-container">
+                    <div style="text-align: center; padding: var(--space-8);">
+                        <i class="bi bi-diagram-3" style="font-size: 6rem; color: var(--brand-600);"></i>
+                        <p class="mt-3 text-muted">Platform Overview</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ============================================================ #}
+{#  Key Features                                                  #}
+{# ============================================================ #}
+<section class="py-16 bg-light" id="features">
+    <div class="container">
+        <div class="text-center mb-12">
+            <h2 class="display-5 fw-bold mb-3">Powerful Features</h2>
+            <p class="lead text-muted" style="max-width: 700px; margin: 0 auto;">
+                Discover the tools that will transform your business operations and boost your productivity.
+            </p>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-4 col-md-6">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon">
+                            <i class="bi bi-people"></i>
+                        </div>
+                        <h4 class="h5 mb-3">Customer Management</h4>
+                        <p class="text-muted mb-0">Build lasting relationships with comprehensive customer profiles, interaction history, and smart segmentation.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+                        <h4 class="h5 mb-3">Inventory Management</h4>
+                        <p class="text-muted mb-0">Track stock levels, get low-stock alerts, and manage multiple warehouses with real-time updates.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon">
+                            <i class="bi bi-cart3"></i>
+                        </div>
+                        <h4 class="h5 mb-3">Order Processing</h4>
+                        <p class="text-muted mb-0">Streamline order fulfillment with automated workflows, status tracking, and integration with shipping providers.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon">
+                            <i class="bi bi-bar-chart"></i>
+                        </div>
+                        <h4 class="h5 mb-3">Analytics & Reports</h4>
+                        <p class="text-muted mb-0">Make data-driven decisions with comprehensive sales reports, customer insights, and performance metrics.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
+                        <h4 class="h5 mb-3">Role-Based Access</h4>
+                        <p class="text-muted mb-0">Control team access with granular permissions, ensuring security and proper workflow management.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon">
+                            <i class="bi bi-plugin"></i>
+                        </div>
+                        <h4 class="h5 mb-3">Integrations</h4>
+                        <p class="text-muted mb-0">Connect with 100+ popular tools including payment gateways, shipping services, and marketing platforms.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ============================================================ #}
+{#  Benefits                                                      #}
+{# ============================================================ #}
+<section class="py-16">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <h2 class="display-5 fw-bold mb-4">Benefits That Drive Growth</h2>
+                <div class="d-flex flex-column gap-4">
+                    <div class="benefit-item">
+                        <div class="benefit-icon">
+                            <i class="bi bi-lightning-charge"></i>
+                        </div>
+                        <div>
+                            <h4 class="h5 mb-1">Increase Efficiency by 40%</h4>
+                            <p class="text-muted mb-0">Automate repetitive tasks and focus on growing your business.</p>
+                        </div>
+                    </div>
+                    <div class="benefit-item">
+                        <div class="benefit-icon">
+                            <i class="bi bi-currency-dollar"></i>
+                        </div>
+                        <div>
+                            <h4 class="h5 mb-1">Boost Revenue by 25%</h4>
+                            <p class="text-muted mb-0">Better customer insights lead to more effective marketing and sales.</p>
+                        </div>
+                    </div>
+                    <div class="benefit-item">
+                        <div class="benefit-icon">
+                            <i class="bi bi-heart"></i>
+                        </div>
+                        <div>
+                            <h4 class="h5 mb-1">Improve Customer Satisfaction</h4>
+                            <p class="text-muted mb-0">Faster response times and personalized experiences keep customers happy.</p>
+                        </div>
+                    </div>
+                    <div class="benefit-item">
+                        <div class="benefit-icon">
+                            <i class="bi bi-clock-history"></i>
+                        </div>
+                        <div>
+                            <h4 class="h5 mb-1">Save 10+ Hours Weekly</h4>
+                            <p class="text-muted mb-0">Streamlined processes free up time for strategic business activities.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="row g-4">
+                    <div class="col-6">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <div class="stat-number">40%</div>
+                                <p class="text-muted mb-0">More Efficient</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <div class="stat-number">25%</div>
+                                <p class="text-muted mb-0">Revenue Increase</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <div class="stat-number">95%</div>
+                                <p class="text-muted mb-0">Customer Satisfaction</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <div class="stat-number">10h+</div>
+                                <p class="text-muted mb-0">Time Saved Weekly</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ============================================================ #}
+{#  CRM Screenshots                                               #}
+{# ============================================================ #}
+<section class="py-16 bg-light">
+    <div class="container">
+        <div class="text-center mb-12">
+            <h2 class="display-5 fw-bold mb-3">See It In Action</h2>
+            <p class="lead text-muted" style="max-width: 700px; margin: 0 auto;">
+                Explore our intuitive interface designed for maximum productivity and ease of use.
+            </p>
+        </div>
+
+        <div class="row g-5">
+            <div class="col-lg-6">
+                <div class="screenshot-container mb-4">
+                    <div style="text-align: center; padding: var(--space-6);">
+                        <i class="bi bi-speedometer2" style="font-size: 4rem; color: var(--brand-600);"></i>
+                        <h4 class="mt-3">Dashboard Overview</h4>
+                        <p class="text-muted">Real-time insights at your fingertips</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="screenshot-container mb-4">
+                    <div style="text-align: center; padding: var(--space-6);">
+                        <i class="bi bi-people-fill" style="font-size: 4rem; color: var(--brand-600);"></i>
+                        <h4 class="mt-3">Customer Management</h4>
+                        <p class="text-muted">Build lasting customer relationships</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="screenshot-container mb-4">
+                    <div style="text-align: center; padding: var(--space-6);">
+                        <i class="bi bi-cart-fill" style="font-size: 4rem; color: var(--brand-600);"></i>
+                        <h4 class="mt-3">Order Processing</h4>
+                        <p class="text-muted">Streamline your fulfillment process</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="screenshot-container mb-4">
+                    <div style="text-align: center; padding: var(--space-6);">
+                        <i class="bi bi-graph-up" style="font-size: 4rem; color: var(--brand-600);"></i>
+                        <h4 class="mt-3">Analytics Dashboard</h4>
+                        <p class="text-muted">Data-driven decision making</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ============================================================ #}
+{#  Social Commerce Features                                      #}
+{# ============================================================ #}
+<section class="py-16">
+    <div class="container">
+        <div class="text-center mb-12">
+            <h2 class="display-5 fw-bold mb-3">Built for Social Commerce</h2>
+            <p class="lead text-muted" style="max-width: 700px; margin: 0 auto;">
+                Specialized features designed for businesses selling through social media platforms.
+            </p>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="text-center">
+                    <div class="feature-icon mx-auto" style="background: var(--info-100); color: var(--info-600);">
+                        <i class="bi bi-facebook"></i>
+                    </div>
+                    <h4 class="h5 mb-2">Facebook Shop</h4>
+                    <p class="text-muted small">Sync products and manage Facebook orders seamlessly</p>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="text-center">
+                    <div class="feature-icon mx-auto" style="background: var(--danger-100); color: var(--danger-600);">
+                        <i class="bi bi-instagram"></i>
+                    </div>
+                    <h4 class="h5 mb-2">Instagram Shopping</h4>
+                    <p class="text-muted small">Tag products and sell directly from Instagram posts</p>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="text-center">
+                    <div class="feature-icon mx-auto" style="background: var(--success-100); color: var(--success-600);">
+                        <i class="bi bi-whatsapp"></i>
+                    </div>
+                    <h4 class="h5 mb-2">WhatsApp Orders</h4>
+                    <p class="text-muted small">Convert WhatsApp conversations into orders instantly</p>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="text-center">
+                    <div class="feature-icon mx-auto" style="background: var(--warning-100); color: var(--warning-600);">
+                        <i class="bi bi-messenger"></i>
+                    </div>
+                    <h4 class="h5 mb-2">Messenger Integration</h4>
+                    <p class="text-muted small">Automated order processing through Facebook Messenger</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-5">
+            <div class="col-lg-6">
+                <div class="card border-0 bg-light">
+                    <div class="card-body">
+                        <h4 class="h5 mb-3">Unified Inbox</h4>
+                        <p class="text-muted mb-0">Manage all customer messages from Facebook, Instagram, and WhatsApp in one place. Never miss a customer inquiry again.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card border-0 bg-light">
+                    <div class="card-body">
+                        <h4 class="h5 mb-3">Social Media Analytics</h4>
+                        <p class="text-muted mb-0">Track performance across all social platforms with unified analytics and insights for better marketing decisions.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ============================================================ #}
+{#  Customer Testimonials                                         #}
+{# ============================================================ #}
+<section class="py-16 bg-light">
+    <div class="container">
+        <div class="text-center mb-12">
+            <h2 class="display-5 fw-bold mb-3">What Our Customers Say</h2>
+            <p class="lead text-muted" style="max-width: 700px; margin: 0 auto;">
+                Join thousands of satisfied businesses who have transformed their operations with our platform.
+            </p>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="testimonial-card">
+                    <div class="d-flex mb-3">
+                        <div class="text-warning">
+                            <i class="bi bi-star-fill"></i>
+                            <i class="bi bi-star-fill"></i>
+                            <i class="bi bi-star-fill"></i>
+                            <i class="bi bi-star-fill"></i>
+                            <i class="bi bi-star-fill"></i>
+                        </div>
+                    </div>
+                    <p class="mb-3">"This platform has completely transformed how we manage our social commerce business. The automation features alone have saved us countless hours every week."</p>
+                    <div class="d-flex align-items-center">
+                        <div style="width: 50px; height: 50px; background: var(--brand-200); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: var(--brand-600);">SA</div>
+                        <div class="ms-3">
+                            <h6 class="mb-0">Sarah Ahmed</h6>
+                            <small class="text-muted">Fashion Boutique Owner</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="testimonial-card">
+                    <div class="d-flex mb-3">
+                        <div class="text-warning">
+                            <i class="bi bi-star-fill"></i>
+                            <i class="bi bi-star-fill"></i>
+                            <i class="bi bi-star-fill"></i>
+                            <i class="bi bi-star-fill"></i>
+                            <i class="bi bi-star-fill"></i>
+                        </div>
+                    </div>
+                    <p class="mb-3">"The customer management features are incredible. We've seen a 30% increase in repeat customers since we started using this CRM."</p>
+                    <div class="d-flex align-items-center">
+                        <div style="width: 50px; height: 50px; background: var(--success-200); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: var(--success-600);">MR</div>
+                        <div class="ms-3">
+                            <h6 class="mb-0">Mohammad Rahman</h6>
+                            <small class="text-muted">Electronics Retailer</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="testimonial-card">
+                    <div class="d-flex mb-3">
+                        <div class="text-warning">
+                            <i class="bi bi-star-fill"></i>
+                            <i class="bi bi-star-fill"></i>
+                            <i class="bi bi-star-fill"></i>
+                            <i class="bi bi-star-fill"></i>
+                            <i class="bi bi-star-fill"></i>
+                        </div>
+                    </div>
+                    <p class="mb-3">"Best investment we've made for our business. The analytics and reporting tools have helped us make smarter decisions and grow our revenue by 40%."</p>
+                    <div class="d-flex align-items-center">
+                        <div style="width: 50px; height: 50px; background: var(--info-200); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: var(--info-600);">FK</div>
+                        <div class="ms-3">
+                            <h6 class="mb-0">Fatima Khan</h6>
+                            <small class="text-muted">Home Decor Store</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ============================================================ #}
+{#  Pricing Plans - Compact Style                                   #}
+{# ============================================================ #}
+<section class="pricing-section" id="pricing">
+    <div class="container">
+        <div class="pricing-header-section">
+            <h2>Choose Your Plan</h2>
+            <p>Select your billing preference to see available plans</p>
+        </div>
+
+        {# Filter Toggle Bar #}
+        <div class="filter-bar">
+            <div class="filter-group">
+                <button class="filter-btn active" id="monthlyBtn" onclick="toggleBilling('monthly')">Monthly</button>
+                <button class="filter-btn" id="yearlyBtn" onclick="toggleBilling('yearly')">Yearly <span class="text-success" style="font-size: 11px;">(Save 20%)</span></button>
+            </div>
+        </div>
+
+        {# Monthly Plans #}
+        <div class="row g-4" id="monthlyPlans">
+            {% for plan in monthly_plans %}
+            <div class="col-lg-3 col-md-6">
+                <div class="pricing-card {% if forloop.counter == 2 %}featured{% endif %}">
+                    {% if forloop.counter == 2 %}
+                    <div class="popular-badge">POPULAR</div>
+                    {% endif %}
+
+                    <div class="pricing-card-body">
+                        <h3 class="plan-name">{{ plan.name }}</h3>
+                        <p class="plan-subtitle">{{ plan.description|truncatewords:12 }}</p>
+
+                        {% if plan.trial_days > 0 %}
+                        <div class="trial-badge">{{ plan.trial_days }} days free</div>
+                        {% endif %}
+
+                        <div class="plan-price">৳{{ plan.price }}</div>
+                        <div class="plan-period">per month</div>
+
+                        <ul class="plan-features">
+                            <li><i class="bi bi-check"></i>{{ plan.max_stores }} Store{{ plan.max_stores|pluralize }}</li>
+                            <li><i class="bi bi-check"></i>{{ plan.max_users }} Team Member{{ plan.max_users|pluralize }}</li>
+                            <li><i class="bi bi-check"></i>{{ plan.max_products }} Products</li>
+                            <li><i class="bi bi-check"></i>{{ plan.max_orders_per_month }} Orders/mo</li>
+                            {% for feature in plan.features.all|slice:":3" %}
+                            <li><i class="bi bi-check"></i>{{ feature.name }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="pricing-card-footer">
+                        {% if request.user.is_authenticated %}
+                        <a href="{% url 'subscriptions:checkout' plan.slug %}"
+                           class="btn {% if forloop.counter == 2 %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            {% if plan.trial_days > 0 %}Start Free Trial{% else %}Choose Plan{% endif %}
+                        </a>
+                        {% else %}
+                        <a href="{% url 'accounts:register' %}"
+                           class="btn {% if forloop.counter == 2 %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            {% if plan.trial_days > 0 %}Start Free Trial{% else %}Choose Plan{% endif %}
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Yearly Plans (hidden by default) #}
+        <div class="row g-4" id="yearlyPlans" style="display: none;">
+            {% for plan in yearly_plans %}
+            <div class="col-lg-4 col-md-6">
+                <div class="pricing-card {% if forloop.counter == 2 %}featured{% endif %}">
+                    {% if forloop.counter == 2 %}
+                    <div class="popular-badge">POPULAR</div>
+                    {% endif %}
+
+                    <div class="pricing-card-body">
+                        <h3 class="plan-name">{{ plan.name }}</h3>
+                        <p class="plan-subtitle">{{ plan.description|truncatewords:12 }}</p>
+
+                        {% if plan.trial_days > 0 %}
+                        <div class="trial-badge">{{ plan.trial_days }} days free</div>
+                        {% endif %}
+
+                        <div class="plan-price">৳{{ plan.price }}</div>
+                        <div class="plan-period">per year <span class="text-success">(Save 20%)</span></div>
+
+                        <ul class="plan-features">
+                            <li><i class="bi bi-check"></i>{{ plan.max_stores }} Store{{ plan.max_stores|pluralize }}</li>
+                            <li><i class="bi bi-check"></i>{{ plan.max_users }} Team Member{{ plan.max_users|pluralize }}</li>
+                            <li><i class="bi bi-check"></i>{{ plan.max_products }} Products</li>
+                            <li><i class="bi bi-check"></i>{{ plan.max_orders_per_month }} Orders/mo</li>
+                            {% for feature in plan.features.all|slice:":3" %}
+                            <li><i class="bi bi-check"></i>{{ feature.name }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="pricing-card-footer">
+                        {% if request.user.is_authenticated %}
+                        <a href="{% url 'subscriptions:checkout' plan.slug %}"
+                           class="btn {% if forloop.counter == 2 %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            {% if plan.trial_days > 0 %}Start Free Trial{% else %}Choose Plan{% endif %}
+                        </a>
+                        {% else %}
+                        <a href="{% url 'accounts:register' %}"
+                           class="btn {% if forloop.counter == 2 %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            {% if plan.trial_days > 0 %}Start Free Trial{% else %}Choose Plan{% endif %}
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="text-center mt-5">
+            <p class="text-muted small">All plans include 24/7 support and regular updates.</p>
+            <a href="{% url 'subscriptions:plans' %}" class="btn btn-link">View all plans →</a>
+        </div>
+    </div>
+</section>
+
+{# ============================================================ #}
+{#  FAQ Section                                                   #}
+{# ============================================================ #}
+<section class="py-16 bg-light">
+    <div class="container">
+        <div class="text-center mb-12">
+            <h2 class="display-5 fw-bold mb-3">Frequently Asked Questions</h2>
+            <p class="lead text-muted" style="max-width: 700px; margin: 0 auto;">
+                Find answers to common questions about our platform and services.
+            </p>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="faq-item active">
+                    <div class="faq-question" onclick="toggleFaq(this)">
+                        <span>What is {{ APP_NAME }} and who is it for?</span>
+                        <i class="bi bi-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        {{ APP_NAME }} is a comprehensive CRM platform designed specifically for social commerce businesses. It's perfect for anyone selling products through Facebook, Instagram, WhatsApp, or other social media platforms who needs to manage customers, orders, inventory, and grow their business efficiently.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFaq(this)">
+                        <span>How does the free trial work?</span>
+                        <i class="bi bi-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        Most plans offer a free trial period (typically 7-14 days) where you can explore all features without any commitment. No credit card is required to start. You can upgrade, downgrade, or cancel at any time during or after the trial.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFaq(this)">
+                        <span>Can I change my plan later?</span>
+                        <i class="bi bi-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        Yes! You can upgrade or downgrade your plan at any time. When upgrading, you'll get immediate access to new features. When downgrading, changes take effect at the end of your current billing period.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFaq(this)">
+                        <span>What payment methods do you accept?</span>
+                        <i class="bi bi-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        We accept all major credit cards (Visa, MasterCard, American Express), bKash, Nagad, Rocket, and bank transfers. All payments are processed securely through our payment partners.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFaq(this)">
+                        <span>Is my data secure?</span>
+                        <i class="bi bi-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        Absolutely! We use bank-level encryption, regular security audits, and comply with data protection regulations. Your data is stored in secure, SOC 2 certified data centers with automatic backups.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFaq(this)">
+                        <span>Do you offer customer support?</span>
+                        <i class="bi bi-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        Yes! All plans include 24/7 email support. Higher-tier plans include priority email support, live chat, and dedicated account managers. Our support team is knowledgeable about social commerce and ready to help you succeed.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ============================================================ #}
+{#  Contact Section                                               #}
+{# ============================================================ #}
+<section class="py-16">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <h2 class="display-5 fw-bold mb-4">Get In Touch</h2>
+                <p class="lead text-muted mb-4">
+                    Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible.
+                </p>
+
+                <div class="d-flex flex-column gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="feature-icon" style="margin-bottom: 0;">
+                            <i class="bi bi-envelope"></i>
+                        </div>
+                        <div>
+                            <h6 class="mb-0">Email Us</h6>
+                            <p class="text-muted mb-0">support@{{ APP_NAME|lower }}.com</p>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="feature-icon" style="margin-bottom: 0;">
+                            <i class="bi bi-telephone"></i>
+                        </div>
+                        <div>
+                            <h6 class="mb-0">Call Us</h6>
+                            <p class="text-muted mb-0">+880 1XXX-XXXXXX</p>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="feature-icon" style="margin-bottom: 0;">
+                            <i class="bi bi-geo-alt"></i>
+                        </div>
+                        <div>
+                            <h6 class="mb-0">Visit Us</h6>
+                            <p class="text-muted mb-0">Dhaka, Bangladesh</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-body">
+                        <form id="contactForm">
+                            <div class="mb-3">
+                                <label class="form-label">Name *</label>
+                                <input type="text" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Email *</label>
+                                <input type="email" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Subject</label>
+                                <input type="text" class="form-control">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Message *</label>
+                                <textarea class="form-control" rows="4" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-send me-2"></i>Send Message
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ============================================================ #}
+{#  Call To Action                                                #}
+{# ============================================================ #}
+<section class="cta-section">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <h2 class="display-4 fw-bold mb-4">Ready to Transform Your Business?</h2>
+                <p class="lead mb-4" style="opacity: 0.9;">
+                    Join thousands of social commerce businesses already using {{ APP_NAME }} to grow their sales and streamline operations.
+                </p>
+                <div class="d-flex justify-content-center gap-3 flex-wrap">
+                    <a href="#pricing" class="btn btn-light btn-lg px-4">
+                        <i class="bi bi-rocket me-2"></i>Start Your Free Trial
+                    </a>
+                    <a href="#features" class="btn btn-outline-light btn-lg px-4">
+                        <i class="bi bi-info-circle me-2"></i>Learn More
+                    </a>
+                </div>
+                <p class="mt-4 mb-0" style="opacity: 0.8;">
+                    No credit card required • Cancel anytime • 24/7 support
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleBilling(period) {
+    const monthlyBtn = document.getElementById('monthlyBtn');
+    const yearlyBtn = document.getElementById('yearlyBtn');
+    const monthlyPlans = document.getElementById('monthlyPlans');
+    const yearlyPlans = document.getElementById('yearlyPlans');
+
+    if (period === 'monthly') {
+        monthlyBtn.classList.add('active');
+        yearlyBtn.classList.remove('active');
+        monthlyPlans.style.display = 'flex';
+        yearlyPlans.style.display = 'none';
+    } else {
+        monthlyBtn.classList.remove('active');
+        yearlyBtn.classList.add('active');
+        monthlyPlans.style.display = 'none';
+        yearlyPlans.style.display = 'flex';
+    }
+}
+
+function toggleFaq(element) {
+    const faqItem = element.closest('.faq-item');
+    faqItem.classList.toggle('active');
+}
+
+document.getElementById('contactForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    alert('Thank you for your message! We\'ll get back to you soon.');
+    this.reset();
+});
+</script>
+{% endblock %}
