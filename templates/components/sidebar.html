@@ -44,6 +44,45 @@
             </div>
             {% endcan %}
 
+            <!-- Subscription Section -->
+            {% if user_subscription or has_pending_subscription or pending_plan %}
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">
+                    <i class="bi bi-stars"></i>
+                    <span>Subscription</span>
+                </div>
+                {% if has_pending_subscription or pending_plan %}
+                    {# User has pending subscription - guide to create store #}
+                    <a href="{% url 'stores:create' %}" class="sidebar-nav-item" style="background: var(--brand-50);">
+                        <div class="sidebar-nav-icon">
+                            <i class="bi bi-plus-lg"></i>
+                        </div>
+                        <span class="sidebar-nav-label">Create Your Store</span>
+                    </a>
+                {% elif user_subscription %}
+                    {# User has active subscription - show management options #}
+                    <a href="{% url 'subscriptions:manage' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'subscriptions:manage' %}active{% endif %}">
+                        <div class="sidebar-nav-icon">
+                            <i class="bi bi-credit-card"></i>
+                        </div>
+                        <span class="sidebar-nav-label">Manage Subscription</span>
+                    </a>
+                    <a href="{% url 'stores:list' %}" class="sidebar-nav-item {% if 'stores' in request.resolver_match.url_name %}active{% endif %}">
+                        <div class="sidebar-nav-icon">
+                            <i class="bi bi-shop"></i>
+                        </div>
+                        <span class="sidebar-nav-label">My Stores</span>
+                    </a>
+                    <a href="{% url 'stores:create' %}" class="sidebar-nav-item">
+                        <div class="sidebar-nav-icon">
+                            <i class="bi bi-plus-circle"></i>
+                        </div>
+                        <span class="sidebar-nav-label">Add New Store</span>
+                    </a>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <!-- Account Section -->
             <div class="sidebar-section">
                 <div class="sidebar-section-title">

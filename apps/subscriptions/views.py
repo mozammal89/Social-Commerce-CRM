@@ -248,6 +248,20 @@ def subscription_welcome(request):
     user = request.user
     subscription_plan = request.session.get("subscription_plan", "")
     trial_days = request.session.get("trial_days", 0)
+    pending_plan = None
+
+    # Check for pending subscription in User model (persists across sessions)
+    if user.pending_plan_slug:
+        try:
+            from apps.permissions.models import SubscriptionPlan
+            pending_plan = SubscriptionPlan.objects.get(slug=user.pending_plan_slug)
+            # If not in session, use from User model
+            if not subscription_plan:
+                subscription_plan = pending_plan.name
+            if not trial_days and user.pending_trial_start:
+                trial_days = pending_plan.trial_days
+        except SubscriptionPlan.DoesNotExist:
+            pass
 
     # Check if user has stores
     has_stores = Store.objects.filter(
@@ -260,9 +274,10 @@ def subscription_welcome(request):
         "subscription_plan": subscription_plan,
         "trial_days": trial_days,
         "has_stores": has_stores,
+        "pending_plan": pending_plan,
     }
 
-    # Clear session data
+    # Clear session data (but keep User model data for persistence)
     request.session.pop("subscription_plan", None)
     request.session.pop("trial_days", None)
 

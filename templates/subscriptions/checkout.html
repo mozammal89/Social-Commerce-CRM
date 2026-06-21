@@ -4,315 +4,257 @@
 {% block title %}Checkout - {{ plan.name }} - Social Commerce CRM{% endblock %}
 
 {% block extra_css %}
-<style>
-    .checkout-section {
-        background: #f8f9fa;
-        padding: var(--space-12) 0;
-        min-height: 100vh;
-    }
-
-    .checkout-header {
-        text-align: center;
-        margin-bottom: var(--space-8);
-    }
-
-    .checkout-header h1 {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--text-primary);
-        margin-bottom: var(--space-2);
-    }
-
-    .checkout-header p {
-        color: var(--text-secondary);
-        font-size: 1rem;
-    }
-
-    /* Plan Summary - Compact */
-    .plan-summary {
-        background: white;
-        border: 2px solid var(--brand-600);
-        border-radius: var(--radius-lg);
-        overflow: hidden;
-        position: relative;
-        margin-bottom: var(--space-4);
-    }
-
-    .plan-badge {
-        position: absolute;
-        top: -1px;
-        right: 16px;
-        background: var(--brand-600);
-        color: white;
-        padding: 4px 12px;
-        border-radius: 0 0 var(--radius) var(--radius);
-        font-size: var(--font-size-xs);
-        font-weight: 600;
-    }
-
-    .plan-header {
-        background: linear-gradient(135deg, var(--brand-50) 0%, white 100%);
-        padding: var(--space-5);
-        text-align: center;
-    }
-
-    .plan-name {
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: var(--text-primary);
-        margin-bottom: var(--space-1);
-    }
-
-    .plan-price {
-        font-size: 2.5rem;
-        font-weight: 800;
-        color: var(--brand-600);
-    }
-
-    .plan-period {
-        color: var(--text-secondary);
-        font-size: var(--font-size-sm);
-    }
-
-    /* Trial Notice */
-    .trial-notice {
-        background: var(--success-50);
-        border-left: 4px solid var(--success-600);
-        border-radius: var(--radius);
-        padding: var(--space-4);
-        margin-bottom: var(--space-4);
-    }
-
-    .trial-notice-header {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-        font-weight: 600;
-        color: var(--success-800);
-        margin-bottom: var(--space-1);
-    }
-
-    .trial-notice-body {
-        color: var(--success-700);
-        font-size: var(--font-size-sm);
-    }
-
-    /* Info Cards */
-    .info-card {
-        background: white;
-        border-radius: var(--radius-lg);
-        padding: var(--space-4);
-        margin-bottom: var(--space-4);
-        border: 1px solid var(--gray-200);
-    }
-
-    .info-card h3 {
-        font-size: 1rem;
-        font-weight: 600;
-        margin-bottom: var(--space-3);
-        color: var(--text-primary);
-    }
-
-    .info-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 0;
-        font-size: var(--font-size-sm);
-        border-bottom: 1px solid var(--gray-100);
-    }
-
-    .info-row:last-child {
-        border-bottom: none;
-    }
-
-    .info-label {
-        color: var(--text-secondary);
-    }
-
-    .info-value {
-        font-weight: 500;
-        color: var(--text-primary);
-    }
-
-    /* Features List */
-    .features-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    .features-list li {
-        padding: 8px 0;
-        font-size: var(--font-size-sm);
-        color: var(--text-secondary);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        border-bottom: 1px solid var(--gray-100);
-    }
-
-    .features-list li:last-child {
-        border-bottom: none;
-    }
-
-    .features-list li i {
-        color: var(--success-600);
-        flex-shrink: 0;
-    }
-
-    /* Checkbox */
-    .terms-checkbox {
-        display: flex;
-        align-items: flex-start;
-        gap: var(--space-2);
-        font-size: var(--font-size-sm);
-        color: var(--text-secondary);
-    }
-
-    .terms-checkbox input[type="checkbox"] {
-        margin-top: 2px;
-        width: 16px;
-        height: 16px;
-        accent-color: var(--brand-600);
-    }
-
-    .terms-checkbox a {
-        color: var(--brand-600);
-        text-decoration: none;
-    }
-
-    /* Actions */
-    .action-buttons {
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-2);
-    }
-
-    .action-buttons .btn {
-        padding: var(--space-3);
-        font-weight: 600;
-        font-size: var(--font-size-sm);
-        border-radius: var(--radius);
-    }
-
-    .security-badge {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: var(--space-2);
-        font-size: var(--font-size-sm);
-        color: var(--text-secondary);
-        margin-top: var(--space-3);
-    }
-
-    @media (max-width: 768px) {
-        .plan-price {
-            font-size: 2rem;
-        }
-    }
-</style>
+<link rel="stylesheet" href="{% static 'css/subscriptions.css' %}">
 {% endblock %}
 
 {% block content %}
 <section class="checkout-section">
     <div class="container">
+        <!-- Header -->
         <div class="checkout-header">
             <h1>Complete Your Subscription</h1>
             <p>You're subscribing to <strong>{{ plan.name }}</strong></p>
         </div>
 
-        <div class="row justify-content-center">
-            <div class="col-lg-6">
-                {% if start_trial and plan.trial_days > 0 %}
-                <div class="trial-notice">
-                    <div class="trial-notice-header">
-                        <i class="bi bi-gift"></i>
-                        <span>{{ plan.trial_days }}-Day Free Trial</span>
+        <div class="row">
+            <!-- Left Column: Plan Summary -->
+            <div class="col-lg-5">
+                <div class="checkout-summary">
+                    {% if start_trial and plan.trial_days > 0 %}
+                    <div class="trial-notice">
+                        <div class="trial-notice-header">
+                            <i class="bi bi-gift"></i>
+                            <span>{{ plan.trial_days }}-Day Free Trial</span>
+                        </div>
+                        <div class="trial-notice-body">
+                            Try all features risk-free. No credit card required.
+                        </div>
                     </div>
-                    <div class="trial-notice-body">
-                        Try all features risk-free. No credit card required.
-                    </div>
-                </div>
-                {% endif %}
+                    {% endif %}
 
-                <div class="plan-summary">
-                    <div class="plan-badge">SELECTED PLAN</div>
-                    <div class="plan-header">
-                        <h2 class="plan-name">{{ plan.name }}</h2>
-                        <p class="text-muted small mb-3">{{ plan.description|truncatewords:10 }}</p>
-                        <div class="plan-price">{{ plan.currency }}{{ total_amount }}</div>
-                        <div class="plan-period">per {{ billing_period }}
-                            {% if billing_period == 'yearly' %}
-                            <span class="text-success">(Save 20%)</span>
-                            {% endif %}
+                    <div class="checkout-plan-summary">
+                        <div class="plan-badge-selected">SELECTED PLAN</div>
+                        <div class="plan-header">
+                            <h2 class="plan-name">{{ plan.name }}</h2>
+                            <p class="plan-description">{{ plan.description }}</p>
+                            <div class="plan-price-section">
+                                <span class="plan-currency">{{ plan.currency }}</span>
+                                <span class="plan-price">{{ total_amount }}</span>
+                            </div>
+                            <div class="plan-period">per {{ billing_period }}
+                                {% if billing_period == 'yearly' %}
+                                <span class="plan-savings">Save 20%</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="plan-body">
+                            <h4 style="font-size: 0.875rem; font-weight: 600; margin-bottom: var(--space-3);">What's Included:</h4>
+                            <ul class="plan-features">
+                                <li><i class="bi bi-check-lg"></i>{{ plan.max_stores }} Store{{ plan.max_stores|pluralize }}</li>
+                                <li><i class="bi bi-check-lg"></i>{{ plan.max_users }} Team Member{{ plan.max_users|pluralize }}</li>
+                                <li><i class="bi bi-check-lg"></i>{{ plan.max_products }} Products</li>
+                                <li><i class="bi bi-check-lg"></i>{{ plan.max_orders_per_month }} Orders/month</li>
+                                <li><i class="bi bi-check-lg"></i>{{ plan.max_warehouses }} Warehouse{{ plan.max_warehouses|pluralize }}</li>
+                                {% for feature in plan.features.all %}
+                                <li><i class="bi bi-check-lg"></i>{{ feature.name }}</li>
+                                {% endfor %}
+                            </ul>
                         </div>
                     </div>
 
-                    <div style="padding: var(--space-4);">
-                        <ul class="features-list">
-                            <li><i class="bi bi-check-lg"></i>{{ plan.max_stores }} Store{{ plan.max_stores|pluralize }}</li>
-                            <li><i class="bi bi-check-lg"></i>{{ plan.max_users }} Team Member{{ plan.max_users|pluralize }}</li>
-                            <li><i class="bi bi-check-lg"></i>{{ plan.max_products }} Products</li>
-                            <li><i class="bi bi-check-lg"></i>{{ plan.max_orders_per_month }} Orders/month</li>
-                            {% for feature in plan.features.all|slice:":3" %}
-                            <li><i class="bi bi-check-lg"></i>{{ feature.name }}</li>
-                            {% endfor %}
-                        </ul>
+                    <!-- Trust Badges -->
+                    <div class="checkout-form-card">
+                        <h4 style="font-size: 0.875rem; font-weight: 600; margin-bottom: var(--space-3);">Why Choose Us?</h4>
+                        <div class="d-flex flex-column gap-3">
+                            <div class="d-flex align-items-start gap-2">
+                                <i class="bi bi-shield-check text-success mt-1"></i>
+                                <div>
+                                    <div style="font-weight: 500; font-size: 0.875rem;">Secure & Reliable</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Bank-level security for your data</div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-start gap-2">
+                                <i class="bi bi-lightning-charge text-warning mt-1"></i>
+                                <div>
+                                    <div style="font-weight: 500; font-size: 0.875rem;">Lightning Fast</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Optimized for speed and performance</div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-start gap-2">
+                                <i class="bi bi-headset text-info mt-1"></i>
+                                <div>
+                                    <div style="font-weight: 500; font-size: 0.875rem;">24/7 Support</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Always here to help you succeed</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
+            </div>
 
-                <div class="info-card">
+            <!-- Right Column: Checkout Form -->
+            <div class="col-lg-7">
+                <div class="checkout-form-card">
                     <h3>Your Information</h3>
-                    <div class="info-row">
-                        <span class="info-label">Name</span>
-                        <span class="info-value">{{ user.get_full_name|default:user.username }}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Email</span>
-                        <span class="info-value">{{ user.email }}</span>
-                    </div>
-                </div>
 
-                <div class="info-card">
-                    <label class="terms-checkbox">
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-6">
+                            <label class="form-label">First Name</label>
+                            <input type="text" class="form-control" value="{{ user.first_name }}" readonly>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label">Last Name</label>
+                            <input type="text" class="form-control" value="{{ user.last_name }}" readonly>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Email Address</label>
+                            <input type="email" class="form-control" value="{{ user.email }}" readonly>
+                        </div>
+                    </div>
+
+                    <div class="checkout-info-row mb-4">
+                        <span class="checkout-info-label">Selected Plan</span>
+                        <span class="checkout-info-value">{{ plan.name }}</span>
+                    </div>
+                    <div class="checkout-info-row mb-4">
+                        <span class="checkout-info-label">Billing Period</span>
+                        <span class="checkout-info-value">{{ billing_period|title }}</span>
+                    </div>
+                    <div class="checkout-info-row mb-4">
+                        <span class="checkout-info-label">Amount</span>
+                        <span class="checkout-info-value">{{ plan.currency }}{{ total_amount }}/{{ billing_period }}</span>
+                    </div>
+
+                    {% if start_trial and plan.trial_days > 0 %}
+                    <div class="trial-notice mb-4">
+                        <div class="trial-notice-header">
+                            <i class="bi bi-check-circle"></i>
+                            <span>Free Trial Activated</span>
+                        </div>
+                        <div class="trial-notice-body">
+                            Your {{ plan.trial_days }}-day free trial starts when you create your store.
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <label class="terms-checkbox mb-4">
                         <input type="checkbox" id="terms" required>
                         <span>
                             I agree to the <a href="/terms/">Terms of Service</a> and
                             <a href="/privacy/">Privacy Policy</a>.
                         </span>
                     </label>
+
+                    <form method="POST" id="subscription-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="plan_slug" value="{{ plan.slug }}">
+                        <input type="hidden" name="billing_period" value="{{ billing_period }}">
+                        <input type="hidden" name="start_trial" value="{{ start_trial|lower }}">
+
+                        <div class="checkout-actions">
+                            {% if start_trial %}
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-rocket me-2"></i>Start Your Free Trial
+                            </button>
+                            <p class="text-center text-muted small">
+                                No credit card required. Cancel anytime.
+                            </p>
+                            {% else %}
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-lock me-2"></i>Complete Subscription
+                            </button>
+                            {% endif %}
+
+                            <a href="{% url 'subscriptions:plans' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-2"></i>Back to Plans
+                            </a>
+
+                            <div class="security-badge">
+                                <i class="bi bi-shield-lock"></i>
+                                <span>Secure 256-bit SSL Encrypted</span>
+                            </div>
+                        </div>
+                    </form>
                 </div>
 
-                <form method="POST" id="subscription-form">
-                    {% csrf_token %}
-                    <input type="hidden" name="plan_slug" value="{{ plan.slug }}">
-                    <input type="hidden" name="billing_period" value="{{ billing_period }}">
-                    <input type="hidden" name="start_trial" value="{{ start_trial|lower }}">
+                <!-- Payment Methods (Placeholder for future integration) -->
+                <div class="checkout-form-card">
+                    <h4 style="font-size: 0.875rem; font-weight: 600; margin-bottom: var(--space-3);">Payment Methods Accepted</h4>
+                    <div class="d-flex gap-3" style="font-size: 1.5rem; color: var(--gray-400);">
+                        <i class="bi bi-credit-card"></i>
+                        <i class="bi bi-paypal"></i>
+                        <i class="bi bi-bank"></i>
+                    </div>
+                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: var(--space-2);">
+                        Payment will be processed after your trial ends. You can cancel anytime.
+                    </p>
+                </div>
+            </div>
+        </div>
 
-                    <div class="action-buttons">
-                        {% if start_trial %}
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-rocket me-2"></i>Start Your Free Trial
-                        </button>
-                        <p class="text-center text-muted small">
-                            No credit card required. Cancel anytime.
-                        </p>
-                        {% else %}
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-lock me-2"></i>Complete Subscription
-                        </button>
-                        {% endif %}
-
-                        <a href="{% url 'subscriptions:plans' %}" class="btn btn-outline-secondary">
-                            <i class="bi bi-arrow-left me-2"></i>Back to Plans
-                        </a>
-
-                        <div class="security-badge">
-                            <i class="bi bi-shield-lock"></i>
-                            <span>Secure subscription activation</span>
+        <!-- FAQs Section -->
+        <div class="row">
+            <div class="col-12">
+                <div class="faq-section">
+                    <h2 class="faq-section-title">Frequently Asked Questions</h2>
+                    <div class="faq-grid">
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-question-text">What happens after my free trial ends?</span>
+                                <span class="faq-question-icon">1</span>
+                            </div>
+                            <div class="faq-answer">
+                                After your free trial, you'll be automatically charged based on your selected plan and billing period. You can cancel anytime before the trial ends without any charges.
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-question-text">Can I change my plan later?</span>
+                                <span class="faq-question-icon">2</span>
+                            </div>
+                            <div class="faq-answer">
+                                Yes! You can upgrade or downgrade your plan at any time from your dashboard. Prorated charges will apply for upgrades.
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-question-text">How do I cancel my subscription?</span>
+                                <span class="faq-question-icon">3</span>
+                            </div>
+                            <div class="faq-answer">
+                                You can cancel your subscription from the Manage Subscription section in your dashboard. Your access will continue until the end of your current billing period.
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-question-text">Is my data secure?</span>
+                                <span class="faq-question-icon">4</span>
+                            </div>
+                            <div class="faq-answer">
+                                Absolutely. We use industry-standard encryption and security measures to protect your data. Your information is stored securely and never shared with third parties.
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-question-text">Can I create multiple stores?</span>
+                                <span class="faq-question-icon">5</span>
+                            </div>
+                            <div class="faq-answer">
+                                The number of stores you can create depends on your plan. Starter includes 1 store, Professional includes 3 stores, and Enterprise allows unlimited stores.
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-question-text">What payment methods do you accept?</span>
+                                <span class="faq-question-icon">6</span>
+                            </div>
+                            <div class="faq-answer">
+                                We accept all major credit cards, PayPal, and bank transfers. All payments are processed securely through our payment partners.
+                            </div>
                         </div>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
@@ -333,7 +275,20 @@ document.getElementById('subscription-form')?.addEventListener('submit', functio
     const submitBtn = this.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Processing...';
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+});
+
+// FAQ accordion functionality
+document.querySelectorAll('.faq-question').forEach(question => {
+    question.addEventListener('click', () => {
+        const answer = question.nextElementSibling;
+        answer.style.display = answer.style.display === 'none' ? 'block' : 'none';
+    });
+});
+
+// Initially hide FAQ answers
+document.querySelectorAll('.faq-answer').forEach(answer => {
+    answer.style.display = 'none';
 });
 </script>
 {% endblock %}

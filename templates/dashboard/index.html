@@ -9,7 +9,7 @@
     {# ============================================================ #}
     {#  Onboarding Progress Section                                  #}
     {# ============================================================ #}
-    {% if user_subscription %}
+    {% if user_subscription or has_pending_subscription %}
     <div class="dashboard-section">
         <div class="card border-0" style="border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--brand-50) 0%, var(--info-50) 100%);">
             <div class="card-body">
@@ -18,9 +18,13 @@
                         <h2 class="h4 mb-1">Welcome to {{ APP_NAME }}! 👋</h2>
                         <p class="text-muted mb-0">Let's get your business set up in 3 simple steps</p>
                     </div>
-                    {% if user_subscription.plan %}
+                    {% if user_subscription and user_subscription.plan %}
                     <div class="badge bg-white text-dark" style="padding: var(--space-2) var(--space-3);">
                         <i class="bi bi-stars me-1"></i>{{ user_subscription.plan.name }} Plan
+                    </div>
+                    {% elif pending_plan %}
+                    <div class="badge bg-white text-dark" style="padding: var(--space-2) var(--space-3);">
+                        <i class="bi bi-stars me-1"></i>{{ pending_plan.name }} Plan
                     </div>
                     {% endif %}
                 </div>
@@ -119,6 +123,25 @@
                 <h1 class="section-title mb-3">Create Your Store</h1>
                 <p class="section-subtitle mb-4" style="max-width: 540px; margin-left: auto; margin-right: auto;">
                     Great! You're subscribed to <strong>{{ user_subscription.plan.name }}</strong>. Now create your first store to start managing your business.
+                </p>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="{% url 'stores:create' %}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-plus-lg me-2"></i>Create Your First Store
+                    </a>
+                </div>
+
+                {% elif has_pending_subscription %}
+                {# User has pending subscription but no store - guide to create store #}
+                <div style="width: 80px; height: 80px; margin: 0 auto var(--space-5); display: flex; align-items: center; justify-content: center; background: var(--brand-50); border-radius: 50%; color: var(--brand-600);">
+                    <i class="bi bi-shop" style="font-size: 2.5rem;"></i>
+                </div>
+                <h1 class="section-title mb-3">Create Your Store</h1>
+                <p class="section-subtitle mb-4" style="max-width: 540px; margin-left: auto; margin-right: auto;">
+                    {% if pending_plan %}
+                    Great! You've chosen the <strong>{{ pending_plan.name }}</strong> plan. Now create your first store to activate your subscription.
+                    {% else %}
+                    Great! You've completed your subscription. Now create your first store to start managing your business.
+                    {% endif %}
                 </p>
                 <div class="d-flex justify-content-center gap-3">
                     <a href="{% url 'stores:create' %}" class="btn btn-primary btn-lg">

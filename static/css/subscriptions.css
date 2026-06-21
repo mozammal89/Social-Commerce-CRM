@@ -1,0 +1,690 @@
+/**
+ * Subscription Page Styles
+ *
+ * Reusable styles for subscription-related pages including:
+ * - Plans page
+ * - Checkout page
+ * - Welcome page
+ * - Subscription management
+ */
+
+/* ============================================================================
+   Plan Cards
+   ============================================================================ */
+
+.plan-card {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.plan-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+}
+
+.plan-card--featured {
+    border-color: var(--brand-600);
+    box-shadow: 0 8px 16px rgba(var(--brand-600-rgb, 13, 110, 253), 0.2);
+}
+
+.plan-card--featured::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--brand-600), var(--brand-500));
+}
+
+.plan-badge-popular {
+    position: absolute;
+    top: -1px;
+    right: 16px;
+    background: var(--brand-600);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 0 0 var(--radius) var(--radius);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+}
+
+.plan-badge-selected {
+    position: absolute;
+    top: -1px;
+    right: 16px;
+    background: var(--success-600);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 0 0 var(--radius) var(--radius);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+}
+
+.plan-header {
+    background: linear-gradient(135deg, var(--brand-50) 0%, white 100%);
+    padding: var(--space-6);
+    text-align: center;
+}
+
+.plan-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.plan-description {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-4);
+}
+
+.plan-price-section {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 4px;
+}
+
+.plan-price {
+    font-size: 3rem;
+    font-weight: 800;
+    color: var(--brand-600);
+    line-height: 1;
+}
+
+.plan-currency {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--brand-600);
+}
+
+.plan-period {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.plan-savings {
+    display: inline-block;
+    margin-top: var(--space-2);
+    padding: 4px 12px;
+    background: var(--success-100);
+    color: var(--success-700);
+    border-radius: var(--radius);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+}
+
+.plan-body {
+    padding: var(--space-5);
+}
+
+.plan-features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--space-5) 0;
+}
+
+.plan-features li {
+    padding: var(--space-2) 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.plan-features li i {
+    color: var(--success-600);
+    flex-shrink: 0;
+}
+
+.plan-features li i.bi-dash {
+    color: var(--text-muted);
+}
+
+.plan-footer {
+    padding: 0 var(--space-5) var(--space-5);
+}
+
+/* ============================================================================
+   Checkout Page
+   ============================================================================ */
+
+.checkout-section {
+    background: #f8f9fa;
+    padding: var(--space-12) 0;
+    min-height: 100vh;
+}
+
+.checkout-header {
+    text-align: center;
+    margin-bottom: var(--space-8);
+}
+
+.checkout-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.checkout-header p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+/* Checkout Summary Side */
+.checkout-summary {
+    position: sticky;
+    top: var(--space-6);
+}
+
+.checkout-plan-summary {
+    background: white;
+    border: 2px solid var(--brand-600);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: var(--space-4);
+}
+
+.checkout-plan-summary .plan-header {
+    padding: var(--space-5);
+}
+
+.checkout-plan-summary .plan-body {
+    padding: var(--space-4);
+}
+
+/* Trial Notice */
+.trial-notice {
+    background: var(--success-50);
+    border-left: 4px solid var(--success-600);
+    border-radius: var(--radius);
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+.trial-notice-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 600;
+    color: var(--success-800);
+    margin-bottom: var(--space-1);
+}
+
+.trial-notice-body {
+    color: var(--success-700);
+    font-size: var(--font-size-sm);
+}
+
+/* Checkout Form Side */
+.checkout-form-card {
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    border: 1px solid var(--gray-200);
+    margin-bottom: var(--space-4);
+}
+
+.checkout-form-card h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: var(--space-4);
+    color: var(--text-primary);
+}
+
+.checkout-info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-2) 0;
+    font-size: var(--font-size-sm);
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.checkout-info-row:last-child {
+    border-bottom: none;
+}
+
+.checkout-info-label {
+    color: var(--text-secondary);
+}
+
+.checkout-info-value {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* Terms Checkbox */
+.terms-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.terms-checkbox input[type="checkbox"] {
+    margin-top: 2px;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--brand-600);
+}
+
+.terms-checkbox a {
+    color: var(--brand-600);
+    text-decoration: none;
+}
+
+.terms-checkbox a:hover {
+    text-decoration: underline;
+}
+
+/* Checkout Actions */
+.checkout-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.checkout-actions .btn {
+    padding: var(--space-3);
+    font-weight: 600;
+    border-radius: var(--radius);
+}
+
+.security-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    margin-top: var(--space-2);
+}
+
+/* ============================================================================
+   FAQs Section
+   ============================================================================ */
+
+.faq-section {
+    margin-top: var(--space-12);
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: var(--space-8);
+}
+
+.faq-section-title {
+    text-align: center;
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: var(--space-6);
+    color: var(--text-primary);
+}
+
+.faq-grid {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.faq-item {
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.faq-question {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-4);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.faq-question:hover {
+    background-color: var(--gray-50);
+}
+
+.faq-question-text {
+    flex: 1;
+}
+
+.faq-question-icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--brand-100);
+    color: var(--brand-600);
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.faq-answer {
+    padding: 0 var(--space-4) var(--space-4);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+}
+
+/* ============================================================================
+   Welcome Page
+   ============================================================================ */
+
+.welcome-section {
+    min-height: 100vh;
+    background: linear-gradient(135deg, var(--brand-600) 0%, var(--brand-800) 100%);
+    padding: var(--space-12) 0;
+}
+
+.welcome-card {
+    background: white;
+    border-radius: 24px;
+    padding: var(--space-8);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.welcome-success-icon {
+    width: 80px;
+    height: 80px;
+    background: var(--success-100);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto var(--space-4);
+    color: var(--success-600);
+    font-size: 40px;
+}
+
+.welcome-title {
+    text-align: center;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.welcome-subtitle {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin-bottom: var(--space-6);
+}
+
+.welcome-plan-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    background: var(--brand-50);
+    color: var(--brand-700);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    margin-bottom: var(--space-6);
+}
+
+.welcome-steps-section {
+    background: var(--gray-50);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    margin-bottom: var(--space-6);
+}
+
+.welcome-steps-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: var(--space-4);
+    color: var(--text-primary);
+}
+
+.welcome-step-item {
+    display: flex;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+
+.welcome-step-item:last-child {
+    margin-bottom: 0;
+}
+
+.welcome-step-number {
+    width: 32px;
+    height: 32px;
+    background: var(--brand-600);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    flex-shrink: 0;
+}
+
+.welcome-step-content h4 {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    margin-bottom: 2px;
+    color: var(--text-primary);
+}
+
+.welcome-step-content p {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.welcome-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.welcome-actions .btn {
+    padding: var(--space-3);
+    font-weight: 600;
+    border-radius: var(--radius);
+}
+
+.welcome-trial-info {
+    text-align: center;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    margin-top: var(--space-4);
+}
+
+/* ============================================================================
+   Manage Subscription Page
+   ============================================================================ */
+
+.subscription-overview-card {
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    border: 1px solid var(--gray-200);
+    margin-bottom: var(--space-4);
+}
+
+.subscription-overview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--space-4);
+}
+
+.subscription-plan-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    background: var(--brand-50);
+    color: var(--brand-700);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
+.subscription-status-badge {
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+}
+
+.subscription-status-badge--active {
+    background: var(--success-100);
+    color: var(--success-700);
+}
+
+.subscription-status-badge--trialing {
+    background: var(--info-100);
+    color: var(--info-700);
+}
+
+.subscription-status-badge--past_due {
+    background: var(--warning-100);
+    color: var(--warning-700);
+}
+
+.subscription-status-badge--cancelled {
+    background: var(--gray-100);
+    color: var(--gray-700);
+}
+
+.subscription-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+}
+
+.subscription-detail-item {
+    padding: var(--space-3);
+    background: var(--gray-50);
+    border-radius: var(--radius);
+}
+
+.subscription-detail-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.subscription-detail-value {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* ============================================================================
+   Billing Toggle
+   ============================================================================ */
+
+.billing-toggle-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-8);
+}
+
+.billing-toggle-label {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.billing-toggle-label--active {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.billing-toggle-switch {
+    position: relative;
+    width: 60px;
+    height: 32px;
+    background: var(--gray-300);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.billing-toggle-switch--active {
+    background: var(--brand-600);
+}
+
+.billing-toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 24px;
+    height: 24px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+}
+
+.billing-toggle-switch--active::after {
+    transform: translateX(28px);
+}
+
+.billing-savings-badge {
+    background: var(--success-100);
+    color: var(--success-700);
+    padding: 4px 8px;
+    border-radius: var(--radius);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .plan-price {
+        font-size: 2rem;
+    }
+
+    .welcome-card {
+        padding: var(--space-5);
+        margin: var(--space-4);
+    }
+
+    .welcome-title {
+        font-size: 1.5rem;
+    }
+
+    .checkout-plan-summary {
+        order: -1;
+        margin-bottom: var(--space-6);
+    }
+
+    .faq-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (min-width: 992px) {
+    .checkout-form-card {
+        margin-bottom: 0;
+    }
+
+    .checkout-summary {
+        margin-bottom: 0;
+    }
+}
