@@ -192,6 +192,38 @@ def subscription_checkout(request, plan_slug):
     if active_memberships(None).filter(user=user).exists():
         return redirect("dashboard:home")
 
+    # Handle POST - Create subscription
+    if request.method == "POST":
+        start_trial = request.POST.get("start_trial", "true").lower() == "true"
+
+        try:
+            with transaction.atomic():
+                # Create store first
+                store_name = f"{user.get_full_name() or user.username}'s Store"
+                store = Store.objects.create(name=store_name)
+
+                # Make the user the store owner
+                owner_role = Role.objects.get(slug="store-owner", store=None)
+                add_member(user, store, owner_role)
+
+                # Create subscription (trial or paid)
+                if start_trial and plan.trial_days > 0:
+                    subscription = create_trial_subscription(
+                        store, plan, actor=user, trial_days=plan.trial_days
+                    )
+                else:
+                    # For paid subscriptions, create as active
+                    # In production, you would integrate with payment gateway here
+                    subscription = create_paid_subscription(store, plan, actor=user)
+
+            # Redirect to success page or dashboard
+            return redirect("subscriptions:success")
+
+        except Exception as e:
+            # Handle error - you might want to show an error message
+            return redirect("subscriptions:plans")
+
+    # Handle GET - Display checkout page
     billing_period = request.GET.get("billing", BILLING_MONTHLY)
     start_trial = request.GET.get("trial", "true").lower() == "true"
 
