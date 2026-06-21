@@ -21,10 +21,7 @@
         <div class="branding-content">
             <div>
                 <div class="branding-header">
-                    <span class="branding-logo" aria-hidden="true">
-                        <i class="bi bi-bag-check"></i>
-                    </span>
-                    <span class="branding-product">{{ APP_NAME }}</span>
+                    <img src="{% static 'images/logo.svg' %}" alt="{{ APP_NAME }}" class="branding-logo-img">
                 </div>
             </div>
 
@@ -87,10 +84,7 @@
         <div class="auth-form-card">
             {# Mobile-only logo, hidden on desktop because the branding panel is visible #}
             <div class="auth-mobile-logo d-lg-none">
-                <span class="auth-mobile-logo__mark" aria-hidden="true">
-                    <i class="bi bi-bag-check"></i>
-                </span>
-                <span>{{ APP_NAME }}</span>
+                <img src="{% static 'images/logo.svg' %}" alt="{{ APP_NAME }}" class="auth-mobile-logo-img">
             </div>
 
             {% block auth_content %}{% endblock %}

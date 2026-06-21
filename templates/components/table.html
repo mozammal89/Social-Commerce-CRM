@@ -1,5 +1,5 @@
 <!-- Table Component -->
-<div class="table-responsive">
+<div class="table-container">
     <table class="table table-hover {% if table_striped %}table-striped{% endif %} {% if table_bordered %}table-bordered{% endif %}">
         <thead>
             <tr>
@@ -22,7 +22,7 @@
             {% for row in table_rows %}
             <tr>
                 {% for column in table_columns %}
-                <td>
+                <td data-label="{{ column.label }}">
                     {% if column.type == 'avatar' %}
                     <div class="d-flex align-items-center">
                         {% if row|get_item:column.avatar_field %}
@@ -44,7 +44,7 @@
                 </td>
                 {% endfor %}
                 {% if table_actions %}
-                <td class="text-end">
+                <td class="text-end" data-label="Actions">
                     <div class="btn-group" role="group">
                         {% for action in table_actions %}
                         <a href="{{ action.url|format:row.id }}" class="btn btn-{{ action.variant|default:'secondary' }} btn-sm">

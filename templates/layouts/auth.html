@@ -1,4 +1,5 @@
 {% extends 'layouts/base.html' %}
+{% load static %}
 
 {% block title %}{{ self.title }}{% endblock %}
 
@@ -13,14 +14,9 @@
     <!-- Left Side - Branding -->
     <div class="auth-branding">
         <div class="branding-content">
-            <h1 class="branding-title">
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline; vertical-align: text-bottom; margin-right: 0.5rem;">
-                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                    <path d="M16 10a4 4 0 0 1-8 0"></path>
-                </svg>
-                {{ APP_NAME }}
-            </h1>
+            <div class="branding-title">
+                <img src="{% static 'images/logo.svg' %}" alt="{{ APP_NAME }}" class="branding-logo-img">
+            </div>
             <p class="branding-subtitle">Manage your social commerce business with ease</p>
 
             <div class="branding-features">
@@ -79,12 +75,7 @@
         <div class="auth-form-card">
             <!-- Mobile Logo -->
             <div class="auth-mobile-logo d-lg-none">
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline; vertical-align: text-bottom; margin-right: 0.5rem;">
-                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                    <path d="M16 10a4 4 0 0 1-8 0"></path>
-                </svg>
-                <span class="fw-bold">{{ APP_NAME }}</span>
+                <img src="{% static 'images/logo.svg' %}" alt="{{ APP_NAME }}" class="auth-mobile-logo-img">
             </div>
 
             {% block auth_content %}{% endblock %}

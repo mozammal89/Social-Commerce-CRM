@@ -179,6 +179,11 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
+    overflow-x: hidden;
+}
+
+body {
+    overflow-x: hidden;
 }
 
 /* =====================================================================
@@ -409,6 +414,23 @@
     width: 100%;
     left: 0;
     right: 0;
+    overflow: visible;
+}
+
+/* Ensure dropdowns extend beyond navbar boundaries */
+.navbar .dropdown,
+.navbar-store-selector,
+.navbar-notifications,
+.navbar-user {
+    overflow: visible;
+}
+
+.navbar .container-fluid {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
 }
 
 .navbar .container-fluid {
@@ -450,7 +472,6 @@
     text-decoration: none;
     display: flex;
     align-items: center;
-    gap: var(--space-2);
     transition: color var(--transition-fast);
 }
 
@@ -458,21 +479,27 @@
     color: var(--brand-700);
 }
 
-.navbar-brand-icon {
-    width: 32px;
-    height: 32px;
-    background: var(--brand-600);
-    color: var(--text-inverse);
-    border-radius: var(--radius);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: var(--font-weight-bold);
+.navbar-brand-logo {
+    height: 40px;
+    width: auto;
+    max-width: 160px;
+    object-fit: contain;
 }
 
 @media (max-width: 991.98px) {
     .navbar-search {
         display: none;
+    }
+}
+
+/* Mobile search toggle button visibility */
+.navbar-search-mobile-toggle {
+    display: none;
+}
+
+@media (max-width: 991.98px) {
+    .navbar-search-mobile-toggle {
+        display: flex;
     }
 }
 
@@ -564,6 +591,18 @@
     outline: none;
 }
 
+.navbar-store-text {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Navbar overflow prevention - ensure children don't cause scroll */
+.navbar .d-flex {
+    min-width: 0;
+}
+
 .navbar-store-icon {
     width: 20px;
     height: 20px;
@@ -586,7 +625,15 @@
 .navbar-notifications .dropdown-menu {
     right: 0;
     left: auto;
-    min-width: 320px;
+    min-width: 280px;
+    max-width: 380px;
+}
+
+@media (max-width: 575.98px) {
+    .navbar-notifications .dropdown-menu {
+        min-width: auto;
+        max-width: calc(100vw - 40px);
+    }
 }
 
 /* User dropdown menu positioning */
@@ -699,11 +746,21 @@
     max-width: 90vw;
 }
 
+/* Ensure dropdowns appear above navbar content */
+.navbar {
+    position: relative;
+    z-index: var(--z-navbar);
+}
+
+.dropdown-menu {
+    z-index: calc(var(--z-navbar) + 1);
+}
+
 @media (max-width: 575.98px) {
     .dropdown-menu {
         max-width: calc(100vw - 32px);
-        left: var(--space-4) !important;
-        right: var(--space-4) !important;
+        left: auto !important;
+        right: 0 !important;
     }
 }
 
@@ -1228,7 +1285,7 @@ textarea.form-control {
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
     position: absolute;
-    z-index: var(--z-dropdown);
+    z-index: calc(var(--z-navbar) + 10);
     top: 100%;
     left: 0;
     margin-top: 4px;
@@ -1623,12 +1680,421 @@ textarea.form-control {
    RESPONSIVE DESIGN
    ===================================================================== */
 
-/* Tablet and below */
-@media (max-width: 991.98px) {
-    .kpi-grid-4 {
+/* =====================================================================
+   TABLE RESPONSIVENESS - Add horizontal scroll support
+   ===================================================================== */
+
+.table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* =====================================================================
+   KPI GRID RESPONSIVE - Smooth scaling across all breakpoints
+   ===================================================================== */
+
+/* Extra small mobile (< 576px) - 1 column */
+@media (max-width: 575.98px) {
+    .kpi-grid-4,
+    .kpi-grid-3,
+    .kpi-grid-2 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Small mobile landscape / Small tablet (576px - 768px) - 2 columns */
+@media (min-width: 576px) and (max-width: 767.98px) {
+    .kpi-grid-4,
+    .kpi-grid-3 {
         grid-template-columns: repeat(2, 1fr);
     }
+}
 
+/* Tablet portrait (768px - 992px) - 3 columns for 4-column grid */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .kpi-grid-4 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .kpi-grid-3,
+    .kpi-grid-2 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* =====================================================================
+   MOBILE TABLE CARD VIEW - Transform tables to cards on small screens
+   ===================================================================== */
+
+@media (max-width: 767.98px) {
+    .table-container {
+        border: none;
+        background: transparent;
+        overflow: visible;
+    }
+
+    .table thead {
+        display: none;
+    }
+
+    .table tbody tr {
+        display: block;
+        margin-bottom: var(--space-4);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-lg);
+        background: var(--surface-primary);
+        box-shadow: var(--shadow-xs);
+    }
+
+    .table tbody tr:hover {
+        background: var(--surface-primary);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--space-3) var(--space-4);
+        border-bottom: 1px solid var(--border-light);
+        font-size: var(--font-size-sm);
+    }
+
+    .table tbody td:last-child {
+        border-bottom: none;
+    }
+
+    .table tbody td::before {
+        content: attr(data-label);
+        font-weight: var(--font-weight-semibold);
+        color: var(--text-primary);
+        margin-right: var(--space-4);
+    }
+
+    /* Hide cells without data-label */
+    .table tbody td:not([data-label])::before {
+        content: "";
+    }
+}
+
+/* =====================================================================
+   DROPDOWN MOBILE FIXES - Normal positioning on mobile
+   ===================================================================== */
+
+/* Small mobile dropdown adjustment */
+@media (min-width: 576px) and (max-width: 767.98px) {
+    .dropdown-menu {
+        max-width: 300px;
+    }
+}
+}
+
+/* =====================================================================
+   MODAL RESPONSIVENESS - Full screen on mobile
+   ===================================================================== */
+
+@media (max-width: 575.98px) {
+    .modal-dialog {
+        margin: 0;
+        max-width: 100vw;
+        width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
+    }
+
+    .modal-content {
+        height: 100%;
+        border-radius: 0;
+        border: none;
+    }
+
+    .modal-body {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .modal-header,
+    .modal-footer {
+        padding: var(--space-4);
+    }
+
+    .modal-body {
+        padding: var(--space-4);
+    }
+}
+
+/* Tablet modal sizing */
+@media (min-width: 576px) and (max-width: 991.98px) {
+    .modal-lg,
+    .modal-xl {
+        max-width: 90vw;
+    }
+}
+
+/* =====================================================================
+   TOUCH TARGETS - Minimum 44px for mobile
+   ===================================================================== */
+
+@media (max-width: 767.98px) {
+    /* Ensure minimum 44px touch targets */
+    .btn {
+        min-height: 44px;
+        min-width: 44px;
+        padding: var(--space-3) var(--space-4);
+    }
+
+    .btn-sm {
+        min-height: 44px;
+        min-width: 44px;
+        padding: var(--space-2_5) var(--space-3);
+        font-size: var(--font-size-sm);
+    }
+
+    .btn-icon {
+        width: 44px;
+        height: 44px;
+    }
+
+    .btn-icon.btn-sm {
+        width: 44px;
+        height: 44px;
+    }
+
+    /* Larger tap targets for navigation */
+    .sidebar-nav-item {
+        min-height: 48px;
+        padding: var(--space-3) var(--space-4);
+    }
+
+    .dropdown-item {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+}
+
+/* =====================================================================
+   MOBILE SEARCH COMPONENT
+   ===================================================================== */
+
+.navbar-search-mobile-toggle {
+    display: none;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    border-radius: var(--radius);
+    transition: all var(--transition-fast);
+}
+
+.navbar-search-mobile-toggle:hover,
+.navbar-search-mobile-toggle:focus {
+    background: var(--surface-secondary);
+    color: var(--text-primary);
+    outline: none;
+}
+
+.navbar-search-mobile-panel {
+    position: fixed;
+    top: var(--navbar-height);
+    left: 0;
+    right: 0;
+    background: var(--surface-primary);
+    padding: var(--space-4);
+    border-bottom: 1px solid var(--border-light);
+    z-index: calc(var(--z-navbar) - 1);
+    transform: translateY(-100%);
+    transition: transform var(--transition-slow);
+    box-shadow: var(--shadow);
+}
+
+.navbar-search-mobile-panel.show {
+    transform: translateY(0);
+}
+
+@media (max-width: 991.98px) {
+    .navbar-search-mobile-toggle {
+        display: flex;
+    }
+
+    .navbar-search {
+        display: none;
+    }
+}
+
+/* =====================================================================
+   STORE SELECTOR MOBILE FIXES
+   ===================================================================== */
+
+@media (max-width: 767.98px) {
+    .navbar-store-button span {
+        max-width: 100px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .navbar-store-selector .dropdown-menu {
+        max-width: calc(100vw - var(--space-8));
+    }
+}
+
+/* =====================================================================
+   SIDEBAR MOBILE IMPROVEMENTS
+   ===================================================================== */
+
+@media (max-width: 991.98px) {
+    .sidebar {
+        width: 280px;
+        max-width: 85vw;
+        transform: translateX(-100%);
+    }
+
+    .sidebar-overlay {
+        display: block;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .sidebar-overlay.show {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .sidebar-content {
+        overscroll-behavior: contain;
+    }
+}
+
+/* =====================================================================
+   CONTENT CONTAINER RESPONSIVE PADDING
+   ===================================================================== */
+
+.content-container {
+    padding: var(--space-8);
+}
+
+@media (max-width: 991.98px) {
+    .content-container {
+        padding: var(--space-6);
+    }
+}
+
+@media (max-width: 767.98px) {
+    .content-container {
+        padding: var(--space-4);
+    }
+}
+
+@media (max-width: 575.98px) {
+    .content-container {
+        padding: var(--space-3);
+    }
+}
+
+/* =====================================================================
+   CONTAINER FLUID MOBILE PADDING
+   ===================================================================== */
+
+@media (max-width: 575.98px) {
+    .navbar .container-fluid {
+        padding-left: var(--space-3);
+        padding-right: var(--space-3);
+    }
+
+    /* Responsive logo sizing on mobile */
+    .navbar-brand-logo {
+        height: 32px;
+        max-width: 120px;
+    }
+}
+
+@media (min-width: 576px) and (max-width: 767.98px) {
+    .navbar-brand-logo {
+        height: 36px;
+        max-width: 140px;
+    }
+}
+
+/* =====================================================================
+   SECTION HEADER MOBILE FIXES
+   ===================================================================== */
+
+@media (max-width: 767.98px) {
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-3);
+    }
+
+    .section-actions {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .section-actions .btn {
+        flex: 1;
+        min-width: 120px;
+    }
+}
+
+/* =====================================================================
+   PAGINATION MOBILE FIXES
+   ===================================================================== */
+
+@media (max-width: 575.98px) {
+    .pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: var(--space-1);
+    }
+
+    /* Show only first, prev, active, next, last */
+    .pagination .page-item:not(.active):not(.prev):not(.next):not(.first):not(.last) {
+        display: none;
+    }
+
+    /* Hide items after active except next and last */
+    .pagination .page-item.active ~ .page-item:not(.next):not(.last) {
+        display: none;
+    }
+}
+
+/* =====================================================================
+   BREADCRUMBS MOBILE FIXES
+   ===================================================================== */
+
+@media (max-width: 575.98px) {
+    .breadcrumb {
+        padding: var(--space-2) var(--space-3);
+        font-size: var(--font-size-xs);
+    }
+
+    .breadcrumb-item:not(.active) {
+        display: none;
+    }
+
+    .breadcrumb-item.active {
+        padding-left: 0;
+    }
+
+    .breadcrumb-item.active::before {
+        content: "›";
+        margin-right: var(--space-1);
+        color: var(--text-muted);
+    }
+}
+
+/* =====================================================================
+   SIDEBAR & MAIN CONTENT LAYOUT
+   ===================================================================== */
+
+/* Tablet and below */
+@media (max-width: 991.98px) {
     .sidebar {
         transform: translateX(-100%);
     }
@@ -1641,39 +2107,77 @@ textarea.form-control {
         width: 100%;
         left: 0;
     }
+
+    /* Prevent navbar horizontal scroll */
+    .navbar .container-fluid {
+        padding-left: var(--space-3);
+        padding-right: var(--space-3);
+    }
+
+    /* Store selector truncation on mobile */
+    .navbar-store-text {
+        max-width: 80px;
+    }
+
+    /* Reduce gaps on mobile */
+    .navbar .d-flex.align-items-center.gap-2 {
+        gap: var(--space-2);
+    }
+
+    /* Notification dropdown max-width on mobile */
+    .navbar-notifications .dropdown-menu {
+        max-width: 320px;
+    }
 }
 
-/* Mobile */
-@media (max-width: 767.98px) {
-    .kpi-grid-2,
-    .kpi-grid-4 {
-        grid-template-columns: 1fr;
+/* Very small screens (below 576px) */
+@media (max-width: 575.98px) {
+    /* Further reduce navbar padding */
+    .navbar .container-fluid {
+        padding-left: var(--space-2);
+        padding-right: var(--space-2);
     }
 
-    .content-container {
-        padding: var(--space-4);
-    }
-
-    .navbar-search {
+    /* Hide store icon on very small screens */
+    .navbar-store-icon {
         display: none;
     }
 
-    .section-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: var(--space-3);
+    /* Further reduce store selector text width */
+    .navbar-store-text {
+        max-width: 60px;
     }
 
-    .table {
-        font-size: var(--font-size-xs);
+    /* Reduce navbar logo size */
+    .navbar-brand-logo {
+        height: 32px;
+        max-width: 100px;
     }
 
-    .table thead th,
-    .table tbody td {
-        padding: var(--space-3) var(--space-4);
+    /* Ensure dropdowns fit within viewport */
+    .dropdown-menu {
+        max-width: calc(100vw - 16px);
+        left: auto !important;
+        right: 8px !important;
+        max-height: calc(100vh - var(--navbar-height) - var(--space-4));
+        overflow-y: auto;
     }
 
-    /* Hide user info on mobile, show avatar only */
+    /* Reduce button icon size */
+    .btn-icon {
+        width: 36px;
+        height: 36px;
+    }
+
+    /* Reduce notification button size */
+    .navbar-notification-button {
+        width: 36px;
+        height: 36px;
+    }
+}
+
+/* Hide user info on mobile, show avatar only */
+@media (max-width: 767.98px) {
     .navbar-user-info,
     .navbar-user-button .bi-chevron-down {
         display: none;
@@ -1704,6 +2208,16 @@ textarea.form-control {
 @media (min-width: 1400px) {
     .dashboard-container {
         padding: 0;
+    }
+}
+
+/* =====================================================================
+   DESKTOP DROPDOWN POSITIONING
+   ===================================================================== */
+
+@media (min-width: 576px) {
+    .dropdown-menu {
+        max-width: 90vw;
     }
 }
 

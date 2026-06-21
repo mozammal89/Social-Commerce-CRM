@@ -199,13 +199,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!results || results.length === 0) {
             return '<div class="p-3 text-muted">No results found</div>';
         }
-        
+
         return results.map(result => {
             const icon = result.icon || 'search';
             const title = result.title || 'Unknown';
             const description = result.description || '';
             const url = result.url || '#';
-            
+
             return `
                 <a href="${url}" class="dropdown-item d-flex align-items-center py-2">
                     <i class="bi bi-${icon} me-2 text-muted"></i>
@@ -217,7 +217,64 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
         }).join('');
     }
-    
+
+    // ========================================
+    // MOBILE SEARCH PANEL FUNCTIONALITY
+    // ========================================
+
+    const mobileSearchToggle = document.querySelector('[data-mobile-search-toggle]');
+    const mobileSearchClose = document.querySelector('[data-mobile-search-close]');
+    const mobileSearchPanel = document.querySelector('.navbar-search-mobile-panel');
+
+    // Toggle mobile search panel
+    function toggleMobileSearch(show) {
+        if (mobileSearchPanel) {
+            if (show) {
+                mobileSearchPanel.classList.add('show');
+                // Focus on search input when opened
+                const searchInput = mobileSearchPanel.querySelector('input');
+                if (searchInput) {
+                    setTimeout(() => searchInput.focus(), 300);
+                }
+            } else {
+                mobileSearchPanel.classList.remove('show');
+            }
+        }
+    }
+
+    // Set up mobile search toggle button
+    if (mobileSearchToggle) {
+        mobileSearchToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleMobileSearch(true);
+        });
+    }
+
+    // Set up mobile search close button
+    if (mobileSearchClose) {
+        mobileSearchClose.addEventListener('click', function(e) {
+            e.preventDefault();
+            toggleMobileSearch(false);
+        });
+    }
+
+    // Close mobile search when clicking outside
+    document.addEventListener('click', function(e) {
+        if (mobileSearchPanel && mobileSearchPanel.classList.contains('show')) {
+            if (!mobileSearchPanel.contains(e.target) && !mobileSearchToggle?.contains(e.target)) {
+                toggleMobileSearch(false);
+            }
+        }
+    });
+
+    // Close mobile search on escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && mobileSearchPanel && mobileSearchPanel.classList.contains('show')) {
+            toggleMobileSearch(false);
+        }
+    });
+
     // ========================================
     // STORE SWITCHING FUNCTIONALITY
     // ========================================

@@ -89,10 +89,14 @@
 }
 
 .branding-title {
-  font-size: 3rem;
-  font-weight: 800;
   margin-bottom: 1rem;
-  letter-spacing: -0.02em;
+}
+
+.branding-logo-img {
+  height: 60px;
+  width: auto;
+  max-width: 200px;
+  object-fit: contain;
 }
 
 .branding-subtitle {
@@ -170,7 +174,13 @@
 .auth-mobile-logo {
   text-align: center;
   margin-bottom: 2rem;
-  font-size: 1.5rem;
+}
+
+.auth-mobile-logo-img {
+  height: 40px;
+  width: auto;
+  max-width: 160px;
+  object-fit: contain;
 }
 
 /* ========================================

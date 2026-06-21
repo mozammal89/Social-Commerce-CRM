@@ -28,6 +28,9 @@ def current_store(request):
     active membership for. It now consults ``StoreMembership`` (active
     rows only), matching the resolution order used by the new
     ``@current_store`` decorator (session → first available).
+
+    Super Admin Fix: Superusers should see all stores regardless of
+    membership, allowing them to switch between any store in the system.
     """
     context = {
         "current_store": None,
@@ -39,14 +42,22 @@ def current_store(request):
 
     user = request.user
 
-    # Bug 2: filter by active StoreMembership rows.
-    context["user_stores"] = list(
-        Store.objects.filter(
-            memberships__user=user,
-            memberships__is_active=True,
-            is_deleted=False,
-        ).distinct().order_by("name")
-    )
+    # Super Admin: Show all stores regardless of membership
+    if user.is_superuser:
+        context["user_stores"] = list(
+            Store.objects.filter(
+                is_deleted=False,
+            ).order_by("name")
+        )
+    else:
+        # Regular user: Only show stores with active membership
+        context["user_stores"] = list(
+            Store.objects.filter(
+                memberships__user=user,
+                memberships__is_active=True,
+                is_deleted=False,
+            ).distinct().order_by("name")
+        )
 
     # Get current store from session or first available
     store_id = request.session.get("current_store_id")

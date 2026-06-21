@@ -1,24 +1,24 @@
 {% load rbac %}
+{% load static %}
 <!-- Modern Top Navigation Bar -->
 <nav class="navbar navbar-sticky-top">
-    <div class="container-fluid" style="padding: 0 var(--space-6);">
+    <div class="container-fluid" style="padding: 0 var(--space-4);">
         <div class="d-flex align-items-center" style="width: 100%; height: 100%;">
             <!-- Left Section -->
-            <div class="d-flex align-items-center gap-4">
+            <div class="d-flex align-items-center">
                 <!-- Mobile Menu Toggle -->
-                <button class="btn-icon" type="button" data-sidebar-toggle style="display: none;" @click="$dispatch('sidebar-open')">
+                <button class="btn-icon d-lg-none" type="button" data-sidebar-toggle @click="$dispatch('sidebar-open')">
                     <i class="bi bi-list" style="font-size: var(--font-size-xl);"></i>
                 </button>
 
                 <!-- Logo -->
                 <a class="navbar-brand" href="{% url 'dashboard:home' %}">
-                    <div class="navbar-brand-icon">SC</div>
-                    <span>{{ APP_NAME }}</span>
+                    <img src="{% static 'images/logo.svg' %}" alt="{{ APP_NAME }}" class="navbar-brand-logo">
                 </a>
             </div>
 
             <!-- Center Section - Search (Hidden on mobile) -->
-            <div class="navbar-search flex-grow-1 mx-4">
+            <div class="navbar-search flex-grow-1 mx-4 d-none d-md-block">
                 <div class="navbar-search-wrapper">
                     <i class="bi bi-search navbar-search-icon"></i>
                     <input type="text" class="navbar-search-input" placeholder="Search customers, products, orders...">
@@ -29,18 +29,23 @@
             </div>
 
             <!-- Right Section -->
-            <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center gap-2 gap-md-3">
+                <!-- Mobile Search Toggle -->
+                <button class="navbar-search-mobile-toggle d-md-none" type="button" data-mobile-search-toggle aria-label="Toggle search">
+                    <i class="bi bi-search" style="font-size: var(--font-size-lg);"></i>
+                </button>
+
                 <!-- Store Selector -->
                 {% if user_stores or current_store %}
                 <div class="navbar-store-selector">
                     <button class="navbar-store-button dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-shop navbar-store-icon"></i>
+                        <i class="bi bi-shop navbar-store-icon d-none d-sm-block"></i>
                         {% if current_store %}
-                            <span style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ current_store.name }}</span>
+                            <span class="navbar-store-text">{{ current_store.name }}</span>
                         {% else %}
-                            <span>Select Store</span>
+                            <span class="navbar-store-text">Store</span>
                         {% endif %}
-                        <i class="bi bi-chevron-down" style="font-size: var(--font-size-xs);"></i>
+                        <i class="bi bi-chevron-down d-none d-md-block" style="font-size: var(--font-size-xs);"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
                         {% if user_stores %}
@@ -83,7 +88,7 @@
                         <i class="bi bi-bell" style="font-size: var(--font-size-lg);"></i>
                         <span class="navbar-notification-badge">3</span>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end" style="min-width: 360px; max-height: 400px; overflow-y: auto;">
+                    <ul class="dropdown-menu dropdown-menu-end">
                         <li class="dropdown-header">
                             <div class="d-flex justify-content-between align-items-center">
                                 <span>Notifications</span>
@@ -162,7 +167,7 @@
                         </div>
                         <i class="bi bi-chevron-down d-none d-md-block" style="font-size: var(--font-size-xs); color: var(--text-muted);"></i>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end" style="width: 240px;">
+                    <ul class="dropdown-menu dropdown-menu-end">
                         <li>
                             <div class="dropdown-header">
                                 <div style="font-weight: var(--font-weight-semibold); color: var(--text-primary);">
@@ -205,11 +210,13 @@
     </div>
 </nav>
 
-<!-- Mobile Sidebar Toggle Button (Visible on mobile) -->
-<style>
-@media (max-width: 991.98px) {
-    [data-sidebar-toggle] {
-        display: flex !important;
-    }
-}
-</style>
+<!-- Mobile Search Panel -->
+<div class="navbar-search-mobile-panel" id="mobileSearchPanel">
+    <div class="navbar-search-wrapper">
+        <i class="bi bi-search navbar-search-icon"></i>
+        <input type="text" class="navbar-search-input" placeholder="Search customers, products, orders..." autofocus>
+        <button type="button" class="navbar-search-close" data-mobile-search-close style="position: absolute; right: var(--space-4); top: 50%; transform: translateY(-50%); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); border: none; background: transparent;">
+            <i class="bi bi-x"></i>
+        </button>
+    </div>
+</div>

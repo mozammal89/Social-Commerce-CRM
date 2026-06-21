@@ -223,13 +223,55 @@
     gap: var(--space-4);
 }
 
-@media (min-width: 768px) {
+/* Card grid base responsive behavior */
+.card-grid-2 {
+    grid-template-columns: 1fr;
+}
+
+.card-grid-3 {
+    grid-template-columns: 1fr;
+}
+
+.card-grid-4 {
+    grid-template-columns: 1fr;
+}
+
+/* Small mobile landscape / Small tablet (576px - 768px) - 2 columns */
+@media (min-width: 576px) and (max-width: 767.98px) {
     .card-grid-2 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .card-grid-3 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .card-grid-4 {
         grid-template-columns: repeat(2, 1fr);
     }
 }
 
+/* Tablet portrait (768px - 992px) */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .card-grid-2 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .card-grid-3 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .card-grid-4 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Desktop (992px and above) */
 @media (min-width: 992px) {
+    .card-grid-2 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
     .card-grid-3 {
         grid-template-columns: repeat(3, 1fr);
     }
@@ -690,27 +732,99 @@
    RESPONSIVE OVERRIDES
    ===================================================================== */
 
-/* Ensure content doesn't overflow on small screens */
-@media (max-width: 575.98px) {
+/* =====================================================================
+   TABLET OVERRIDES (768px - 992px)
+   ===================================================================== */
+
+@media (min-width: 768px) and (max-width: 991.98px) {
+    /* Adjust form layouts for tablet */
+    .row > .col-lg-4 {
+        width: 50%;
+    }
+
+    .row > .col-lg-8 {
+        width: 100%;
+    }
+
+    /* Modal sizing for tablet */
+    .modal-xl-custom {
+        max-width: 90vw;
+    }
+}
+
+/* =====================================================================
+   MOBILE OVERRIDES (Below 768px)
+   ===================================================================== */
+
+@media (max-width: 767.98px) {
+    /* Table improvements */
     .table-responsive {
         font-size: var(--text-xs);
     }
 
+    /* Button sizing improvements */
     .btn-sm {
         font-size: var(--text-xs);
         padding: var(--space-1) var(--space-2);
     }
 
+    /* Quick link cards stack on mobile */
+    .quick-link-card {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    /* Activity items stack better on mobile */
+    .activity-item {
+        padding: var(--space-2) 0;
+    }
+
+    /* Empty state padding reduction */
+    .empty-state {
+        padding: var(--space-8) var(--space-4);
+    }
+}
+
+/* =====================================================================
+   SMALL MOBILE OVERRIDES (Below 576px)
+   ===================================================================== */
+
+@media (max-width: 575.98px) {
+    /* Form actions stack on mobile */
     .form-actions {
         flex-direction: column;
+        gap: var(--space-3);
+    }
+
+    .form-actions .btn {
+        width: 100%;
     }
 
     .form-actions-right {
         margin-left: 0;
     }
 
-    .quick-link-card {
-        flex-direction: column;
-        text-align: center;
+    /* Stack form fields on mobile */
+    .row > .col-md-6,
+    .row > .col-md-4,
+    .row > .col-md-3,
+    .row > .col-lg-4 {
+        width: 100%;
+    }
+
+    /* Input groups adjust for mobile */
+    .input-group-with-icon .form-control {
+        padding-left: calc(var(--space-10) + var(--space-1));
+    }
+
+    /* Modal custom sizing for small mobile */
+    .modal-sm-custom,
+    .modal-md-custom {
+        max-width: 100vw;
+    }
+
+    /* Skeleton loading adjust for mobile */
+    .skeleton {
+        background-size: 150% 100%;
     }
 }
