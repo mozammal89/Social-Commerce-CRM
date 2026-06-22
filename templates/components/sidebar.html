@@ -45,7 +45,7 @@
             {% endcan %}
 
             <!-- Subscription Section -->
-            {% if user_subscription or has_pending_subscription or pending_plan %}
+            {% if has_user_subscription or has_pending_subscription or pending_plan %}
             <div class="sidebar-section">
                 <div class="sidebar-section-title">
                     <i class="bi bi-stars"></i>
@@ -59,7 +59,7 @@
                         </div>
                         <span class="sidebar-nav-label">Create Your Store</span>
                     </a>
-                {% elif user_subscription %}
+                {% elif has_user_subscription %}
                     {# User has active subscription - show management options #}
                     <a href="{% url 'subscriptions:manage' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'subscriptions:manage' %}active{% endif %}">
                         <div class="sidebar-nav-icon">
@@ -67,7 +67,7 @@
                         </div>
                         <span class="sidebar-nav-label">Manage Subscription</span>
                     </a>
-                    <a href="{% url 'stores:store_list' %}" class="sidebar-nav-item {% if 'stores' in request.resolver_match.url_name %}active{% endif %}">
+                    <a href="{% url 'stores:store_list' %}" class="sidebar-nav-item {% if 'store_list' in request.resolver_match.url_name or request.resolver_match.app_name == 'stores' %}active{% endif %}">
                         <div class="sidebar-nav-icon">
                             <i class="bi bi-shop"></i>
                         </div>

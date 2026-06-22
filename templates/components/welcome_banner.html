@@ -15,7 +15,7 @@
 
 {% if show_welcome %}
     {% if has_user_subscription or has_pending_subscription or pending_plan %}
-<div class="welcome-banner-container mb-4" id="welcomeBanner" data-banner-id="dashboard-welcome">
+<div class="welcome-banner-container mb-4" id="welcomeBanner" data-banner-id="dashboard-welcome" data-user-has-no-store="{% if user_has_no_store %}true{% else %}false{% endif %}">
     <div class="card border-0 shadow-sm" style="
         border-radius: var(--radius-lg);
         background: linear-gradient(135deg, var(--brand-600) 0%, var(--brand-500) 100%);
@@ -169,12 +169,30 @@ function isBannerDismissed(bannerId) {
     return false;
 }
 
-// Auto-hide banner if previously dismissed
+// Auto-hide banner if previously dismissed AND user has completed onboarding
 document.addEventListener('DOMContentLoaded', function() {
     const bannerId = 'dashboard-welcome';
-    if (isBannerDismissed(bannerId)) {
-        const banner = document.querySelector(`[data-banner-id="${bannerId}"]`);
-        if (banner) {
+    const banner = document.querySelector(`[data-banner-id="${bannerId}"]`);
+
+    if (!banner) return;
+
+    // Check if user has created a store from data attribute
+    const userHasNoStore = banner.getAttribute('data-user-has-no-store') === 'true';
+
+    // Only hide if user has created a store (onboarding completed)
+    // Otherwise clear the dismissal so banner shows again
+    if (userHasNoStore) {
+        // User hasn't created store yet - clear any previous dismissal
+        try {
+            const dismissedBanners = JSON.parse(localStorage.getItem('dismissedBanners') || '{}');
+            delete dismissedBanners[bannerId];
+            localStorage.setItem('dismissedBanners', JSON.stringify(dismissedBanners));
+        } catch (e) {
+            console.warn('Could not clear banner dismissal:', e);
+        }
+    } else {
+        // User has created store - hide banner if previously dismissed
+        if (isBannerDismissed(bannerId)) {
             banner.style.display = 'none';
         }
     }

@@ -165,7 +165,7 @@
     --z-modal: 1050;
     --z-popover: 1060;
     --z-tooltip: 1070;
-    --z-navbar: 1030;
+    --z-navbar: 1040;
 }
 
 /* =====================================================================
@@ -408,13 +408,14 @@ body {
     background: var(--surface-primary);
     border-bottom: 1px solid var(--border-light);
     height: var(--navbar-height);
-    position: sticky;
+    position: fixed;
     top: 0;
-    z-index: var(--z-navbar);
-    width: 100%;
     left: 0;
     right: 0;
+    z-index: 1000;
+    width: 100%;
     overflow: visible;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 /* Ensure dropdowns extend beyond navbar boundaries */
@@ -423,6 +424,36 @@ body {
 .navbar-notifications,
 .navbar-user {
     overflow: visible;
+    position: static;
+}
+
+/* Dropdown menu positioning - ensure visibility */
+.navbar .dropdown-menu {
+    position: absolute !important;
+    top: 100%;
+    left: auto;
+    right: 0;
+    z-index: 1050 !important;
+    margin-top: 4px;
+    min-width: 200px;
+}
+
+.navbar-store-selector .dropdown-menu {
+    right: 0;
+    left: auto;
+}
+
+.navbar-notifications .dropdown-menu {
+    right: 0;
+    left: auto;
+    width: 350px;
+    max-width: 90vw;
+}
+
+.navbar-user .dropdown-menu {
+    right: 0;
+    left: auto;
+    min-width: 250px;
 }
 
 .navbar .container-fluid {
@@ -464,6 +495,7 @@ body {
     min-width: 0;
     max-width: 400px;
     margin: 0 var(--space-4);
+    position: relative;
 }
 
 .navbar-brand {
@@ -474,6 +506,8 @@ body {
     display: flex;
     align-items: center;
     transition: color var(--transition-fast);
+    position: relative;
+    z-index: 1;
 }
 
 .navbar-brand:hover {
@@ -506,6 +540,7 @@ body {
 
 .navbar-search-wrapper {
     position: relative;
+    z-index: 1;
 }
 
 .navbar-search-input {
@@ -517,8 +552,11 @@ body {
     border: 1px solid var(--border-light);
     border-radius: var(--radius-full);
     transition: all var(--transition-fast);
+    position: relative;
+    z-index: 1;
 }
 
+/* Navbar Search Input Focus State */
 .navbar-search-input:focus {
     outline: none;
     background: var(--surface-primary);
@@ -533,6 +571,7 @@ body {
     transform: translateY(-50%);
     color: var(--text-muted);
     pointer-events: none;
+    z-index: 2;
 }
 
 .navbar-search-clear {
@@ -744,18 +783,21 @@ body {
 }
 
 /* Fix dropdown positioning to prevent overflow issues */
-.dropdown-menu {
-    max-width: 90vw;
+/* Bootstrap dropdown show state */
+.dropdown.show .dropdown-menu {
+    display: block;
+    z-index: 1050;
 }
 
 /* Ensure dropdowns appear above navbar content */
 .navbar {
-    position: relative;
-    z-index: var(--z-navbar);
+    position: fixed;
+    z-index: 1000;
 }
 
 .dropdown-menu {
-    z-index: calc(var(--z-navbar) + 1);
+    z-index: 1001;
+    position: absolute !important;
 }
 
 @media (max-width: 575.98px) {
@@ -819,6 +861,7 @@ body {
     margin-left: 0;
     transition: margin-left var(--transition-slow);
     width: 100%;
+    padding-top: calc(var(--navbar-height) + var(--space-6));
 }
 
 .content-container {
@@ -1285,6 +1328,7 @@ textarea.form-control {
 
 .dropdown {
     position: relative;
+    z-index: 1;
 }
 
 .dropdown-menu {
@@ -1293,9 +1337,9 @@ textarea.form-control {
     background: var(--surface-primary);
     border: 1px solid var(--border-light);
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
     position: absolute;
-    z-index: calc(var(--z-navbar) + 10);
+    z-index: 1050;
     top: 100%;
     left: 0;
     margin-top: 4px;
@@ -1315,6 +1359,48 @@ textarea.form-control {
 .dropdown-menu.show {
     display: block;
     animation: dropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dropdown-menu {
+    min-width: 200px;
+    padding: var(--space-2);
+    background: var(--surface-primary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    position: absolute;
+    z-index: 1050;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    will-change: transform, opacity;
+    display: none;
+}
+
+.dropdown-menu.show {
+    display: block;
+    animation: dropdownFadeIn 0.15s ease-out;
+}
+
+.dropdown-menu-end {
+    right: 0;
+    left: auto;
+}
+
+.dropdown-menu-start {
+    left: 0;
+    right: auto;
 }
 
 @keyframes dropdownFadeIn {
@@ -1920,10 +2006,30 @@ textarea.form-control {
     transform: translateY(-100%);
     transition: transform var(--transition-slow);
     box-shadow: var(--shadow);
+    overflow: hidden;
 }
 
 .navbar-search-mobile-panel.show {
     transform: translateY(0);
+}
+
+.navbar-search-clear {
+    position: absolute;
+    right: var(--space-4);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    border-radius: var(--radius-full);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    z-index: 3;
 }
 
 @media (max-width: 991.98px) {
