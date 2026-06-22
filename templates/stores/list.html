@@ -1,0 +1,438 @@
+{% extends 'layouts/dashboard.html' %}
+{% load static %}
+
+{% block title %}My Stores - {{ APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <!-- Page Header -->
+    <div class="section-header">
+        <div>
+            <h1 class="section-title">My Stores</h1>
+            <p class="section-subtitle">Manage your stores and track their performance</p>
+        </div>
+        {% if remaining_stores > 0 %}
+        <a href="{% url 'stores:create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-2"></i>Create Store
+        </a>
+        {% else %}
+        <a href="{% url 'subscriptions:manage' %}" class="btn btn-primary">
+            <i class="bi bi-arrow-up-circle me-2"></i>Upgrade Plan
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="kpi-grid kpi-grid-3 mb-4">
+        <div class="kpi-card">
+            <div class="kpi-card-header">
+                <i class="bi bi-shop" style="color: var(--brand-600);"></i>
+                <span class="text-muted">Total Stores</span>
+            </div>
+            <div class="kpi-card-value">{{ store_count }}</div>
+            <div class="kpi-card-subtitle">
+                {% if remaining_stores > 0 %}
+                    <span class="text-success">{{ remaining_stores }} available</span>
+                {% else %}
+                    <span class="text-warning">Plan limit reached</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-card-header">
+                <i class="bi bi-check-circle" style="color: var(--success-600);"></i>
+                <span class="text-muted">Active Stores</span>
+            </div>
+            <div class="kpi-card-value">{{ active_count }}</div>
+            <div class="kpi-card-subtitle">
+                <span class="text-muted">{{ store_count|add:active_count|add:-1 }} total</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-card-header">
+                <i class="bi bi-graph-up" style="color: var(--info-600);"></i>
+                <span class="text-muted">Plan Usage</span>
+            </div>
+            <div class="kpi-card-value">
+                {% if max_stores > 0 %}
+                    {% widthratio store_count max_stores 100 %}%
+                {% else %}
+                    0%
+                {% endif %}
+            </div>
+            <div class="kpi-card-subtitle">
+                <span class="text-muted">{{ store_count }} / {{ max_stores }} stores</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" id="searchStores" class="form-control" placeholder="Search stores..." data-search-target>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select id="filterStatus" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="pending">Pending</option>
+                        <option value="archived">Archived</option>
+                    </select>
+                </div>
+                <div class="col-md-3 text-end">
+                    <a href="{% url 'stores:store_list_html' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Reset
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stores Table -->
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="storesTable">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 50px;">Logo</th>
+                        <th>Store Name</th>
+                        <th style="width: 120px;">Status</th>
+                        <th style="width: 100px;">Members</th>
+                        <th style="width: 120px;">Created</th>
+                        <th style="width: 150px; text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for store in stores %}
+                    <tr class="store-row" data-store-name="{{ store.name|lower }}" data-store-status="{{ store.status }}">
+                        <!-- Logo -->
+                        <td>
+                            {% if store.logo %}
+                            <img src="{{ store.logo.url }}" alt="{{ store.name }}" class="rounded" style="width: 40px; height: 40px; object-fit: cover;">
+                            {% else %}
+                            <div class="rounded d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; background: var(--brand-100); color: var(--brand-600);">
+                                <i class="bi bi-shop"></i>
+                            </div>
+                            {% endif %}
+                        </td>
+
+                        <!-- Name & Description -->
+                        <td>
+                            <div>
+                                <a href="{% url 'stores:store_detail_html' store_id=store.id %}" class="text-decoration-none fw-bold">
+                                    {{ store.name }}
+                                </a>
+                                {% if store == current_store %}
+                                <span class="badge bg-success ms-2">Current</span>
+                                {% endif %}
+                            </div>
+                            {% if store.description %}
+                            <div class="text-muted small text-truncate" style="max-width: 250px;">{{ store.description }}</div>
+                            {% endif %}
+                        </td>
+
+                        <!-- Status -->
+                        <td>
+                            {% if store.status == 'active' %}
+                            <span class="status-badge status-badge--active">Active</span>
+                            {% elif store.status == 'inactive' %}
+                            <span class="status-badge status-badge--inactive">Inactive</span>
+                            {% elif store.status == 'pending' %}
+                            <span class="status-badge status-badge--pending">Pending</span>
+                            {% elif store.status == 'archived' %}
+                            <span class="status-badge status-badge--danger">Archived</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Members -->
+                        <td>
+                            <span class="badge bg-light text-dark">
+                                <i class="bi bi-people me-1"></i>{{ store.member_count|default:0 }}
+                            </span>
+                        </td>
+
+                        <!-- Created -->
+                        <td>
+                            <span class="text-muted small">{{ store.created_at|date:"M d, Y" }}</span>
+                        </td>
+
+                        <!-- Actions -->
+                        <td style="text-align: right;">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-icon dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-three-dots-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <a class="dropdown-item" href="{% url 'stores:store_detail_html' store_id=store.id %}">
+                                            <i class="bi bi-eye me-2"></i>View Details
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="{% url 'stores:store_edit_html' store_id=store.id %}">
+                                            <i class="bi bi-pencil me-2"></i>Edit Store
+                                        </a>
+                                    </li>
+                                    {% if store != current_store %}
+                                    <li>
+                                        <button class="dropdown-item" onclick="switchStore('{{ store.id }}', '{{ store.name }}')">
+                                            <i class="bi bi-arrow-repeat me-2"></i>Switch to This
+                                        </button>
+                                    </li>
+                                    {% endif %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <button class="dropdown-item text-danger" onclick="deleteStore('{{ store.id }}', '{{ store.name }}')">
+                                            <i class="bi bi-trash me-2"></i>Delete Store
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5">
+                            <div class="text-muted">
+                                <i class="bi bi-shop" style="font-size: 3rem;"></i>
+                                <p class="mt-3 mb-0">No stores yet. Create your first store to get started!</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Empty State (when no stores) -->
+    {% if not stores %}
+    <div class="card border-0 shadow-sm mt-4">
+        <div class="card-body text-center py-5">
+            <div style="width: 80px; height: 80px; margin: 0 auto 1.5rem; background: var(--brand-50); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                <i class="bi bi-shop" style="font-size: 2rem; color: var(--brand-600);"></i>
+            </div>
+            <h3 class="mb-2">No Stores Yet</h3>
+            <p class="text-muted mb-4">Create your first store to start managing your business</p>
+            {% if remaining_stores > 0 %}
+            <a href="{% url 'stores:create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-lg me-2"></i>Create Your First Store
+            </a>
+            {% else %}
+            <a href="{% url 'subscriptions:manage' %}" class="btn btn-primary">
+                <i class="bi bi-arrow-up-circle me-2"></i>Upgrade Your Plan
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% csrf_token %}
+<script src="{% static 'js/stores.js' %}"></script>
+<script>
+// Search and filter functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchStores');
+    const statusFilter = document.getElementById('filterStatus');
+    const storeRows = document.querySelectorAll('.store-row');
+
+    function filterStores() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const statusValue = statusFilter.value;
+
+        storeRows.forEach(row => {
+            const storeName = row.getAttribute('data-store-name') || '';
+            const storeStatus = row.getAttribute('data-store-status') || '';
+
+            const matchesSearch = storeName.includes(searchTerm);
+            const matchesStatus = !statusValue || storeStatus === statusValue;
+
+            row.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
+        });
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', filterStores);
+    }
+
+    if (statusFilter) {
+        statusFilter.addEventListener('change', filterStores);
+    }
+});
+
+// Store switch function
+function switchStore(storeId, storeName) {
+    if (typeof switchStore === 'undefined') {
+        // Fallback to direct API call
+        const csrfToken = getCSRFToken();
+        fetch(`/api/v1/stores/${storeId}/switch/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            credentials: 'same-origin',
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (typeof showNotification === 'function') {
+                    showNotification(`Switched to ${storeName}`, 'success');
+                }
+                setTimeout(() => location.reload(), 500);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            if (typeof showNotification === 'function') {
+                showNotification('Failed to switch store', 'error');
+            }
+        });
+    }
+}
+
+// Delete store function
+function deleteStore(storeId, storeName) {
+    if (!confirm(`Are you sure you want to delete "${storeName}"? This action cannot be undone.`)) {
+        return;
+    }
+
+    const csrfToken = getCSRFToken();
+    const row = document.querySelector(`tr[data-store-name="${storeName.toLowerCase()}"]`);
+
+    if (row) {
+        row.style.opacity = '0.5';
+    }
+
+    fetch(`/api/v1/stores/${storeId}/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': csrfToken,
+        },
+        credentials: 'same-origin',
+    })
+    .then(response => {
+        if (response.ok) {
+            if (typeof showNotification === 'function') {
+                showNotification(`"${storeName}" has been deleted`, 'success');
+            }
+            if (row) {
+                row.remove();
+            }
+            // Reload page after short delay
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            throw new Error('Delete failed');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        if (typeof showNotification === 'function') {
+            showNotification('Failed to delete store', 'error');
+        }
+        if (row) {
+            row.style.opacity = '1';
+        }
+    });
+}
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Store list specific styles */
+.store-row {
+    transition: background-color 0.2s;
+}
+
+.store-row:hover {
+    background-color: var(--surface-secondary);
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.status-badge--active {
+    background: var(--success-50);
+    color: var(--success-700);
+}
+
+.status-badge--inactive {
+    background: var(--neutral-100);
+    color: var(--neutral-600);
+}
+
+.status-badge--pending {
+    background: var(--warning-50);
+    color: var(--warning-700);
+}
+
+.status-badge--danger {
+    background: var(--danger-50);
+    color: var(--danger-700);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .kpi-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .kpi-grid.kpi-grid-3 {
+        grid-template-columns: 1fr;
+    }
+
+    /* Transform table to cards on mobile */
+    #storesTable thead {
+        display: none;
+    }
+
+    #storesTable tbody,
+    #storesTable tr,
+    #storesTable td {
+        display: block;
+        width: 100%;
+    }
+
+    #storesTable tr {
+        margin-bottom: 1rem;
+        border: 1px solid var(--neutral-200);
+        border-radius: 8px;
+        padding: 1rem;
+    }
+
+    #storesTable td {
+        text-align: left !important;
+        padding: 0.5rem 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    #storesTable td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        margin-right: 1rem;
+    }
+}
+</style>
+{% endblock %}

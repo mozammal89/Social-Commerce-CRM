@@ -1,0 +1,278 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% block title %}Edit Store - {{ store.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'stores:store_list_html' %}">My Stores</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'stores:store_detail_html' store_id=store.id %}">{{ store.name }}</a></li>
+            <li class="breadcrumb-item active">Edit</li>
+        </ol>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="section-header">
+        <div>
+            <h1 class="section-title">Edit Store</h1>
+            <p class="section-subtitle">Update your store information and settings</p>
+        </div>
+        <a href="{% url 'stores:store_detail_html' store_id=store.id %}" class="btn btn-outline-secondary">
+            <i class="bi bi-x-lg me-2"></i>Cancel
+        </a>
+    </div>
+
+    <div class="row g-5">
+        <!-- Main Form -->
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Store Information</h2>
+                </div>
+                <div class="card-body">
+                    <form id="editStoreForm" class="d-flex flex-column gap-4">
+                        <input type="hidden" name="storeId" value="{{ store.id }}">
+
+                        <!-- Store Name -->
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label class="form-label" for="storeName">
+                                    Store Name <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" id="storeName" name="name" class="form-control"
+                                       value="{{ store.name }}" required
+                                       placeholder="e.g., My Amazing Store">
+                                <small class="form-text text-muted">Choose a name that represents your business</small>
+                            </div>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label class="form-label" for="storeDescription">Description</label>
+                                <textarea id="storeDescription" name="description" class="form-control" rows="3"
+                                          placeholder="Describe your store and what you sell...">{{ store.description }}</textarea>
+                                <small class="form-text text-muted">A brief description helps customers understand your business</small>
+                            </div>
+                        </div>
+
+                        <!-- Status -->
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="storeStatus">Status</label>
+                                <select id="storeStatus" name="status" class="form-select">
+                                    <option value="active" {% if store.status == 'active' %}selected{% endif %}>Active</option>
+                                    <option value="inactive" {% if store.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                                    <option value="pending" {% if store.status == 'pending' %}selected{% endif %}>Pending</option>
+                                    <option value="archived" {% if store.status == 'archived' %}selected{% endif %}>Archived</option>
+                                </select>
+                                <small class="form-text text-muted">Set the operational status of your store</small>
+                            </div>
+
+                            <!-- Slug (Read-only) -->
+                            <div class="col-md-6">
+                                <label class="form-label" for="storeSlug">Store Slug</label>
+                                <input type="text" id="storeSlug" class="form-control" value="{{ store.slug }}" readonly>
+                                <small class="form-text text-muted">Automatically generated from store name</small>
+                            </div>
+                        </div>
+
+                        <!-- Logo Upload -->
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label class="form-label" for="storeLogo">Store Logo</label>
+                                <input type="file" id="storeLogo" name="logo" class="form-control" accept="image/*">
+                                <small class="form-text text-muted">Upload a logo for your store (recommended: 200x200px)</small>
+                            </div>
+                        </div>
+
+                        <!-- Current Logo Preview -->
+                        {% if store.logo %}
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label class="form-label">Current Logo</label>
+                                <div class="d-flex align-items-center gap-3">
+                                    <img src="{{ store.logo.url }}" alt="{{ store.name }}" class="rounded" style="width: 80px; height: 80px; object-fit: cover;">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeLogo()">
+                                        <i class="bi bi-trash me-1"></i>Remove Logo
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <hr>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex gap-3">
+                            <button type="submit" class="btn btn-primary" data-loading>
+                                <i class="bi bi-check-lg me-2"></i>Save Changes
+                            </button>
+                            <a href="{% url 'stores:store_detail_html' store_id=store.id %}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Guide -->
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Tips</h2>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0" style="padding-left: 1.5rem; line-height: 1.8;">
+                        <li>Use a clear, descriptive name for your store</li>
+                        <li>Add keywords to your description for better discoverability</li>
+                        <li>Set status to "Inactive" when temporarily closed</li>
+                        <li>Upload a square logo for best display quality</li>
+                        <li>Slug is auto-generated and cannot be edited</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Store Info</h2>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="text-muted small">Store ID</label>
+                        <div class="fw-medium"><code>{{ store.id }}</code></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="text-muted small">Created</label>
+                        <div class="fw-medium">{{ store.created_at|date:"F j, Y" }}</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="text-muted small">Last Updated</label>
+                        <div class="fw-medium">{{ store.updated_at|date:"F j, Y" }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% csrf_token %}
+<script>
+// Get CSRF token from cookie or from the csrfmiddlewaretag input
+function getCSRFToken() {
+    // First try to get from the hidden input (Django template tag)
+    const csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    if (csrfInput) {
+        return csrfInput.value;
+    }
+
+    // Then try to get from cookie
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return decodeURIComponent(value);
+        }
+    }
+
+    return null;
+}
+
+// Update slug preview as user types name
+document.getElementById('storeName').addEventListener('input', function() {
+    const name = this.value;
+    const slug = name.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    document.getElementById('storeSlug').value = slug || '';
+});
+
+// Remove logo function
+function removeLogo() {
+    if (confirm('Are you sure you want to remove the store logo?')) {
+        // TODO: Implement logo removal via API
+        if (typeof showNotification === 'function') {
+            showNotification('Logo removal feature coming soon', 'info');
+        }
+    }
+}
+
+// Form submission
+document.getElementById('editStoreForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const form = this;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+
+    // Set loading state
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+
+    // Get form data
+    const storeId = form.querySelector('[name="storeId"]').value;
+    const name = form.querySelector('[name="name"]').value;
+    const description = form.querySelector('[name="description"]').value;
+    const status = form.querySelector('[name="status"]').value;
+
+    const data = {
+        name: name,
+        description: description || '',
+        status: status
+    };
+
+    const csrfToken = getCSRFToken();
+
+    try {
+        const response = await fetch(`/api/v1/stores/${storeId}/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(data),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            // Show success notification
+            if (typeof showNotification === 'function') {
+                showNotification('Store updated successfully!', 'success');
+            }
+            // Redirect after a short delay
+            setTimeout(() => {
+                window.location.href = "{% url 'stores:store_detail_html' store_id=store.id %}";
+            }, 1000);
+        } else {
+            // Build error message
+            let errorMessage = 'Failed to update store.';
+            if (result.name) {
+                errorMessage += ' ' + result.name[0];
+            } else if (result.detail) {
+                errorMessage += ' ' + result.detail;
+            } else if (result.error) {
+                errorMessage += ' ' + result.error;
+            }
+
+            // Show error notification
+            if (typeof showNotification === 'function') {
+                showNotification(errorMessage, 'error');
+            }
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        // Show error notification
+        if (typeof showNotification === 'function') {
+            showNotification('An error occurred. Please try again.', 'error');
+        }
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }
+});
+</script>
+{% endblock %}

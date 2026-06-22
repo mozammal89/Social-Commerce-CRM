@@ -1,0 +1,328 @@
+{% extends 'layouts/dashboard.html' %}
+{% load rbac %}
+
+{% block title %}{{ store.name }} - Store Details{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'stores:store_list_html' %}">My Stores</a></li>
+            <li class="breadcrumb-item active">{{ store.name }}</li>
+        </ol>
+    </nav>
+
+    <!-- Store Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-start mb-4">
+        <div class="d-flex align-items-center gap-3">
+            <!-- Store Logo -->
+            {% if store.logo %}
+            <img src="{{ store.logo.url }}" alt="{{ store.name }}" class="rounded" style="width: 80px; height: 80px; object-fit: cover;">
+            {% else %}
+            <div class="rounded d-flex align-items-center justify-content-center" style="width: 80px; height: 80px; background: var(--brand-100); color: var(--brand-600);">
+                <i class="bi bi-shop" style="font-size: 2.5rem;"></i>
+            </div>
+            {% endif %}
+
+            <!-- Store Info -->
+            <div>
+                <h1 class="h3 mb-1">{{ store.name }}</h1>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    {% if store.status == 'active' %}
+                    <span class="status-badge status-badge--active">Active</span>
+                    {% elif store.status == 'inactive' %}
+                    <span class="status-badge status-badge--inactive">Inactive</span>
+                    {% elif store.status == 'pending' %}
+                    <span class="status-badge status-badge--pending">Pending</span>
+                    {% elif store.status == 'archived' %}
+                    <span class="status-badge status-badge--danger">Archived</span>
+                    {% endif %}
+                    <span class="text-muted small">
+                        <i class="bi bi-clock me-1"></i>
+                        Created {{ store.created_at|date:"F j, Y" }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="d-flex gap-2">
+            {% if is_owner or is_manager %}
+            <a href="{% url 'stores:store_edit_html' store_id=store.id %}" class="btn btn-primary">
+                <i class="bi bi-pencil me-1"></i>Edit Store
+            </a>
+            {% endif %}
+            <a href="{% url 'stores:store_list_html' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Back to List
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="kpi-grid kpi-grid-4 mb-4">
+        <div class="kpi-card">
+            <div class="kpi-card-header">
+                <i class="bi bi-box" style="color: var(--brand-600);"></i>
+                <span class="text-muted">Products</span>
+            </div>
+            <div class="kpi-card-value">{{ products_count }}</div>
+            <div class="kpi-card-subtitle">
+                <span class="text-muted">Total products</span>
+            </div>
+            {% if can "products.view" %}
+            <a href="{% url 'products:list' %}" class="kpi-card-link">View Products →</a>
+            {% endif %}
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-card-header">
+                <i class="bi bi-cart3" style="color: var(--success-600);"></i>
+                <span class="text-muted">Orders</span>
+            </div>
+            <div class="kpi-card-value">{{ orders_count }}</div>
+            <div class="kpi-card-subtitle">
+                <span class="text-muted">Total orders</span>
+            </div>
+            {% if can "orders.view" %}
+            <a href="{% url 'orders:list' %}" class="kpi-card-link">View Orders →</a>
+            {% endif %}
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-card-header">
+                <i class="bi bi-people" style="color: var(--info-600);"></i>
+                <span class="text-muted">Customers</span>
+            </div>
+            <div class="kpi-card-value">{{ customers_count }}</div>
+            <div class="kpi-card-subtitle">
+                <span class="text-muted">Total customers</span>
+            </div>
+            {% if can "customers.view" %}
+            <a href="{% url 'customers:list' %}" class="kpi-card-link">View Customers →</a>
+            {% endif %}
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-card-header">
+                <i class="bi bi-users" style="color: var(--warning-600);"></i>
+                <span class="text-muted">Team Members</span>
+            </div>
+            <div class="kpi-card-value">{{ member_count }}</div>
+            <div class="kpi-card-subtitle">
+                <span class="text-muted">Active members</span>
+            </div>
+            {% if is_owner %}
+            <button class="kpi-card-link" onclick="showMemberModal()">Manage Team →</button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Store Information -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header">
+                    <h2 class="card-title mb-0">Store Information</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="text-muted small">Store Name</label>
+                            <div class="fw-medium">{{ store.name }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small">Slug</label>
+                            <div class="fw-medium">
+                                <code>{{ store.slug }}</code>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="text-muted small">Description</label>
+                            <div class="fw-medium">{{ store.description|default:"<span class=\"text-muted\">No description provided</span>" }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small">Status</label>
+                            <div class="fw-medium text-capitalize">{{ store.status }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small">Created Date</label>
+                            <div class="fw-medium">{{ store.created_at|date:"F j, Y" }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small">Last Updated</label>
+                            <div class="fw-medium">{{ store.updated_at|date:"F j, Y" }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            {% if is_owner or is_manager %}
+            <div class="card border-0 shadow-sm">
+                <div class="card-header">
+                    <h2 class="card-title mb-0">Quick Actions</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-sm-6 col-md-4">
+                            <a href="{% if can "products.create" %}{% url 'products:create' %}{% else %}#{% endif %}" class="btn btn-outline-primary w-100">
+                                <i class="bi bi-plus-lg me-2"></i>Add Product
+                            </a>
+                        </div>
+                        <div class="col-sm-6 col-md-4">
+                            <a href="{% if can "orders.create" %}{% url 'orders:create' %}{% else %}#{% endif %}" class="btn btn-outline-success w-100">
+                                <i class="bi bi-receipt me-2"></i>Create Order
+                            </a>
+                        </div>
+                        <div class="col-sm-6 col-md-4">
+                            <a href="{% if can "customers.create" %}{% url 'customers:create' %}{% else %}#{% endif %}" class="btn btn-outline-info w-100">
+                                <i class="bi bi-person-plus me-2"></i>Add Customer
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Danger Zone -->
+            {% if is_owner %}
+            <div class="card border-danger shadow-sm mb-4" style="border: 1px solid var(--danger-200) !important;">
+                <div class="card-header bg-danger text-white">
+                    <h2 class="card-title mb-0">Danger Zone</h2>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Once you delete a store, there is no going back. Please be certain.
+                    </p>
+                    <button onclick="deleteStore('{{ store.id }}', '{{ store.name }}')" class="btn btn-danger w-100">
+                        <i class="bi bi-trash me-2"></i>Delete This Store
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Store Settings -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header">
+                    <h2 class="card-title mb-0">Store Settings</h2>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="#" class="btn btn-outline-secondary text-start">
+                            <i class="bi bi-gear me-2"></i>General Settings
+                        </a>
+                        <a href="#" class="btn btn-outline-secondary text-start">
+                            <i class="bi bi-bell me-2"></i>Notifications
+                        </a>
+                        <a href="#" class="btn btn-outline-secondary text-start">
+                            <i class="bi bi-shield-check me-2"></i>Privacy & Security
+                        </a>
+                        <a href="#" class="btn btn-outline-secondary text-start">
+                            <i class="bi bi-plug me-2"></i>Integrations
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% csrf_token %}
+<script>
+function deleteStore(storeId, storeName) {
+    if (!confirm(`Are you sure you want to delete "${storeName}"? This action cannot be undone.`)) {
+        return;
+    }
+
+    const csrfToken = getCSRFToken();
+
+    fetch(`/api/v1/stores/${storeId}/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': csrfToken,
+        },
+        credentials: 'same-origin',
+    })
+    .then(response => {
+        if (response.ok) {
+            if (typeof showNotification === 'function') {
+                showNotification(`"${storeName}" has been deleted`, 'success');
+            }
+            setTimeout(() => {
+                window.location.href = "{% url 'stores:store_list_html' %}";
+            }, 1000);
+        } else {
+            throw new Error('Delete failed');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        if (typeof showNotification === 'function') {
+            showNotification('Failed to delete store', 'error');
+        }
+    });
+}
+
+function showMemberModal() {
+    // TODO: Implement member management modal
+    if (typeof showNotification === 'function') {
+        showNotification('Team management coming soon!', 'info');
+    }
+}
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.status-badge--active {
+    background: var(--success-50);
+    color: var(--success-700);
+}
+
+.status-badge--inactive {
+    background: var(--neutral-100);
+    color: var(--neutral-600);
+}
+
+.status-badge--pending {
+    background: var(--warning-50);
+    color: var(--warning-700);
+}
+
+.status-badge--danger {
+    background: var(--danger-50);
+    color: var(--danger-700);
+}
+
+.kpi-card-link {
+    display: inline-block;
+    margin-top: 0.5rem;
+    color: var(--brand-600);
+    text-decoration: none;
+    font-size: 0.875rem;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+}
+
+.kpi-card-link:hover {
+    text-decoration: underline;
+}
+</style>
+{% endblock %}

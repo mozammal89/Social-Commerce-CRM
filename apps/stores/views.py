@@ -362,3 +362,192 @@ def create_store_template(request):
         logger.error(f"Error in create_store_template: {str(e)}")
         messages.error(request, "An error occurred. Please try again.")
         return redirect("dashboard:home")
+
+
+# ---------------------------------------------------------------------------
+# Template Views for Store Management (HTML Interface)
+# ---------------------------------------------------------------------------
+@login_required
+def store_list_template(request):
+    """Template view for listing all user's stores."""
+    try:
+        user = request.user
+
+        # Get user's stores through active memberships with member counts
+        from django.db.models import Count
+
+        stores = (
+            Store.objects.filter(
+                memberships__user=user,
+                memberships__is_active=True,
+                is_deleted=False,
+            )
+            .annotate(
+                member_count=Count("memberships", filter=models.Q(memberships__is_active=True))
+            )
+            .distinct()
+            .order_by("-created_at")
+        )
+
+        # Get current store from context
+        from apps.common.context_processors import current_store as cp
+        ctx = cp(request)
+        current_store = ctx.get("current_store")
+
+        # Get subscription info for plan limits
+        max_stores = _resolve_max_stores_cap(user)
+        current_count = stores.count()
+        remaining_stores = max_stores - current_count
+
+        # Count active stores
+        active_count = stores.filter(status="active").count()
+
+        return render(
+            request,
+            "stores/list.html",
+            {
+                "stores": stores,
+                "current_store": current_store,
+                "store_count": current_count,
+                "active_count": active_count,
+                "max_stores": max_stores,
+                "remaining_stores": remaining_stores,
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Error in store_list_template: {str(e)}")
+        messages.error(request, "An error occurred while loading stores.")
+        return redirect("dashboard:home")
+
+
+@login_required
+def store_detail_template(request, store_id):
+    """Template view for viewing a single store's details."""
+    try:
+        user = request.user
+        store = Store.objects.filter(id=store_id, is_deleted=False).first()
+
+        if not store:
+            messages.error(request, "Store not found.")
+            return redirect("stores:store_list_html")
+
+        # Check if user has access to this store
+        if not getattr(user, "is_superuser", False):
+            membership = StoreMembership.objects.filter(
+                user=user,
+                store=store,
+                is_active=True,
+            ).first()
+            if not membership:
+                messages.error(request, "You don't have access to this store.")
+                return redirect("stores:store_list_html")
+
+        # Check user's role in the store
+        from apps.permissions.models import Role
+
+        owner_role = Role.objects.filter(slug="store-owner").first()
+        manager_role = Role.objects.filter(slug="manager").first()
+
+        is_owner = False
+        is_manager = False
+
+        if getattr(user, "is_superuser", False):
+            is_owner = True
+            is_manager = True
+        else:
+            membership = StoreMembership.objects.filter(
+                user=user, store=store, is_active=True
+            ).first()
+            if membership:
+                if membership.role == owner_role:
+                    is_owner = True
+                elif membership.role == manager_role:
+                    is_manager = True
+
+        # Count members
+        member_count = StoreMembership.objects.filter(
+            store=store, is_active=True
+        ).count()
+
+        # Get store stats (placeholder for now)
+        products_count = 0
+        orders_count = 0
+        customers_count = 0
+
+        # Get current store for RBAC context
+        from apps.common.context_processors import current_store as cp
+        ctx = cp(request)
+        current_store = ctx.get("current_store")
+
+        return render(
+            request,
+            "stores/detail.html",
+            {
+                "store": store,
+                "current_store": current_store,  # For RBAC template tags
+                "is_owner": is_owner,
+                "is_manager": is_manager,
+                "member_count": member_count,
+                "products_count": products_count,
+                "orders_count": orders_count,
+                "customers_count": customers_count,
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Error in store_detail_template: {str(e)}")
+        messages.error(request, "An error occurred while loading store details.")
+        return redirect("stores:store_list_html")
+
+
+@login_required
+def store_edit_template(request, store_id):
+    """Template view for editing a store."""
+    try:
+        user = request.user
+        store = Store.objects.filter(id=store_id, is_deleted=False).first()
+
+        if not store:
+            messages.error(request, "Store not found.")
+            return redirect("stores:store_list_html")
+
+        # Check if user has access to this store
+        if not getattr(user, "is_superuser", False):
+            membership = StoreMembership.objects.filter(
+                user=user,
+                store=store,
+                is_active=True,
+            ).first()
+            if not membership:
+                messages.error(request, "You don't have access to this store.")
+                return redirect("stores:store_list_html")
+
+        # Only owners and managers can edit
+        from apps.permissions.models import Role
+
+        owner_role = Role.objects.filter(slug="store-owner").first()
+        manager_role = Role.objects.filter(slug="manager").first()
+
+        can_edit = (
+            getattr(user, "is_superuser", False)
+            or store.is_owner(user)
+            or store.is_manager(user)
+        )
+
+        if not can_edit:
+            messages.error(request, "You don't have permission to edit this store.")
+            return redirect("stores:store_detail_html", store_id=store_id)
+
+        return render(
+            request,
+            "stores/edit.html",
+            {
+                "store": store,
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Error in store_edit_template: {str(e)}")
+        messages.error(request, "An error occurred while loading edit form.")
+        return redirect("stores:store_list_html")
