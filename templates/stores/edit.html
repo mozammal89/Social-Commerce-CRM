@@ -33,6 +33,7 @@
                 </div>
                 <div class="card-body">
                     <form id="editStoreForm" class="d-flex flex-column gap-4">
+                        {% csrf_token %}
                         <input type="hidden" name="storeId" value="{{ store.id }}">
 
                         <!-- Store Name -->
@@ -157,7 +158,6 @@
     </div>
 </div>
 
-{% csrf_token %}
 <script>
 // Get CSRF token from cookie or from the csrfmiddlewaretag input
 function getCSRFToken() {
@@ -210,30 +210,54 @@ document.getElementById('editStoreForm').addEventListener('submit', async functi
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
 
-    // Get form data
+    // Get form data including file upload
+    const formData = new FormData(form);
     const storeId = form.querySelector('[name="storeId"]').value;
-    const name = form.querySelector('[name="name"]').value;
-    const description = form.querySelector('[name="description"]').value;
-    const status = form.querySelector('[name="status"]').value;
 
+    // Add JSON fields
     const data = {
-        name: name,
-        description: description || '',
-        status: status
+        name: formData.get('name'),
+        description: formData.get('description') || '',
+        status: formData.get('status')
     };
+
+    // Check if logo is being uploaded
+    const logoFile = form.querySelector('[name="logo"]').files[0];
+    let hasLogo = logoFile !== undefined;
 
     const csrfToken = getCSRFToken();
 
     try {
-        const response = await fetch(`/api/v1/stores/${storeId}/`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken,
-            },
-            credentials: 'same-origin',
-            body: JSON.stringify(data),
-        });
+        let response;
+
+        if (hasLogo) {
+            // Use FormData for file upload with PATCH method
+            const uploadFormData = new FormData();
+            uploadFormData.append('name', data.name);
+            uploadFormData.append('description', data.description);
+            uploadFormData.append('status', data.status);
+            uploadFormData.append('logo', logoFile);
+
+            response = await fetch(`/api/v1/stores/${storeId}/?format=json`, {
+                method: 'PATCH',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                },
+                credentials: 'same-origin',
+                body: uploadFormData,
+            });
+        } else {
+            // Use JSON for text-only updates
+            response = await fetch(`/api/v1/stores/${storeId}/`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify(data),
+            });
+        }
 
         const result = await response.json();
 
@@ -255,6 +279,8 @@ document.getElementById('editStoreForm').addEventListener('submit', async functi
                 errorMessage += ' ' + result.detail;
             } else if (result.error) {
                 errorMessage += ' ' + result.error;
+            } else if (result.logo) {
+                errorMessage += ' Logo: ' + result.logo[0];
             }
 
             // Show error notification

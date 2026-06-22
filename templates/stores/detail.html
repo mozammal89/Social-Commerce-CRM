@@ -59,62 +59,74 @@
         </div>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="kpi-grid kpi-grid-4 mb-4">
-        <div class="kpi-card">
-            <div class="kpi-card-header">
-                <i class="bi bi-box" style="color: var(--brand-600);"></i>
-                <span class="text-muted">Products</span>
+    <!-- Stats Cards - Compact Version -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="flex-shrink-0" style="width: 40px; height: 40px; background: var(--brand-50); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-box" style="color: var(--brand-600); font-size: 1.25rem;"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="text-muted small mb-1">Products</div>
+                            <div class="fw-bold mb-0" style="font-size: 1.5rem;">{{ products_count }}</div>
+                            <div class="text-muted small">Total products</div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="kpi-card-value">{{ products_count }}</div>
-            <div class="kpi-card-subtitle">
-                <span class="text-muted">Total products</span>
-            </div>
-            {% if can "products.view" %}
-            <a href="{% url 'products:list' %}" class="kpi-card-link">View Products →</a>
-            {% endif %}
         </div>
 
-        <div class="kpi-card">
-            <div class="kpi-card-header">
-                <i class="bi bi-cart3" style="color: var(--success-600);"></i>
-                <span class="text-muted">Orders</span>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="flex-shrink-0" style="width: 40px; height: 40px; background: var(--success-50); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-cart3" style="color: var(--success-600); font-size: 1.25rem;"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="text-muted small mb-1">Orders</div>
+                            <div class="fw-bold mb-0" style="font-size: 1.5rem;">{{ orders_count }}</div>
+                            <div class="text-muted small">Total orders</div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="kpi-card-value">{{ orders_count }}</div>
-            <div class="kpi-card-subtitle">
-                <span class="text-muted">Total orders</span>
-            </div>
-            {% if can "orders.view" %}
-            <a href="{% url 'orders:list' %}" class="kpi-card-link">View Orders →</a>
-            {% endif %}
         </div>
 
-        <div class="kpi-card">
-            <div class="kpi-card-header">
-                <i class="bi bi-people" style="color: var(--info-600);"></i>
-                <span class="text-muted">Customers</span>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="flex-shrink-0" style="width: 40px; height: 40px; background: var(--info-50); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-people" style="color: var(--info-600); font-size: 1.25rem;"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="text-muted small mb-1">Customers</div>
+                            <div class="fw-bold mb-0" style="font-size: 1.5rem;">{{ customers_count }}</div>
+                            <div class="text-muted small">Total customers</div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="kpi-card-value">{{ customers_count }}</div>
-            <div class="kpi-card-subtitle">
-                <span class="text-muted">Total customers</span>
-            </div>
-            {% if can "customers.view" %}
-            <a href="{% url 'customers:list' %}" class="kpi-card-link">View Customers →</a>
-            {% endif %}
         </div>
 
-        <div class="kpi-card">
-            <div class="kpi-card-header">
-                <i class="bi bi-users" style="color: var(--warning-600);"></i>
-                <span class="text-muted">Team Members</span>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="flex-shrink-0" style="width: 40px; height: 40px; background: var(--warning-50); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-users" style="color: var(--warning-600); font-size: 1.25rem;"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="text-muted small mb-1">Team</div>
+                            <div class="fw-bold mb-0" style="font-size: 1.5rem;">{{ member_count }}</div>
+                            <div class="text-muted small">Members</div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="kpi-card-value">{{ member_count }}</div>
-            <div class="kpi-card-subtitle">
-                <span class="text-muted">Active members</span>
-            </div>
-            {% if is_owner %}
-            <button class="kpi-card-link" onclick="showMemberModal()">Manage Team →</button>
-            {% endif %}
         </div>
     </div>
 
@@ -232,7 +244,18 @@
 </div>
 
 {% csrf_token %}
+<input type="hidden" name="csrfmiddlewaretoken" value="" data-csrf-token>
+
 <script>
+// Copy CSRF token to hidden input for JavaScript access
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    const csrfTokenInput = document.querySelector('[data-csrf-token]');
+    if (csrfTokenInput && csrfInput) {
+        csrfTokenInput.value = csrfInput.value;
+    }
+});
+
 function deleteStore(storeId, storeName) {
     if (!confirm(`Are you sure you want to delete "${storeName}"? This action cannot be undone.`)) {
         return;

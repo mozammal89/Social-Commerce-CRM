@@ -862,11 +862,24 @@ body {
     transition: margin-left var(--transition-slow);
     width: 100%;
     padding-top: calc(var(--navbar-height) + var(--space-6));
+    min-height: calc(100vh - var(--navbar-height));
+    display: flex;
+    flex-direction: column;
 }
 
 .content-container {
     padding: var(--space-8);
     max-width: 100%;
+    flex: 1;
+}
+
+/* =====================================================================
+   FOOTER
+   ===================================================================== */
+
+#main-content-area footer {
+    margin-top: auto;
+    flex-shrink: 0;
 }
 
 /* =====================================================================
@@ -1385,7 +1398,6 @@ textarea.form-control {
     left: 0;
     margin-top: 4px;
     will-change: transform, opacity;
-    display: none;
 }
 
 .dropdown-menu.show {
@@ -1412,6 +1424,60 @@ textarea.form-control {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+ /* Table dropdown specific fixes */
+ .table .dropdown-menu {
+     position: absolute !important;
+     z-index: 9999 !important;
+ }
+ 
+ .table-responsive .dropdown-menu {
+     position: absolute !important;
+     z-index: 9999 !important;
+ }
+ 
+ /* Ensure table dropdowns don't get clipped */
+ .table-responsive {
+     overflow-x: auto;
+     overflow-y: visible;
+ }
+ 
+ /* Store row dropdown specific fixes */
+ .store-row .dropdown {
+     position: relative;
+     z-index: 100;
+ }
+ 
+ .store-row .dropdown-menu {
+     position: absolute !important;
+     z-index: 9999 !important;
+     right: 0;
+     left: auto;
+     min-width: 180px;
+     display: none;
+     opacity: 0;
+     visibility: hidden;
+ }
+ 
+ .store-row .dropdown.show .dropdown-menu {
+     display: block !important;
+     opacity: 1 !important;
+     visibility: visible !important;
+ }
+
+/* Store row dropdown specific fixes */
+.store-row .dropdown {
+    position: relative;
+    z-index: 10;
+}
+
+.store-row .dropdown-menu {
+    position: absolute !important;
+    z-index: 1050 !important;
+    right: 0;
+    left: auto;
+    min-width: 180px;
 }
 
 .dropdown-item {

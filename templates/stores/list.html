@@ -22,48 +22,66 @@
         {% endif %}
     </div>
 
-    <!-- Stats Cards -->
-    <div class="kpi-grid kpi-grid-3 mb-4">
-        <div class="kpi-card">
-            <div class="kpi-card-header">
-                <i class="bi bi-shop" style="color: var(--brand-600);"></i>
-                <span class="text-muted">Total Stores</span>
-            </div>
-            <div class="kpi-card-value">{{ store_count }}</div>
-            <div class="kpi-card-subtitle">
-                {% if remaining_stores > 0 %}
-                    <span class="text-success">{{ remaining_stores }} available</span>
-                {% else %}
-                    <span class="text-warning">Plan limit reached</span>
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="kpi-card">
-            <div class="kpi-card-header">
-                <i class="bi bi-check-circle" style="color: var(--success-600);"></i>
-                <span class="text-muted">Active Stores</span>
-            </div>
-            <div class="kpi-card-value">{{ active_count }}</div>
-            <div class="kpi-card-subtitle">
-                <span class="text-muted">{{ store_count|add:active_count|add:-1 }} total</span>
+    <!-- Stats Cards - Compact Version -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="flex-shrink-0" style="width: 40px; height: 40px; background: var(--brand-50); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-shop" style="color: var(--brand-600); font-size: 1.25rem;"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="text-muted small mb-1">Total Stores</div>
+                            <div class="fw-bold mb-0" style="font-size: 1.5rem;">{{ store_count }}</div>
+                            {% if remaining_stores > 0 %}
+                                <div class="text-success small">{{ remaining_stores }} available</div>
+                            {% else %}
+                                <div class="text-warning small">Plan limit reached</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="kpi-card">
-            <div class="kpi-card-header">
-                <i class="bi bi-graph-up" style="color: var(--info-600);"></i>
-                <span class="text-muted">Plan Usage</span>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="flex-shrink-0" style="width: 40px; height: 40px; background: var(--success-50); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-check-circle" style="color: var(--success-600); font-size: 1.25rem;"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="text-muted small mb-1">Active Stores</div>
+                            <div class="fw-bold mb-0" style="font-size: 1.5rem;">{{ active_count }}</div>
+                            <div class="text-muted small">{{ store_count }} total</div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="kpi-card-value">
-                {% if max_stores > 0 %}
-                    {% widthratio store_count max_stores 100 %}%
-                {% else %}
-                    0%
-                {% endif %}
-            </div>
-            <div class="kpi-card-subtitle">
-                <span class="text-muted">{{ store_count }} / {{ max_stores }} stores</span>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="flex-shrink-0" style="width: 40px; height: 40px; background: var(--info-50); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-graph-up" style="color: var(--info-600); font-size: 1.25rem;"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="text-muted small mb-1">Plan Usage</div>
+                            <div class="fw-bold mb-0" style="font-size: 1.5rem;">
+                                {% if max_stores > 0 %}
+                                    {% widthratio store_count max_stores 100 %}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </div>
+                            <div class="text-muted small">{{ store_count }} / {{ max_stores }}</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -168,7 +186,7 @@
 
                         <!-- Actions -->
                         <td style="text-align: right;">
-                            <div class="dropdown">
+                            <div class="dropdown dropup">
                                 <button class="btn btn-sm btn-icon dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="bi bi-three-dots-vertical"></i>
                                 </button>
@@ -241,6 +259,19 @@
 {% csrf_token %}
 <script src="{% static 'js/stores.js' %}"></script>
 <script>
+// Ensure CSRF token is available for JavaScript
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    if (!csrfInput) {
+        // If no hidden input exists, the {% csrf_token %} tag renders one
+        const tokenInput = document.createElement('input');
+        tokenInput.type = 'hidden';
+        tokenInput.name = 'csrfmiddlewaretoken';
+        tokenInput.value = document.querySelector('[name="csrfmiddlewaretoken"]')?.value || '';
+        document.body.appendChild(tokenInput);
+    }
+});
+
 // Search and filter functionality
 document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('searchStores');
@@ -390,6 +421,46 @@ function deleteStore(storeId, storeName) {
     background: var(--danger-50);
     color: var(--danger-700);
 }
+
+ /* Dropdown positioning fix for table */
+ .table-responsive {
+     overflow-x: auto;
+     overflow-y: visible;
+     position: relative;
+ }
+ 
+ /* Table row dropdown fixes */
+ .store-row .dropdown {
+     position: relative !important;
+     z-index: 100;
+ }
+ 
+ .store-row .dropdown-menu {
+     position: absolute !important;
+     z-index: 9999 !important;
+     right: 0 !important;
+     left: auto !important;
+     min-width: 180px;
+     display: none !important;
+     opacity: 0 !important;
+     visibility: hidden !important;
+ }
+ 
+ .store-row .dropdown.show .dropdown-menu {
+     display: block !important;
+     opacity: 1 !important;
+     visibility: visible !important;
+ }
+ 
+ /* Prevent table container from clipping dropdowns */
+ #storesTable {
+     position: relative;
+ }
+ 
+ #storesTable .dropdown-menu {
+     position: absolute !important;
+     z-index: 9999 !important;
+ }
 
 /* Mobile responsive */
 @media (max-width: 768px) {
