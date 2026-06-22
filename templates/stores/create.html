@@ -35,6 +35,14 @@
                             </div>
                         </div>
 
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label class="form-label" for="storeLogo">Store Logo</label>
+                                <input type="file" id="storeLogo" name="logo" class="form-control" accept="image/*">
+                                <small class="form-text text-muted">Upload a logo for your store (recommended: 200x200px)</small>
+                            </div>
+                        </div>
+
                         <div class="alert alert-info">
                             <i class="bi bi-info-circle me-2"></i>
                             <strong>Your Plan:</strong>
@@ -170,24 +178,43 @@ document.getElementById('createStoreForm').addEventListener('submit', async func
     // Only send the fields that the serializer accepts
     const name = form.querySelector('[name="name"]').value;
     const description = form.querySelector('[name="description"]').value;
-
-    const data = {
-        name: name,
-        description: description || ''
-    };
+    const logoFile = form.querySelector('[name="logo"]').files[0];
 
     const csrfToken = getCSRFToken();
 
     try {
-        const response = await fetch('/api/v1/stores/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken,
-            },
-            credentials: 'same-origin',
-            body: JSON.stringify(data),
-        });
+        let response;
+        if (logoFile) {
+            // Use multipart so the logo file goes through.
+            const uploadFormData = new FormData();
+            uploadFormData.append('name', name);
+            uploadFormData.append('description', description || '');
+            uploadFormData.append('logo', logoFile);
+
+            response = await fetch('/api/v1/stores/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                },
+                credentials: 'same-origin',
+                body: uploadFormData,
+            });
+        } else {
+            // No logo — JSON is enough.
+            const data = {
+                name: name,
+                description: description || ''
+            };
+            response = await fetch('/api/v1/stores/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify(data),
+            });
+        }
 
         const result = await response.json();
 

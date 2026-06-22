@@ -186,35 +186,32 @@
 
                         <!-- Actions -->
                         <td style="text-align: right;">
-                            <div class="dropdown dropup">
-                                <button class="btn btn-sm btn-icon dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="bi bi-three-dots-vertical"></i>
+                            <div class="d-inline-flex gap-1">
+                                <a href="{% url 'stores:store_detail_html' store_id=store.id %}"
+                                   class="btn btn-sm btn-icon btn-outline-secondary"
+                                   title="View Details" aria-label="View Details">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{% url 'stores:store_edit_html' store_id=store.id %}"
+                                   class="btn btn-sm btn-icon btn-outline-secondary"
+                                   title="Edit Store" aria-label="Edit Store">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% if store != current_store %}
+                                <button type="button"
+                                        class="btn btn-sm btn-icon btn-outline-secondary"
+                                        title="Switch to This Store"
+                                        aria-label="Switch to This Store"
+                                        onclick="switchStore('{{ store.id }}', '{{ store.name }}')">
+                                    <i class="bi bi-arrow-repeat"></i>
                                 </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li>
-                                        <a class="dropdown-item" href="{% url 'stores:store_detail_html' store_id=store.id %}">
-                                            <i class="bi bi-eye me-2"></i>View Details
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="{% url 'stores:store_edit_html' store_id=store.id %}">
-                                            <i class="bi bi-pencil me-2"></i>Edit Store
-                                        </a>
-                                    </li>
-                                    {% if store != current_store %}
-                                    <li>
-                                        <button class="dropdown-item" onclick="switchStore('{{ store.id }}', '{{ store.name }}')">
-                                            <i class="bi bi-arrow-repeat me-2"></i>Switch to This
-                                        </button>
-                                    </li>
-                                    {% endif %}
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li>
-                                        <button class="dropdown-item text-danger" onclick="deleteStore('{{ store.id }}', '{{ store.name }}')">
-                                            <i class="bi bi-trash me-2"></i>Delete Store
-                                        </button>
-                                    </li>
-                                </ul>
+                                {% endif %}
+                                <button type="button"
+                                        class="btn btn-sm btn-icon btn-outline-danger"
+                                        title="Delete Store" aria-label="Delete Store"
+                                        onclick="deleteStore('{{ store.id }}', '{{ store.name }}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -335,10 +332,23 @@ function switchStore(storeId, storeName) {
 
 // Delete store function
 function deleteStore(storeId, storeName) {
-    if (!confirm(`Are you sure you want to delete "${storeName}"? This action cannot be undone.`)) {
-        return;
+    if (typeof window.confirmAction !== 'function') {
+        // Modal not loaded — fall back to native confirm.
+        if (!confirm(`Are you sure you want to delete "${storeName}"? This action cannot be undone.`)) {
+            return;
+        }
+        return _performDeleteStore(storeId, storeName);
     }
+    window.confirmAction({
+        title: 'Delete store?',
+        message: `Are you sure you want to delete "${storeName}"? This action cannot be undone.`,
+        confirmText: 'Delete',
+        confirmClass: 'btn-danger',
+        onConfirm: function () { _performDeleteStore(storeId, storeName); },
+    });
+}
 
+function _performDeleteStore(storeId, storeName) {
     const csrfToken = getCSRFToken();
     const row = document.querySelector(`tr[data-store-name="${storeName.toLowerCase()}"]`);
 
@@ -422,44 +432,14 @@ function deleteStore(storeId, storeName) {
     color: var(--danger-700);
 }
 
- /* Dropdown positioning fix for table */
- .table-responsive {
-     overflow-x: auto;
-     overflow-y: visible;
-     position: relative;
- }
- 
- /* Table row dropdown fixes */
- .store-row .dropdown {
-     position: relative !important;
-     z-index: 100;
- }
- 
- .store-row .dropdown-menu {
-     position: absolute !important;
-     z-index: 9999 !important;
-     right: 0 !important;
-     left: auto !important;
-     min-width: 180px;
-     display: none !important;
-     opacity: 0 !important;
-     visibility: hidden !important;
- }
- 
- .store-row .dropdown.show .dropdown-menu {
-     display: block !important;
-     opacity: 1 !important;
-     visibility: visible !important;
- }
- 
- /* Prevent table container from clipping dropdowns */
- #storesTable {
-     position: relative;
- }
- 
- #storesTable .dropdown-menu {
-     position: absolute !important;
-     z-index: 9999 !important;
+ /* Store row action icons */
+ .store-row .btn-icon {
+     width: 32px;
+     height: 32px;
+     display: inline-flex;
+     align-items: center;
+     justify-content: center;
+     padding: 0;
  }
 
 /* Mobile responsive */

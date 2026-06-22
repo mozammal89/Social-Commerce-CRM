@@ -61,22 +61,24 @@
 
                         <!-- Status -->
                         <div class="row g-3">
-                            <div class="col-md-6">
+                            <div class="col-md-12">
                                 <label class="form-label" for="storeStatus">Status</label>
+                                {% if store.status == 'archived' %}
+                                {# Archived is not editable from this form — show the current value
+                                   and send it back unchanged on save so it doesn't revert to active. #}
+                                <input type="text" class="form-control" value="Archived" disabled>
+                                <input type="hidden" name="status" value="archived">
+                                <small class="form-text text-muted">
+                                    Archived stores cannot be edited. Contact support to restore.
+                                </small>
+                                {% else %}
                                 <select id="storeStatus" name="status" class="form-select">
                                     <option value="active" {% if store.status == 'active' %}selected{% endif %}>Active</option>
                                     <option value="inactive" {% if store.status == 'inactive' %}selected{% endif %}>Inactive</option>
                                     <option value="pending" {% if store.status == 'pending' %}selected{% endif %}>Pending</option>
-                                    <option value="archived" {% if store.status == 'archived' %}selected{% endif %}>Archived</option>
                                 </select>
                                 <small class="form-text text-muted">Set the operational status of your store</small>
-                            </div>
-
-                            <!-- Slug (Read-only) -->
-                            <div class="col-md-6">
-                                <label class="form-label" for="storeSlug">Store Slug</label>
-                                <input type="text" id="storeSlug" class="form-control" value="{{ store.slug }}" readonly>
-                                <small class="form-text text-muted">Automatically generated from store name</small>
+                                {% endif %}
                             </div>
                         </div>
 
@@ -108,7 +110,7 @@
 
                         <!-- Action Buttons -->
                         <div class="d-flex gap-3">
-                            <button type="submit" class="btn btn-primary" data-loading>
+                            <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-check-lg me-2"></i>Save Changes
                             </button>
                             <a href="{% url 'stores:store_detail_html' store_id=store.id %}" class="btn btn-secondary">Cancel</a>
@@ -130,7 +132,6 @@
                         <li>Add keywords to your description for better discoverability</li>
                         <li>Set status to "Inactive" when temporarily closed</li>
                         <li>Upload a square logo for best display quality</li>
-                        <li>Slug is auto-generated and cannot be edited</li>
                     </ul>
                 </div>
             </div>
@@ -181,21 +182,67 @@ function getCSRFToken() {
 
 // Update slug preview as user types name
 document.getElementById('storeName').addEventListener('input', function() {
-    const name = this.value;
-    const slug = name.toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-    document.getElementById('storeSlug').value = slug || '';
+    // Slug is auto-generated server-side from the name on save; nothing
+    // to preview in the form anymore.
 });
 
 // Remove logo function
 function removeLogo() {
-    if (confirm('Are you sure you want to remove the store logo?')) {
-        // TODO: Implement logo removal via API
-        if (typeof showNotification === 'function') {
-            showNotification('Logo removal feature coming soon', 'info');
+    if (typeof window.confirmAction !== 'function') {
+        if (!confirm('Are you sure you want to remove the store logo?')) {
+            return;
         }
+        return _performRemoveLogo();
     }
+    window.confirmAction({
+        title: 'Remove logo?',
+        message: 'Are you sure you want to remove the store logo? This cannot be undone.',
+        confirmText: 'Remove',
+        confirmClass: 'btn-danger',
+        onConfirm: _performRemoveLogo,
+    });
+}
+
+function _performRemoveLogo() {
+    const csrfToken = getCSRFToken();
+    const storeId = document.querySelector('[name="storeId"]').value;
+    const removeBtn = document.querySelector('[onclick="removeLogo()"]');
+    const originalHtml = removeBtn ? removeBtn.innerHTML : null;
+
+    if (removeBtn) {
+        removeBtn.disabled = true;
+        removeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Removing...';
+    }
+
+    fetch(`/api/v1/stores/${storeId}/logo/remove/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+        },
+        credentials: 'same-origin',
+    })
+    .then(response => response.json().then(data => ({ ok: response.ok, data: data })))
+    .then(({ ok, data }) => {
+        if (ok) {
+            if (typeof showNotification === 'function') {
+                showNotification(data.message || 'Logo removed.', 'success');
+            }
+            // Reload to refresh the form (logo preview block disappears).
+            setTimeout(() => location.reload(), 600);
+        } else {
+            throw new Error(data.error || data.detail || 'Remove failed');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        if (typeof showNotification === 'function') {
+            showNotification(error.message || 'Failed to remove logo', 'error');
+        }
+        if (removeBtn) {
+            removeBtn.disabled = false;
+            if (originalHtml !== null) removeBtn.innerHTML = originalHtml;
+        }
+    });
 }
 
 // Form submission

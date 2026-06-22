@@ -1,0 +1,79 @@
+<!-- {# Reusable confirmation modal. Include this in any template that needs a
+   styled confirmation dialog instead of the native browser confirm().
+
+   Usage from JS:
+       window.confirmAction({
+           title: "Delete store?",
+           message: 'Are you sure you want to delete "My Store"?',
+           confirmText: "Delete",
+           confirmClass: "btn-danger",
+           onConfirm: function () { ... }
+       });
+#} -->
+<div class="modal fade" id="appConfirmModal" tabindex="-1" aria-labelledby="appConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="appConfirmModalLabel">Confirm</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="appConfirmModalMessage" class="mb-0">Are you sure?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-confirm-action="cancel">Cancel</button>
+                <button type="button" class="btn btn-danger" id="appConfirmModalConfirm" data-confirm-action="confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    "use strict";
+
+    // Expose a single helper on window so any page can call it.
+    window.confirmAction = function (options) {
+        options = options || {};
+        var modalEl = document.getElementById("appConfirmModal");
+        if (!modalEl) {
+            // Fallback: if the modal partial isn't on the page, use native confirm.
+            return Promise.resolve(window.confirm(options.message || "Are you sure?"));
+        }
+
+        var titleEl = document.getElementById("appConfirmModalLabel");
+        var messageEl = document.getElementById("appConfirmModalMessage");
+        var confirmBtn = document.getElementById("appConfirmModalConfirm");
+        var bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+        if (options.title) titleEl.textContent = options.title;
+        if (options.message) messageEl.textContent = options.message;
+        if (options.confirmText) confirmBtn.textContent = options.confirmText;
+
+        // Reset confirm button class to the requested one.
+        confirmBtn.className = "btn " + (options.confirmClass || "btn-danger");
+
+        return new Promise(function (resolve) {
+            function cleanup() {
+                confirmBtn.removeEventListener("click", onConfirm);
+                modalEl.removeEventListener("hidden.bs.modal", onDismiss);
+            }
+            function onConfirm() {
+                cleanup();
+                bsModal.hide();
+                if (typeof options.onConfirm === "function") {
+                    try { options.onConfirm(); } catch (e) { console.error(e); }
+                }
+                resolve(true);
+            }
+            function onDismiss() {
+                cleanup();
+                resolve(false);
+            }
+            confirmBtn.addEventListener("click", onConfirm);
+            modalEl.addEventListener("hidden.bs.modal", onDismiss, { once: true });
+            bsModal.show();
+        });
+    };
+})();
+</script>

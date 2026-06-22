@@ -46,9 +46,12 @@
     <script src="{% static 'js/dashboard.js' %}"></script>
     <script src="{% static 'js/navbar-sticky.js' %}"></script>
     <script src="{% static 'js/dropdown-fix.js' %}"></script>
-    <script src="{% static 'js/direct-table-dropdown.js' %}"></script>
+    {# direct-table-dropdown.js disabled: it strips data-bs-toggle and inline-styles the menu, conflicting with Bootstrap. #}
     
     {% block extra_js %}{% endblock %}
-    
+
+    {# Central confirmation modal — available on every page via window.confirmAction(). #}
+    {% include 'components/confirm_modal.html' %}
+
 </body>
 </html>

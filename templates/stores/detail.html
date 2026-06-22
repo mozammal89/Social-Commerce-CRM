@@ -257,10 +257,22 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function deleteStore(storeId, storeName) {
-    if (!confirm(`Are you sure you want to delete "${storeName}"? This action cannot be undone.`)) {
-        return;
+    if (typeof window.confirmAction !== 'function') {
+        if (!confirm(`Are you sure you want to delete "${storeName}"? This action cannot be undone.`)) {
+            return;
+        }
+        return _performDeleteStore(storeId, storeName);
     }
+    window.confirmAction({
+        title: 'Delete store?',
+        message: `Are you sure you want to delete "${storeName}"? This action cannot be undone.`,
+        confirmText: 'Delete',
+        confirmClass: 'btn-danger',
+        onConfirm: function () { _performDeleteStore(storeId, storeName); },
+    });
+}
 
+function _performDeleteStore(storeId, storeName) {
     const csrfToken = getCSRFToken();
 
     fetch(`/api/v1/stores/${storeId}/`, {

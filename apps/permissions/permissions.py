@@ -24,6 +24,44 @@ import logging
 
 from rest_framework.permissions import BasePermission
 
+
+def _resolve_store_from_view(view):
+    """
+    Resolve the Store for a permission check when ``request.store`` is not
+    pre-populated by middleware / decorator.
+
+    Order of attempts:
+      1. ``view.kwargs['store_id']`` / ``['id']`` / ``['store_pk']``
+      2. ``view.get_object()`` for generic DRF views (uses lookup_field)
+
+    Returns ``None`` if no store can be resolved; callers fail-closed in
+    that case.
+    """
+    if view is None:
+        return None
+    kwargs = getattr(view, "kwargs", {}) or {}
+    from apps.stores.models import Store
+
+    for key in ("store_id", "id", "store_pk", "pk"):
+        raw = kwargs.get(key)
+        if raw:
+            try:
+                return Store.objects.filter(id=raw, is_deleted=False).first()
+            except Exception:
+                return None
+    if hasattr(view, "get_object"):
+        try:
+            obj = view.get_object()
+        except Exception:
+            return None
+        # Match Store, or anything with a ``store`` FK.
+        if isinstance(obj, Store):
+            return obj
+        store = getattr(obj, "store", None)
+        if isinstance(store, Store):
+            return store
+    return None
+
 from .resolver import PermissionResolver
 
 
@@ -131,7 +169,7 @@ class IsStoreMember(BasePermission):
     message = "You are not a member of this store."
 
     def has_permission(self, request, view):
-        store = getattr(request, "store", None)
+        store = getattr(request, "store", None) or _resolve_store_from_view(view)
         if not store:
             # Fail-closed: a store-scoped view without a resolved store
             # cannot be safely authorized. Caller must use StoreContextMixin
@@ -167,7 +205,7 @@ class HasStoreRole(BasePermission):
         )
 
     def has_permission(self, request, view):
-        store = getattr(request, "store", None)
+        store = getattr(request, "store", None) or _resolve_store_from_view(view)
         if not store:
             return False
         if request.user.is_superuser:

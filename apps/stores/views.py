@@ -26,6 +26,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from rest_framework import generics, status, permissions, exceptions
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from apps.stores.models import Store
@@ -71,6 +72,9 @@ class StoreListView(generics.ListCreateAPIView):
     """View for listing and creating stores."""
 
     permission_classes = [permissions.IsAuthenticated]
+    # Accept JSON (default) plus multipart/form-data so the create form
+    # can upload a logo in the same request. Global default is JSON-only.
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
 
     def get_queryset(self):
         """Return stores where the user has an active membership."""
@@ -128,6 +132,10 @@ class StoreDetailView(generics.RetrieveUpdateDestroyAPIView):
         IsStoreMember,
         HasStoreRole.with_level(Role.LEVEL_MANAGER),
     ]
+    # Accept JSON (default) plus multipart/form-data so the edit form can
+    # upload a logo. Global DEFAULT_PARSER_CLASSES is JSON-only, so we
+    # opt-in here to keep the rest of the API strict.
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
     lookup_field = "id"
 
     def get_queryset(self):
@@ -235,6 +243,46 @@ def manage_store_staff(request, store_id=None):
         message = f"User removed as {role.name}"
 
     return Response({"message": message}, status=status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# remove_store_logo — POST endpoint to clear the store logo
+# ---------------------------------------------------------------------------
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def remove_store_logo(request, store_id):
+    """Delete the logo file from disk and clear the field on the store.
+
+    Only the store owner may remove the logo.
+    """
+    store = Store.objects.filter(id=store_id, is_deleted=False).first()
+    if store is None:
+        return Response({"error": "Store not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    user = request.user
+    if not getattr(user, "is_superuser", False) and not store.is_owner(user):
+        raise exceptions.PermissionDenied("Only store owners can remove the logo.")
+
+    if not store.logo:
+        return Response(
+            {"message": "No logo to remove.", "removed": False},
+            status=status.HTTP_200_OK,
+        )
+
+    # Delete the file from storage, then clear the field, then save.
+    logo_name = store.logo.name
+    store.logo.delete(save=False)
+    store.logo = None
+    store.save(update_fields=["logo", "updated_at"])
+
+    logger.info(
+        "Store logo removed: store_id=%s logo=%s by user=%s",
+        store.id, logo_name, getattr(user, "id", None),
+    )
+    return Response(
+        {"message": "Logo removed.", "removed": True},
+        status=status.HTTP_200_OK,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -496,7 +544,14 @@ def store_detail_template(request, store_id):
         )
 
     except Exception as e:
-        logger.error(f"Error in store_detail_template: {str(e)}")
+        import traceback
+        logger.error(
+            "Error in store_detail_template for store_id=%s user=%s: %s\n%s",
+            store_id,
+            getattr(request.user, "id", None),
+            e,
+            traceback.format_exc(),
+        )
         messages.error(request, "An error occurred while loading store details.")
         return redirect("stores:store_list_html")
 
