@@ -1,0 +1,184 @@
+<!-- {#
+    Dismissible Welcome Banner Component
+
+    Usage:
+
+    Context variables:
+    - show_welcome: boolean, whether to show the banner
+    - welcome_title: string, custom title (optional)
+    - welcome_message: string, custom message (optional)
+    - user_subscription: subscription object (optional)
+    - pending_plan: plan object (optional)
+    - action_url: string, URL for CTA button (optional)
+    - action_text: string, text for CTA button (optional)
+#} -->
+
+{% if show_welcome %}
+    {% if has_user_subscription or has_pending_subscription or pending_plan %}
+<div class="welcome-banner-container mb-4" id="welcomeBanner" data-banner-id="dashboard-welcome">
+    <div class="card border-0 shadow-sm" style="
+        border-radius: var(--radius-lg);
+        background: linear-gradient(135deg, var(--brand-600) 0%, var(--brand-500) 100%);
+        overflow: hidden;
+        position: relative;
+    ">
+        <!-- Decorative Elements -->
+        <div style="position: absolute; top: -50px; right: -50px; width: 150px; height: 150px; background: rgba(255,255,255,0.1); border-radius: 50%;"></div>
+        <div style="position: absolute; bottom: -30px; left: 20%; width: 80px; height: 80px; background: rgba(255,255,255,0.05); border-radius: 50%;"></div>
+
+        <div class="card-body d-flex align-items-center justify-content-between" style="padding: var(--space-5);">
+            <!-- Left Side: Welcome Message -->
+            <div class="d-flex align-items-center gap-4" style="flex: 1;">
+                <!-- Icon -->
+                <div style="width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.2); border-radius: var(--radius-lg); flex-shrink: 0;">
+                    <i class="bi bi-party-popper" style="font-size: 1.75rem; color: white;"></i>
+                </div>
+
+                <!-- Message -->
+                <div style="color: white;">
+                    <h3 class="mb-1" style="font-size: 1.25rem; font-weight: 600;">
+                        {% if welcome_title %}{{ welcome_title }}{% else %}Welcome to {{ APP_NAME }}!{% endif %}
+                    </h3>
+                    <p class="mb-0" style="font-size: 0.875rem; opacity: 0.95;">
+                        {% if welcome_message %}{{ welcome_message }}{% else %}
+                            {% if has_pending_subscription or pending_plan %}
+                                Complete your setup by creating your first store.
+                            {% elif user_has_no_store %}
+                                You're all set up! Create your first store to get started.
+                            {% else %}
+                                Your subscription is active. Explore your dashboard!
+                            {% endif %}
+                        {% endif %}
+                    </p>
+
+                    <!-- Plan Badge -->
+                    {% if has_user_subscription %}
+                        {% if user_subscription %}
+                    <span class="badge mt-2" style="background: rgba(255,255,255,0.2); color: white;">
+                        <i class="bi bi-stars me-1"></i>{{ user_subscription.plan.name }}
+                    </span>
+                        {% endif %}
+                    {% elif pending_plan %}
+                    <span class="badge mt-2" style="background: rgba(255,255,255,0.2); color: white;">
+                        <i class="bi bi-stars me-1"></i>{{ pending_plan.name }} (Pending)
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Right Side: Actions -->
+            <div class="d-flex align-items-center gap-3">
+                <!-- CTA Button -->
+                {% if action_url and action_text %}
+                <a href="{{ action_url }}" class="btn btn-light">
+                    {{ action_text }}
+                </a>
+                {% elif has_pending_subscription or pending_plan or user_has_no_store %}
+                <a href="{% url 'stores:create' %}" class="btn btn-light">
+                    <i class="bi bi-plus-lg me-1"></i>Create Store
+                </a>
+                {% else %}
+                <a href="{% url 'subscriptions:manage' %}" class="btn btn-light">
+                    <i class="bi bi-gear me-1"></i>Manage Subscription
+                </a>
+                {% endif %}
+
+                <!-- Dismiss Button -->
+                <button type="button" class="btn btn-link text-white p-0" data-dismiss-banner onclick="dismissWelcomeBanner('dashboard-welcome')" style="opacity: 0.8;">
+                    <i class="bi bi-x-lg" style="font-size: 1.25rem;"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Welcome Banner Animations */
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translate3d(0, -20px, 0);
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+@keyframes fadeOutUp {
+    from {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+    to {
+        opacity: 0;
+        transform: translate3d(0, -20px, 0);
+    }
+}
+
+.welcome-banner-container {
+    animation: slideInDown 0.4s ease-out;
+}
+
+.welcome-banner-container.removing {
+    animation: fadeOutUp 0.3s ease-in forwards;
+}
+
+.welcome-banner-container .btn-link:hover {
+    opacity: 1 !important;
+}
+</style>
+
+<script>
+// Dismiss welcome banner and remember user's choice
+function dismissWelcomeBanner(bannerId) {
+    const banner = document.querySelector(`[data-banner-id="${bannerId}"]`);
+    if (!banner) return;
+
+    // Add removing class for fade-out animation
+    banner.classList.add('removing');
+
+    // Remove after animation completes
+    setTimeout(() => {
+        banner.remove();
+    }, 300);
+
+    // Store in localStorage so banner doesn't show again
+    try {
+        const dismissedBanners = JSON.parse(localStorage.getItem('dismissedBanners') || '{}');
+        dismissedBanners[bannerId] = new Date().toISOString();
+        localStorage.setItem('dismissedBanners', JSON.stringify(dismissedBanners));
+    } catch (e) {
+        console.warn('Could not store banner dismissal:', e);
+    }
+}
+
+// Check if banner was previously dismissed
+function isBannerDismissed(bannerId) {
+    try {
+        const dismissedBanners = JSON.parse(localStorage.getItem('dismissedBanners') || '{}');
+        if (dismissedBanners[bannerId]) {
+            const dismissedDate = new Date(dismissedBanners[bannerId]);
+            const daysSinceDismissed = (new Date() - dismissedDate) / (1000 * 60 * 60 * 24);
+            // Show banner again after 7 days
+            return daysSinceDismissed < 7;
+        }
+    } catch (e) {
+        console.warn('Could not check banner dismissal:', e);
+    }
+    return false;
+}
+
+// Auto-hide banner if previously dismissed
+document.addEventListener('DOMContentLoaded', function() {
+    const bannerId = 'dashboard-welcome';
+    if (isBannerDismissed(bannerId)) {
+        const banner = document.querySelector(`[data-banner-id="${bannerId}"]`);
+        if (banner) {
+            banner.style.display = 'none';
+        }
+    }
+});
+</script>
+    {% endif %}
+{% endif %}

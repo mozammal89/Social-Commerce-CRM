@@ -67,6 +67,7 @@ def dashboard_home(request):
     * ``plan_features``       — feature codes on the active plan
     * ``perm_count``          — number of effective permission codes
     * ``max_users``           — plan seat cap, or None
+    * ``show_welcome``        — True if welcome banner should be shown
     """
     user = request.user
     is_superuser = user.is_superuser
@@ -129,6 +130,9 @@ def dashboard_home(request):
         "user_subscription": user_subscription,
         "needs_subscription": needs_subscription,
         "has_pending_subscription": has_pending_subscription,
+        "show_welcome": True,  # Show welcome banner
+        # Boolean flags for template checks
+        "has_user_subscription": user_subscription is not None,
     }
 
     # If user has pending subscription, get plan details
