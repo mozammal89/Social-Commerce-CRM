@@ -31,29 +31,35 @@ def _get_user_subscription_context(user):
     if not user or not user.is_authenticated:
         return context
 
-    # Check if user has a pending subscription (subscribed but no store yet)
+    # Check if user has existing subscriptions (regardless of pending plan)
+    try:
+        from apps.permissions.models import Subscription
+
+        user_subscription = (
+            Subscription.objects.filter(
+                store__memberships__user=user,
+                store__memberships__is_active=True,
+                status__in=["trialing", "active"],
+            )
+            .select_related("plan")
+            .first()
+        )
+
+        if user_subscription:
+            context["user_subscription"] = user_subscription
+            context["has_user_subscription"] = True
+    except Exception:
+        pass
+
+    # Check for pending subscription (user subscribed but no store yet, or upgrading plan)
     if user.pending_plan_slug:
         context["has_pending_subscription"] = True
         try:
             from apps.permissions.models import SubscriptionPlan
+
             pending_plan = SubscriptionPlan.objects.get(slug=user.pending_plan_slug)
             context["pending_plan"] = pending_plan
         except SubscriptionPlan.DoesNotExist:
-            pass
-    else:
-        # Try to find existing subscription through store memberships
-        try:
-            from apps.permissions.models import Subscription
-            user_subscription = Subscription.objects.filter(
-                store__memberships__user=user,
-                store__memberships__is_active=True,
-                status__in=["trialing", "active"]
-            ).select_related('plan').first()
-
-            if user_subscription:
-                context["user_subscription"] = user_subscription
-                context["has_user_subscription"] = True
-        except Exception:
             pass
 
     return context
@@ -108,7 +114,9 @@ def current_store(request):
                 memberships__user=user,
                 memberships__is_active=True,
                 is_deleted=False,
-            ).distinct().order_by("name")
+            )
+            .distinct()
+            .order_by("name")
         )
 
     # Get current store from session or first available

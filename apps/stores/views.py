@@ -652,3 +652,49 @@ def store_edit_template(request, store_id):
         logger.error(f"Error in store_edit_template: {str(e)}")
         messages.error(request, "An error occurred while loading edit form.")
         return redirect("stores:store_list_html")
+
+
+# ---------------------------------------------------------------------------
+# API Views for Store Switching
+# ---------------------------------------------------------------------------
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def switch_store_api(request, store_id):
+    """
+    API endpoint to switch the active store for the current session.
+
+    Similar to dashboard.views.switch_store but returns JSON for AJAX requests.
+
+    Authorization:
+    * Superusers may switch to any non-deleted store.
+    * Regular users must have an active StoreMembership for the target store.
+    """
+    user = request.user
+    store = Store.objects.filter(id=store_id, is_deleted=False).first()
+
+    if store is None:
+        return Response(
+            {"success": False, "error": "Store not found."}, status=status.HTTP_404_NOT_FOUND
+        )
+
+    if not user.is_superuser:
+        is_member = StoreMembership.objects.filter(
+            user=user,
+            store=store,
+            is_active=True,
+        ).exists()
+        if not is_member:
+            return Response(
+                {"success": False, "error": "You don't have access to this store."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+    request.session["current_store_id"] = str(store_id)
+    return Response(
+        {
+            "success": True,
+            "message": f"Switched to store: {store.name}",
+            "store_id": str(store_id),
+            "store_name": store.name,
+        }
+    )

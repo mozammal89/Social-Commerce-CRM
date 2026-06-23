@@ -13,6 +13,7 @@ from apps.stores.views import (
     store_detail_template,
     store_edit_template,
     remove_store_logo,
+    switch_store_api,
 )
 
 app_name = "stores"
@@ -27,4 +28,5 @@ urlpatterns = [
     path("<uuid:id>/", StoreDetailView.as_view(), name="store_detail"),
     path("<uuid:store_id>/staff/", manage_store_staff, name="manage_staff"),
     path("<uuid:store_id>/logo/remove/", remove_store_logo, name="remove_logo"),
+    path("<uuid:store_id>/switch/", switch_store_api, name="switch_store_api"),
 ]

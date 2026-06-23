@@ -301,33 +301,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Store switch function
 function switchStore(storeId, storeName) {
-    if (typeof switchStore === 'undefined') {
-        // Fallback to direct API call
-        const csrfToken = getCSRFToken();
-        fetch(`/api/v1/stores/${storeId}/switch/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken,
-            },
-            credentials: 'same-origin',
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                if (typeof showNotification === 'function') {
-                    showNotification(`Switched to ${storeName}`, 'success');
-                }
-                setTimeout(() => location.reload(), 500);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
+    const csrfToken = getCSRFToken();
+    
+    fetch(`/api/v1/stores/${storeId}/switch/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+        },
+        credentials: 'same-origin',
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success || data.message) {
             if (typeof showNotification === 'function') {
-                showNotification('Failed to switch store', 'error');
+                showNotification(`Switched to ${storeName}`, 'success');
             }
-        });
-    }
+            setTimeout(() => location.reload(), 500);
+        } else {
+            if (typeof showNotification === 'function') {
+                showNotification(data.error || 'Failed to switch store', 'error');
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        if (typeof showNotification === 'function') {
+            showNotification('Failed to switch store', 'error');
+        }
+    });
 }
 
 // Delete store function
