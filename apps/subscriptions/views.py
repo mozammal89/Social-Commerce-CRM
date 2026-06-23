@@ -7,6 +7,36 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
+
+
+def _resolve_current_store_for_user(request, user):
+    """Pick the store the user is currently working on.
+
+    Resolution order:
+      1. ``request.session['current_store_id']`` if it points to a store
+         the user has an active membership for.
+      2. The user's first store (by ``joined_at`` on the membership).
+
+    Returns a ``Store`` instance or ``None`` if the user has no stores.
+    """
+    qs = (
+        Store.objects
+        .filter(
+            memberships__user=user,
+            memberships__is_active=True,
+            is_deleted=False,
+        )
+        .distinct()
+        .order_by("memberships__joined_at")
+    )
+
+    session_store_id = request.session.get("current_store_id") if hasattr(request, "session") else None
+    if session_store_id:
+        store = qs.filter(id=session_store_id).first()
+        if store is not None:
+            return store
+
+    return qs.first()
 from django.utils import timezone
 from django.db import transaction
 
@@ -297,8 +327,10 @@ def manage_subscription(request):
     if not memberships.exists():
         return redirect("subscriptions:plans")
 
-    # Get the first store and its subscription
-    store = memberships.first().store
+    # Resolve the store the user is currently viewing (session > first).
+    store = _resolve_current_store_for_user(request, user)
+    if store is None:
+        return redirect("subscriptions:plans")
     subscription = get_active_subscription(store)
 
     if not subscription:
@@ -460,7 +492,9 @@ def cancel_subscription_view(request):
     if not memberships.exists():
         return Response({"error": "No active subscription found"}, status=status.HTTP_404_NOT_FOUND)
 
-    store = memberships.first().store
+    store = _resolve_current_store_for_user(request, user)
+    if store is None:
+        return Response({"error": "No active subscription found"}, status=status.HTTP_404_NOT_FOUND)
     subscription = get_active_subscription(store)
 
     if not subscription:
@@ -504,7 +538,9 @@ def update_subscription_plan(request):
     if not memberships.exists():
         return Response({"error": "No active subscription found"}, status=status.HTTP_404_NOT_FOUND)
 
-    store = memberships.first().store
+    store = _resolve_current_store_for_user(request, user)
+    if store is None:
+        return Response({"error": "No active subscription found"}, status=status.HTTP_404_NOT_FOUND)
     subscription = get_active_subscription(store)
 
     if not subscription:
@@ -539,6 +575,18 @@ def update_subscription_plan(request):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+            # Mark the session so the dashboard renders a "plan changed"
+            # success banner on the user's next request. Cleared on read.
+            request.session["plan_changed_just_now"] = {
+                "action": action,
+                "plan_name": new_plan.name,
+                "plan_slug": new_plan.slug,
+                "effective_immediately": (
+                    action == "upgraded"
+                    or serializer.validated_data.get("effective_immediately", False)
+                ),
+            }
+
             return Response(
                 {
                     "message": f"Subscription {action} successfully",
@@ -564,7 +612,9 @@ def get_current_subscription(request):
     if not memberships.exists():
         return Response({"error": "No subscription found"}, status=status.HTTP_404_NOT_FOUND)
 
-    store = memberships.first().store
+    store = _resolve_current_store_for_user(request, user)
+    if store is None:
+        return Response({"error": "No active subscription found"}, status=status.HTTP_404_NOT_FOUND)
     subscription = get_active_subscription(store)
 
     if not subscription:
@@ -613,7 +663,9 @@ def check_subscription_limits(request):
     if not memberships.exists():
         return Response({"error": "No subscription found"}, status=status.HTTP_404_NOT_FOUND)
 
-    store = memberships.first().store
+    store = _resolve_current_store_for_user(request, user)
+    if store is None:
+        return Response({"error": "No subscription found"}, status=status.HTTP_404_NOT_FOUND)
     limits_info = check_plan_limits(store)
 
     return Response(limits_info)

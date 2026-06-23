@@ -348,6 +348,10 @@ def upgrade_subscription(
     """
     Upgrade a subscription to a higher-tier plan.
 
+    CRITICAL FIX: When a user upgrades their subscription, upgrade ALL stores
+    they own to the new plan, not just the current store. This ensures
+    consistent plan limits across all stores.
+
     Args:
         subscription: The subscription to upgrade
         new_plan: The new plan to upgrade to
@@ -361,8 +365,112 @@ def upgrade_subscription(
         raise ValueError("New plan price must be higher for upgrades")
 
     old_plan = subscription.plan
+
+    # Upgrade the specific subscription
     subscription.plan = new_plan
     subscription.save(update_fields=["plan", "updated_at"])
+
+    # CRITICAL: Also upgrade all other subscriptions for stores owned by the same user
+    try:
+        from apps.permissions.models import StoreMembership, Subscription
+        from apps.stores.models import Store
+        from apps.accounts.models import User
+
+        # Get all store owner memberships for the same user across all stores
+        owner_memberships = (
+            StoreMembership.objects.filter(
+                user__subscriptions=subscription.store,  # Get the user from current subscription
+                role__slug="store-owner",
+                is_active=True,
+            )
+            .select_related("user", "store")
+            .all()
+        )
+
+        # Get the user who owns the store
+        store_owners = (
+            StoreMembership.objects.filter(
+                store=subscription.store, role__slug="store-owner", is_active=True
+            )
+            .select_related("user")
+            .first()
+        )
+
+        if store_owners:
+            user = store_owners.user
+
+            # Find all stores where this user is the owner
+            user_owned_stores = Store.objects.filter(
+                memberships__user=user,
+                memberships__role__slug="store-owner",
+                memberships__is_active=True,
+                is_deleted=False,
+            ).distinct()
+
+            # Upgrade subscriptions for all stores owned by this user
+            for store in user_owned_stores:
+                if store.id != subscription.store_id:  # Don't upgrade the current store again
+                    try:
+                        store_sub = Subscription.objects.get(store=store)
+                        if (
+                            store_sub.plan.max_stores < new_plan.max_stores
+                        ):  # Only upgrade if current plan is lower
+                            store_sub.plan = new_plan
+                            store_sub.save(update_fields=["plan", "updated_at"])
+
+                            # Record event for the upgraded store subscription
+                            record_event(
+                                store_sub,
+                                EVENT_UPGRADED,
+                                actor=actor,
+                                metadata={
+                                    "old_plan": store_sub.plan.slug,
+                                    "new_plan": new_plan.slug,
+                                    "bulk_upgrade": True,
+                                    "original_store": subscription.store_id,
+                                },
+                            )
+
+                            # Clear cache for this store
+                            cache.delete(f"{CACHE_SUBSCRIPTION_PREFIX}{store_sub.store_id}")
+
+                            # Bump store plan version
+                            try:
+                                from apps.permissions.cache import bump_store_plan_version
+
+                                bump_store_plan_version(store_sub.store_id)
+                            except Exception:
+                                pass
+                    except Subscription.DoesNotExist:
+                        # Create subscription for stores that don't have one
+                        try:
+                            new_sub = Subscription.objects.create(
+                                store=store,
+                                plan=new_plan,
+                                starts_at=timezone.now(),
+                                status="trialing",
+                                trial_ends_at=timezone.now() + timedelta(days=new_plan.trial_days)
+                                if new_plan.trial_days
+                                else None,
+                            )
+                            record_event(
+                                new_sub,
+                                EVENT_CREATED,
+                                actor=actor,
+                                metadata={
+                                    "plan_slug": new_plan.slug,
+                                    "bulk_upgrade": True,
+                                },
+                            )
+                        except Exception as e:
+                            logger.exception(
+                                f"Failed to create subscription for store {store.id} during upgrade"
+                            )
+
+    except Exception as e:
+        logger.exception(
+            f"Failed to upgrade subscriptions for all stores owned by user during plan upgrade"
+        )
 
     record_event(
         subscription,
@@ -379,6 +487,28 @@ def upgrade_subscription(
     cache.delete(f"{CACHE_PLAN_PREFIX}{old_plan.slug}")
     cache.delete(f"{CACHE_PLAN_PREFIX}{new_plan.slug}")
     cache.delete(f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.store_id}")
+
+    # Clear user-specific cache for all store members to ensure they get new limits
+    try:
+        from apps.permissions.models import StoreMembership
+        from apps.permissions.cache import invalidate_user_store_cache
+
+        # Get all active members of the store
+        memberships = StoreMembership.objects.filter(store=subscription.store, is_active=True)
+
+        for membership in memberships:
+            invalidate_user_store_cache(membership.user_id, subscription.store_id)
+    except Exception:
+        logger.exception("Failed to invalidate user cache on upgrade")
+
+    # Bump the RBAC store-plan version so cached feature / permission sets
+    # for this store are invalidated immediately on the next read.
+    try:
+        from apps.permissions.cache import bump_store_plan_version
+
+        bump_store_plan_version(subscription.store_id)
+    except Exception:
+        logger.exception("Failed to bump store plan version on upgrade")
 
     logger.info(f"Upgraded subscription {subscription.id} from {old_plan.slug} to {new_plan.slug}")
     return subscription
@@ -447,6 +577,26 @@ def downgrade_subscription(
         cache.delete(f"{CACHE_PLAN_PREFIX}{old_plan.slug}")
         cache.delete(f"{CACHE_PLAN_PREFIX}{new_plan.slug}")
         cache.delete(f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.store_id}")
+
+        # Clear user-specific cache for all store members to ensure they get new limits
+        try:
+            from apps.permissions.models import StoreMembership
+            from apps.permissions.cache import invalidate_user_store_cache
+
+            # Get all active members of the store
+            memberships = StoreMembership.objects.filter(store=subscription.store, is_active=True)
+
+            for membership in memberships:
+                invalidate_user_store_cache(membership.user_id, subscription.store_id)
+        except Exception:
+            logger.exception("Failed to invalidate user cache on downgrade")
+
+        try:
+            from apps.permissions.cache import bump_store_plan_version
+
+            bump_store_plan_version(subscription.store_id)
+        except Exception:
+            logger.exception("Failed to bump store plan version on downgrade")
 
         logger.info(
             f"Downgraded subscription {subscription.id} from {old_plan.slug} to {new_plan.slug}"

@@ -72,28 +72,44 @@ def dashboard_home(request):
     user = request.user
     is_superuser = user.is_superuser
 
-    # Check user's subscription status
+    # Check user's subscription status.
+    #
+    # Order of truth (most authoritative first):
+    #   1. Real Subscription row attached to a store the user is a member of.
+    #   2. user.pending_plan_slug (a one-shot signup marker, only valid
+    #      BEFORE the store is created).
+    #   3. None of the above → user needs to pick a plan.
+    #
+    # `pending_plan_slug` is intentionally NOT used as a primary signal
+    # after the user has a real subscription. Otherwise upgrading in
+    # place leaves the dashboard thinking the user is in a "pending"
+    # onboarding flow.
     user_subscription = None
     needs_subscription = False
     has_pending_subscription = False
 
-    # Check if user has a pending subscription (subscribed but no store yet)
-    if user.pending_plan_slug:
-        has_pending_subscription = True
-    else:
-        # Try to find existing subscription through store memberships
-        try:
-            from apps.permissions.models import Subscription
+    try:
+        from apps.permissions.models import Subscription
 
-            user_subscription = Subscription.objects.filter(
+        user_subscription = (
+            Subscription.objects
+            .filter(
                 store__memberships__user=user,
                 store__memberships__is_active=True,
-                status__in=["trialing", "active"]
-            ).select_related('plan').first()
+                status__in=["trialing", "active"],
+            )
+            .select_related("plan")
+            .first()
+        )
+    except Exception:
+        user_subscription = None
 
-            if not user_subscription:
-                needs_subscription = True
-        except Exception:
+    if user_subscription is None:
+        # No real subscription. The signup marker may still be set,
+        # meaning the user paid but hasn't created their first store yet.
+        if user.pending_plan_slug:
+            has_pending_subscription = True
+        else:
             needs_subscription = True
 
     # If user needs subscription and has no pending subscription, redirect to plans page
@@ -102,6 +118,27 @@ def dashboard_home(request):
 
         messages.info(request, "Welcome! Choose a subscription plan to get started.")
         return redirect("subscriptions:plans")
+
+    # User has memberships but their subscription is canceled/expired/past_due
+    # (Fix #3): redirect them to the manage page so they can re-subscribe
+    # or see why their features are blocked.
+    subscription_needs_attention = (
+        user_subscription is None
+        and not needs_subscription
+        and not has_pending_subscription
+        and not is_superuser
+        and StoreMembership.objects.filter(
+            user=user, is_active=True,
+        ).exists()
+    )
+    if subscription_needs_attention:
+        from django.contrib import messages
+
+        messages.warning(
+            request,
+            "Your subscription is no longer active. Renew or pick a new plan to continue.",
+        )
+        return redirect("subscriptions:manage")
 
     user_stores = _user_stores(user, is_superuser)
     current_store = _resolve_current_store(request, user_stores)
@@ -121,6 +158,10 @@ def dashboard_home(request):
 
         raise PermissionDenied
 
+    # Plan-changed banner (Fix #5): if the user just upgraded/downgraded,
+    # surface that in the template and clear the session flag.
+    plan_changed = request.session.pop("plan_changed_just_now", None)
+
     context: dict[str, Any] = {
         "user": user,
         "is_superuser": is_superuser,
@@ -133,6 +174,8 @@ def dashboard_home(request):
         "show_welcome": True,  # Show welcome banner
         # Boolean flags for template checks
         "has_user_subscription": user_subscription is not None,
+        # Plan-change banner payload (or None)
+        "plan_changed": plan_changed,
     }
 
     # If user has pending subscription, get plan details

@@ -104,7 +104,7 @@ class StoreListView(generics.ListCreateAPIView):
             .distinct()
             .count()
         )
-
+        print(f"Current store count for user {user.id}: {current_count}")
         # Determine cap. For new users we may not have a subscription yet,
         # so fall back to a generous default plan cap.
         cap = _resolve_max_stores_cap(user)
@@ -277,7 +277,9 @@ def remove_store_logo(request, store_id):
 
     logger.info(
         "Store logo removed: store_id=%s logo=%s by user=%s",
-        store.id, logo_name, getattr(user, "id", None),
+        store.id,
+        logo_name,
+        getattr(user, "id", None),
     )
     return Response(
         {"message": "Logo removed.", "removed": True},
@@ -318,31 +320,72 @@ class MyStoresView(generics.ListAPIView):
 # ---------------------------------------------------------------------------
 def _resolve_max_stores_cap(user) -> int:
     """Return the max_stores cap from the highest active subscription the
-    user has, falling back to DEFAULT_PLAN_MAX_STORES.
-    """
-    from apps.permissions.models import Subscription, SubscriptionPlan
+    user has access to, falling back to DEFAULT_PLAN_MAX_STORES.
 
-    sub = (
+    CRITICAL FIX: Look at ALL subscriptions across all stores the user has
+    access to (not just stores where they have membership), and use the
+    highest max_stores value. This ensures that if a user has upgraded to a
+    higher-tier plan on any store, they can create more stores.
+    """
+    from apps.permissions.models import Subscription, SubscriptionPlan, StoreMembership
+    from apps.accounts.models import User
+
+    # Get all stores the user has any access to (any active membership)
+    user_accessible_stores = Store.objects.filter(
+        memberships__user=user, memberships__is_active=True, is_deleted=False
+    ).distinct()
+
+    # Initialize max_stores with 0
+    max_stores = 0
+
+    if not user_accessible_stores.exists():
+        # User has no store access yet, check if they have any subscription plan at all
+        # This handles the case where user just upgraded but hasn't created a store yet
+        # We'll look for the highest-tier plan they've subscribed to anywhere
+        all_user_subs = Subscription.objects.filter(
+            store__in=user_accessible_stores,  # This will be empty, so try different approach
+        )
+
+        # Alternative: check if user has any pending plan from the subscription flow
+        if hasattr(user, "pending_plan_slug") and user.pending_plan_slug:
+            try:
+                pending_plan = SubscriptionPlan.objects.get(slug=user.pending_plan_slug)
+                if getattr(pending_plan, "max_stores", None):
+                    return int(pending_plan.max_stores)
+            except Exception:
+                pass
+
+    # Get all subscriptions for all stores the user has access to
+    accessible_store_ids = user_accessible_stores.values_list("id", flat=True)
+
+    all_accessible_subs = (
         Subscription.objects.filter(
-            store__memberships__user=user,
-            store__memberships__is_active=True,
-            status__in=("active", "trialing"),
+            store_id__in=accessible_store_ids, status__in=("active", "trialing")
         )
         .select_related("plan")
-        .order_by("-plan__max_stores")
-        .first()
+        .all()
     )
-    if sub is not None and getattr(sub.plan, "max_stores", None):
-        return int(sub.plan.max_stores)
 
-    # Fallback: pick the public free/trial plan if any.
-    free_plan = (
-        SubscriptionPlan.objects.filter(is_active=True, is_public=True)
-        .order_by("-max_stores")
-        .first()
-    )
-    if free_plan is not None and getattr(free_plan, "max_stores", None):
-        return int(free_plan.max_stores)
+    if all_accessible_subs.exists():
+        # Find the subscription with the highest max_stores
+        for sub in all_accessible_subs:
+            plan_max = getattr(sub.plan, "max_stores", 0)
+            if plan_max > max_stores:
+                max_stores = plan_max
+
+    # CRITICAL: Check for pending plan - it might be higher tier than current subscription
+    # This handles users who just upgraded but haven't completed store creation yet
+    if hasattr(user, "pending_plan_slug") and user.pending_plan_slug:
+        try:
+            pending_plan = SubscriptionPlan.objects.get(slug=user.pending_plan_slug)
+            pending_max = getattr(pending_plan, "max_stores", 0)
+            if pending_max > max_stores:
+                max_stores = pending_max
+        except Exception:
+            pass
+
+    if max_stores > 0:
+        return max_stores
 
     return DEFAULT_PLAN_MAX_STORES
 
@@ -354,7 +397,9 @@ def create_store_template(request):
         from apps.permissions.models import Subscription, SubscriptionPlan
 
         # Check for pending subscription from User model (persists across sessions)
-        pending_plan_slug = request.user.pending_plan_slug or request.session.get("pending_plan_slug")
+        pending_plan_slug = request.user.pending_plan_slug or request.session.get(
+            "pending_plan_slug"
+        )
         pending_plan = None
 
         # Get pending plan if exists
@@ -365,11 +410,15 @@ def create_store_template(request):
                 pass
 
         # Find subscriptions through user's store memberships
-        user_subscription = Subscription.objects.filter(
-            store__memberships__user=request.user,
-            store__memberships__is_active=True,
-            status__in=["trialing", "active"]
-        ).select_related('plan').first()
+        user_subscription = (
+            Subscription.objects.filter(
+                store__memberships__user=request.user,
+                store__memberships__is_active=True,
+                status__in=["trialing", "active"],
+            )
+            .select_related("plan")
+            .first()
+        )
 
         # Allow store creation if user has active subscription OR pending plan from checkout
         if not user_subscription and not pending_plan:
@@ -439,6 +488,7 @@ def store_list_template(request):
 
         # Get current store from context
         from apps.common.context_processors import current_store as cp
+
         ctx = cp(request)
         current_store = ctx.get("current_store")
 
@@ -514,9 +564,7 @@ def store_detail_template(request, store_id):
                     is_manager = True
 
         # Count members
-        member_count = StoreMembership.objects.filter(
-            store=store, is_active=True
-        ).count()
+        member_count = StoreMembership.objects.filter(store=store, is_active=True).count()
 
         # Get store stats (placeholder for now)
         products_count = 0
@@ -525,6 +573,7 @@ def store_detail_template(request, store_id):
 
         # Get current store for RBAC context
         from apps.common.context_processors import current_store as cp
+
         ctx = cp(request)
         current_store = ctx.get("current_store")
 
@@ -545,6 +594,7 @@ def store_detail_template(request, store_id):
 
     except Exception as e:
         import traceback
+
         logger.error(
             "Error in store_detail_template for store_id=%s user=%s: %s\n%s",
             store_id,
@@ -585,9 +635,7 @@ def store_edit_template(request, store_id):
         manager_role = Role.objects.filter(slug="manager").first()
 
         can_edit = (
-            getattr(user, "is_superuser", False)
-            or store.is_owner(user)
-            or store.is_manager(user)
+            getattr(user, "is_superuser", False) or store.is_owner(user) or store.is_manager(user)
         )
 
         if not can_edit:

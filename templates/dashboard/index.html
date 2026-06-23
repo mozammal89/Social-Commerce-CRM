@@ -89,6 +89,28 @@
     {#  Regular dashboard (member has at least one store)            #}
     {# ============================================================ #}
 
+    {# Plan-change success banner (Fix #5). #}
+    {% if plan_changed %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>
+        {% if plan_changed.action == "upgraded" %}
+            <strong>You're now on the {{ plan_changed.plan_name }} plan.</strong>
+            New features and limits are active immediately.
+        {% elif plan_changed.action == "downgraded" %}
+            {% if plan_changed.effective_immediately %}
+                <strong>Your plan has been changed to {{ plan_changed.plan_name }}.</strong>
+                Some features may no longer be available.
+            {% else %}
+                <strong>Your plan will change to {{ plan_changed.plan_name }} at the end of the current billing period.</strong>
+            {% endif %}
+        {% else %}
+            <strong>Your plan has been updated.</strong>
+        {% endif %}
+        <a href="{% url 'subscriptions:manage' %}" class="btn btn-sm btn-outline-success ms-2">View subscription</a>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+
     <!-- Page Header -->
     <div class="section-header">
         <div>

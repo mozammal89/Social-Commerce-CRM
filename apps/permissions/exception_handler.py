@@ -12,14 +12,39 @@ Wire it in via::
 
 from __future__ import annotations
 
+from rest_framework import status
+from rest_framework.response import Response
 from rest_framework.views import exception_handler
+
+from .exceptions import PlanLimitExceeded
 
 
 def rbac_exception_handler(exc, context):
     """
     Wrap DRF's default exception handler and enrich 403 responses with
     machine-readable fields so the frontend can show a useful message.
+
+    Also converts RBAC-specific exceptions (e.g. ``PlanLimitExceeded``)
+    into structured 403 responses so the frontend gets a clean error
+    payload instead of a 500.
     """
+    # Plan limit hit: convert to a 403 with a structured payload so the
+    # front-end can show "upgrade your plan" UI.
+    if isinstance(exc, PlanLimitExceeded):
+        return Response(
+            {
+                "error": "plan_limit_exceeded",
+                "detail": (
+                    f"You've reached your plan's {exc.limit_attr} limit "
+                    f"({exc.current}/{exc.cap}). Upgrade your plan to continue."
+                ),
+                "limit_attr": exc.limit_attr,
+                "current": exc.current,
+                "cap": exc.cap,
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     response = exception_handler(exc, context)
     if response is None:
         return None

@@ -242,6 +242,23 @@ document.getElementById('createStoreForm').addEventListener('submit', async func
             if (typeof showNotification === 'function') {
                 showNotification(errorMessage, 'error');
             }
+
+            // If the failure was a plan limit, also surface an "Upgrade
+            // your plan" CTA so the user has a clear next step.
+            if (result.error === 'plan_limit_exceeded') {
+                const upgradeHtml = `<a href="{% url 'subscriptions:manage' %}" class="btn btn-sm btn-primary ms-2">Upgrade plan</a>`;
+                const container = document.querySelector('.messages-container') || document.body;
+                const banner = document.createElement('div');
+                banner.className = 'alert alert-warning alert-dismissible fade show mt-3';
+                banner.innerHTML = `
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    ${errorMessage}
+                    ${upgradeHtml}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                `;
+                container.appendChild(banner);
+            }
+
             submitBtn.disabled = false;
             submitBtn.innerHTML = originalText;
         }
