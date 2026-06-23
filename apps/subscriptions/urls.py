@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import api_views
 
 app_name = "subscriptions"
 
@@ -18,4 +19,6 @@ urlpatterns = [
     path("api/update-plan/", views.update_subscription_plan, name="api-update-plan"),
     path("api/current/", views.get_current_subscription, name="api-current"),
     path("api/limits/", views.check_subscription_limits, name="api-limits"),
+    # Aggregated API views (for multi-store support)
+    path("api/aggregated-limits/", api_views.get_aggregated_limits, name="api-aggregated-limits"),
 ]

@@ -272,5 +272,89 @@ document.getElementById('createStoreForm').addEventListener('submit', async func
         submitBtn.innerHTML = originalText;
     }
 });
+
+// Function to update plan information dynamically
+async function updatePlanInformation() {
+    try {
+        const response = await fetch('/subscriptions/api/aggregated-limits/', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'same-origin',
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            
+            // Update plan name
+            const planElements = document.querySelectorAll('.alert-info strong');
+            if (planElements.length >= 2 && data.plan) {
+                planElements[1].textContent = `${data.plan.name} (${data.limits.max_stores} stores max)`;
+            }
+
+            // Update current count display
+            const currentCountElement = document.querySelector('.d-flex.justify-content-between strong');
+            if (currentCountElement && data.limits) {
+                currentCountElement.textContent = `${data.limits.current_stores} / ${data.limits.max_stores}`;
+            }
+
+            // Update remaining stores display
+            const remainingElements = document.querySelectorAll('.d-flex.justify-content-between strong');
+            if (remainingElements.length >= 2 && data.limits) {
+                remainingElements[1].textContent = data.limits.remaining_stores;
+            }
+
+            // Update progress bar
+            const progressBar = document.querySelector('.progress-bar');
+            if (progressBar && data.limits) {
+                const percentage = (data.limits.current_stores / data.limits.max_stores) * 100;
+                progressBar.style.width = `${percentage}%`;
+                progressBar.setAttribute('aria-valuenow', data.limits.current_stores);
+                progressBar.setAttribute('aria-valuemax', data.limits.max_stores);
+            }
+
+            // Update submit button state
+            const submitBtn = document.querySelector('button[type="submit"]');
+            if (submitBtn && data.limits) {
+                submitBtn.disabled = !data.limits.can_create_more;
+            }
+
+            // Update plan limit alert
+            const planLimitAlert = document.querySelector('.alert-warning');
+            if (planLimitAlert && data.limits) {
+                if (data.limits.remaining_stores <= 0) {
+                    planLimitAlert.style.display = 'block';
+                } else {
+                    planLimitAlert.style.display = 'none';
+                }
+            }
+
+            // Update info alert for remaining stores
+            const infoAlert = document.querySelector('.alert-info small.text-danger');
+            const remainingSmall = document.querySelector('.alert-info small.text-muted');
+            if (infoAlert && remainingSmall && data.limits) {
+                if (data.limits.remaining_stores > 0) {
+                    infoAlert.style.display = 'none';
+                    remainingSmall.style.display = 'inline';
+                    remainingSmall.innerHTML = `You can create <strong>${data.limits.remaining_stores} more store${data.limits.remaining_stores !== 1 ? 's' : ''}</strong>`;
+                } else {
+                    infoAlert.style.display = 'inline';
+                    remainingSmall.style.display = 'none';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Failed to fetch plan information:', error);
+    }
+}
+
+// Update plan information when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    updatePlanInformation();
+    
+    // Also update periodically to catch any changes
+    setInterval(updatePlanInformation, 30000); // Every 30 seconds
+});
 </script>
 {% endblock %}

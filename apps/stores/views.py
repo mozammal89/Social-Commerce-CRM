@@ -425,11 +425,9 @@ def create_store_template(request):
             messages.warning(request, "You need an active subscription to create a store.")
             return redirect("subscriptions:plans")
 
-        # Determine which plan to use for limits
-        if pending_plan:
-            max_stores = pending_plan.max_stores
-        else:
-            max_stores = user_subscription.plan.max_stores
+        # Use the fixed function to determine the correct max stores cap
+        # This considers ALL subscriptions across all stores and pending plans
+        max_stores = _resolve_max_stores_cap(request.user)
 
         current_count = (
             Store.objects.filter(
@@ -441,7 +439,7 @@ def create_store_template(request):
             .count()
         )
 
-        remaining_stores = max_stores - current_count
+        remaining_stores = max(0, max_stores - current_count)
 
         return render(
             request,

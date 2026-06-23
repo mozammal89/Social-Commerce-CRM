@@ -24,7 +24,8 @@ const PlanCache = {
         }
 
         try {
-            const response = await fetch('/api/v1/subscriptions/current/', {
+            // Use the correct API endpoint for aggregated limits
+            const response = await fetch('/subscriptions/api/aggregated-limits/', {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -80,10 +81,10 @@ const PlanCache = {
     async getMaxStoresLimit() {
         const plan = await PlanCache.getCurrentPlan();
         
-        if (!plan || !plan.subscription || !plan.subscription.plan) {
-            // Fallback to checking plans directly
+        if (!plan || !plan.limits) {
+            // Fallback to checking limits API directly
             try {
-                const response = await fetch('/api/v1/subscriptions/api/limits/', {
+                const response = await fetch('/subscriptions/api/limits/', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
@@ -93,7 +94,7 @@ const PlanCache = {
 
                 if (response.ok) {
                     const data = await response.json();
-                    return data.limits?.max_stores || 1;
+                    return data.max_stores || 1;
                 }
             } catch (error) {
                 console.error('Error fetching plan limits:', error);
@@ -102,7 +103,7 @@ const PlanCache = {
             return 1; // Default fallback
         }
         
-        return plan.subscription.plan.max_stores || 1;
+        return plan.limits.max_stores || 1;
     },
 
     /**
@@ -117,6 +118,14 @@ const PlanCache = {
      * Get remaining store slots
      */
     async getRemainingStores(currentStoreCount = 0) {
+        const plan = await PlanCache.getCurrentPlan();
+        
+        if (plan && plan.limits) {
+            // Use the API's calculated remaining stores if available
+            return plan.limits.remaining_stores;
+        }
+        
+        // Fallback to manual calculation
         const maxStores = await PlanCache.getMaxStoresLimit();
         return maxStores - currentStoreCount;
     },

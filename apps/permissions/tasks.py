@@ -2,6 +2,7 @@
 
 Scheduled via Celery beat in config/celery.py.
 """
+
 from __future__ import annotations
 import logging
 from celery import shared_task
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 def expire_trials() -> int:
     """Move trialing subscriptions whose trial_ends_at < now to expired."""
     from .models import Subscription
-    from .services import transition_status
+    from apps.subscriptions.services import transition_status
     from .constants import SUB_TRIALING, SUB_EXPIRED
 
     now = timezone.now()
@@ -36,7 +37,7 @@ def expire_trials() -> int:
 def expire_active_periods() -> int:
     """Move active subscriptions whose current_period_end < now to expired."""
     from .models import Subscription
-    from .services import transition_status
+    from apps.subscriptions.services import transition_status
     from .constants import SUB_ACTIVE, SUB_EXPIRED
 
     now = timezone.now()
@@ -61,7 +62,7 @@ def escalate_past_due(grace_days: int = 7) -> int:
     """
     from datetime import timedelta
     from .models import Subscription
-    from .services import transition_status
+    from apps.subscriptions.services import transition_status
     from .constants import SUB_PAST_DUE, SUB_EXPIRED
 
     cutoff = timezone.now() - timedelta(days=grace_days)
