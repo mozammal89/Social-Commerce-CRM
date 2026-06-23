@@ -75,23 +75,12 @@
                         </div>
                         <span class="sidebar-nav-label">My Stores</span>
                     </a>
-                    {% if has_pending_subscription or pending_plan %}
-                        {# User has pending plan upgrade - show upgrade notification #}
-                        <a href="{% url 'subscriptions:plans' %}" class="sidebar-nav-item" style="background: var(--success-50);">
-                            <div class="sidebar-nav-icon">
-                                <i class="bi bi-arrow-up-circle"></i>
-                            </div>
-                            <span class="sidebar-nav-label">Plan Upgrade Pending</span>
-                        </a>
-                    {% else %}
-                        {# Regular add store option #}
-                        <a href="{% url 'stores:create' %}" class="sidebar-nav-item">
-                            <div class="sidebar-nav-icon">
-                                <i class="bi bi-plus-circle"></i>
-                            </div>
-                            <span class="sidebar-nav-label">Add New Store</span>
-                        </a>
-                    {% endif %}
+                    <a href="{% url 'stores:create' %}" class="sidebar-nav-item">
+                        <div class="sidebar-nav-icon">
+                            <i class="bi bi-plus-circle"></i>
+                        </div>
+                        <span class="sidebar-nav-label">Add New Store</span>
+                    </a>
                 {% endif %}
             </div>
             {% endif %}

@@ -352,6 +352,9 @@ def upgrade_subscription(
     they own to the new plan, not just the current store. This ensures
     consistent plan limits across all stores.
 
+    CRITICAL FIX: Clear pending_plan_slug for existing users after upgrade
+    since they already have stores and don't need "pending" status.
+
     Args:
         subscription: The subscription to upgrade
         new_plan: The new plan to upgrade to
@@ -376,18 +379,7 @@ def upgrade_subscription(
         from apps.stores.models import Store
         from apps.accounts.models import User
 
-        # Get all store owner memberships for the same user across all stores
-        owner_memberships = (
-            StoreMembership.objects.filter(
-                user__subscriptions=subscription.store,  # Get the user from current subscription
-                role__slug="store-owner",
-                is_active=True,
-            )
-            .select_related("user", "store")
-            .all()
-        )
-
-        # Get the user who owns the store
+        # Get the user who owns the current subscription's store
         store_owners = (
             StoreMembership.objects.filter(
                 store=subscription.store, role__slug="store-owner", is_active=True
@@ -467,10 +459,60 @@ def upgrade_subscription(
                                 f"Failed to create subscription for store {store.id} during upgrade"
                             )
 
+            # CRITICAL: Clear pending_plan_slug for existing users after upgrade
+            # They already have stores, so they're not "pending" anything
+            if user and hasattr(user, "pending_plan_slug") and user.pending_plan_slug:
+                user.pending_plan_slug = None
+                user.pending_trial_start = None
+                user.pending_subscription_date = None
+                user.save(
+                    update_fields=[
+                        "pending_plan_slug",
+                        "pending_trial_start",
+                        "pending_subscription_date",
+                    ]
+                )
+
     except Exception as e:
         logger.exception(
             f"Failed to upgrade subscriptions for all stores owned by user during plan upgrade"
         )
+
+    # CRITICAL: Clear pending_plan_slug for existing users after upgrade
+    # This must happen OUTSIDE the try-except to ensure it runs even if bulk upgrade fails
+    try:
+        from apps.permissions.models import StoreMembership, Subscription
+        from apps.stores.models import Store
+        from apps.accounts.models import User
+
+        # Get the user who owns the current subscription's store
+        store_owners = (
+            StoreMembership.objects.filter(
+                store=subscription.store, role__slug="store-owner", is_active=True
+            )
+            .select_related("user")
+            .first()
+        )
+
+        if store_owners:
+            user = store_owners.user
+
+            # Clear pending_plan_slug for existing users after upgrade
+            # They already have stores, so they're not "pending" anything
+            if user and hasattr(user, "pending_plan_slug") and user.pending_plan_slug:
+                user.pending_plan_slug = None
+                user.pending_trial_start = False  # BooleanField, not datetime
+                user.pending_subscription_date = None
+                user.save(
+                    update_fields=[
+                        "pending_plan_slug",
+                        "pending_trial_start",
+                        "pending_subscription_date",
+                    ]
+                )
+    except Exception as e:
+        logger.exception(f"Failed to clear pending_plan_slug after upgrade: {str(e)}")
+        # Continue anyway - the upgrade succeeded
 
     record_event(
         subscription,
