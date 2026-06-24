@@ -5,6 +5,10 @@
 
 {% block title %}Members - {{ APP_NAME }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'permissions/css/role_permission.css' %}">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid p-0">
     {% include "components/messages.html" %}
@@ -147,6 +151,13 @@
                                         data-membership-id="{{ m.id }}"
                                         data-member-name="{{ m.user.email }}">
                                     <i class="bi bi-person-x"></i> Deactivate
+                                </button>
+                                {% else %}
+                                <button type="button" class="btn btn-sm btn-outline-success"
+                                        data-action="reactivate-member"
+                                        data-membership-id="{{ m.id }}"
+                                        data-member-name="{{ m.user.email }}">
+                                    <i class="bi bi-person-check"></i> Reactivate
                                 </button>
                                 {% endif %}
                             </td>

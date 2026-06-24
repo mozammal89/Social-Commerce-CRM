@@ -40,6 +40,25 @@ urlpatterns = [
         views.MemberDeactivateView.as_view(),
         name="member_deactivate",
     ),
+    path(
+        "members/<uuid:membership_id>/reactivate/",
+        views.MemberReactivateView.as_view(),
+        name="member_reactivate",
+    ),
+
+    # ---- User permission overrides ----
+    path("overrides/", views.OverrideListView.as_view(), name="override_list"),
+    path("overrides/new/", views.OverrideCreateView.as_view(), name="override_create"),
+    path(
+        "overrides/<uuid:override_id>/edit/",
+        views.OverrideUpdateView.as_view(),
+        name="override_edit",
+    ),
+    path(
+        "overrides/<uuid:override_id>/delete/",
+        views.OverrideDeleteView.as_view(),
+        name="override_delete",
+    ),
 
     # ---- Permission catalog ----
     path("permissions/", views.PermissionCatalogView.as_view(), name="permission_catalog"),

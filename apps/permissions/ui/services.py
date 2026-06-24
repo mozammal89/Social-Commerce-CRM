@@ -505,6 +505,32 @@ def deactivate_member(
     return membership
 
 
+def reactivate_member(
+    *,
+    actor,
+    membership: StoreMembership,
+    request=None,
+) -> StoreMembership:
+    """Reactivate a previously deactivated membership."""
+    _require_members_manage(actor, membership.store)
+
+    with transaction.atomic():
+        before = {"is_active": membership.is_active}
+        membership.is_active = True
+        membership.save(update_fields=["is_active", "updated_at"])
+        _emit_audit_log(
+            actor=actor,
+            store=membership.store,
+            action="member.reactivate",
+            target_type="store_membership",
+            target_id=str(membership.id),
+            before=before,
+            after={"is_active": True},
+            request=request,
+        )
+    return membership
+
+
 # ---------------------------------------------------------------------------
 # User-level permission overrides
 # ---------------------------------------------------------------------------

@@ -228,7 +228,7 @@
                 {% endif %}
                 {% can_any "employees.view" "roles.view" as show_team_settings %}
                 {% if show_team_settings %}
-                <a href="{% url 'settings:team' %}" class="sidebar-nav-item {% if 'team' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'role_permission:member_list' %}" class="sidebar-nav-item {% if request.resolver_match.app_name == 'role_permission' and 'member' in request.resolver_match.url_name %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-people"></i>
                     </div>
@@ -249,10 +249,10 @@
                     </div>
                     <span class="sidebar-nav-label">Billing</span>
                 </a>
+
+                {% include "role_permission/components/sidebar_section.html" %}
             </div>
             {% endif %}
-
-            {% include "role_permission/components/sidebar_section.html" %}
 
             <!-- Help Section -->
             <div class="sidebar-section">

@@ -118,17 +118,23 @@ RESOURCES: Dict[str, dict] = {
         "description": "Team members.",
         "actions": ["view", "create", "update", "delete", "assign"],
     },
+    "members": {
+        "name": "Store Members",
+        "category": "team",
+        "description": "Store team membership and role assignments.",
+        "actions": ["view", "create", "update", "delete", "assign", "manage"],
+    },
     "roles": {
         "name": "Roles & Permissions",
         "category": "team",
         "description": "Custom roles and their permission bindings.",
-        "actions": ["view", "create", "update", "delete", "assign"],
+        "actions": ["view", "create", "update", "delete", "assign", "manage", "manage_system"],
     },
     "permissions": {
         "name": "Permission Overrides",
         "category": "team",
         "description": "User-specific permission overrides.",
-        "actions": ["view", "create", "update", "delete"],
+        "actions": ["view", "create", "update", "delete", "override_grant"],
     },
     "integrations": {
         "name": "Integrations",
@@ -141,6 +147,12 @@ RESOURCES: Dict[str, dict] = {
         "category": "platform",
         "description": "Store configuration and preferences.",
         "actions": ["view", "update"],
+    },
+    "audit": {
+        "name": "Audit Log",
+        "category": "platform",
+        "description": "Append-only record of RBAC changes.",
+        "actions": ["view"],
     },
 }
 
