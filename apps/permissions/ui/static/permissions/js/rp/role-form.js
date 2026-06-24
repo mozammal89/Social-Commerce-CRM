@@ -20,6 +20,7 @@ const init = () => {
 
   selectAll?.addEventListener('click', (e) => {
     e.preventDefault();
+    animateSelectAll(allCheckboxes());
     allCheckboxes().forEach((cb) => { cb.checked = true; });
     syncGroupHeaders(form, allCheckboxes);
     updateCounter(form, allCheckboxes);
@@ -27,6 +28,7 @@ const init = () => {
 
   deselectAll?.addEventListener('click', (e) => {
     e.preventDefault();
+    animateDeselectAll(allCheckboxes());
     allCheckboxes().forEach((cb) => { cb.checked = false; });
     syncGroupHeaders(form, allCheckboxes);
     updateCounter(form, allCheckboxes);
@@ -34,6 +36,7 @@ const init = () => {
 
   invert?.addEventListener('click', (e) => {
     e.preventDefault();
+    animateInvertSelection(allCheckboxes());
     allCheckboxes().forEach((cb) => { cb.checked = !cb.checked; });
     syncGroupHeaders(form, allCheckboxes);
     updateCounter(form, allCheckboxes);
@@ -45,10 +48,19 @@ const init = () => {
       e.preventDefault();
       const group = btn.closest('[data-permission-group]');
       if (!group) return;
+
+      // Animate the group's checkboxes
+      const checkboxes = group.querySelectorAll('input[type="checkbox"][name="permissions"]');
+      animateSelectAll(checkboxes);
+
       group.querySelectorAll('input[type="checkbox"][name="permissions"]')
         .forEach((cb) => { cb.checked = true; });
       syncGroupHeaders(form, allCheckboxes);
       updateCounter(form, allCheckboxes);
+
+      // Visual feedback on the button
+      btn.style.transform = 'scale(1.1)';
+      setTimeout(() => btn.style.transform = '', 150);
     });
   });
 
@@ -57,10 +69,19 @@ const init = () => {
       e.preventDefault();
       const group = btn.closest('[data-permission-group]');
       if (!group) return;
+
+      // Animate the group's checkboxes
+      const checkboxes = group.querySelectorAll('input[type="checkbox"][name="permissions"]');
+      animateDeselectAll(checkboxes);
+
       group.querySelectorAll('input[type="checkbox"][name="permissions"]')
         .forEach((cb) => { cb.checked = false; });
       syncGroupHeaders(form, allCheckboxes);
       updateCounter(form, allCheckboxes);
+
+      // Visual feedback on the button
+      btn.style.transform = 'scale(1.1)';
+      setTimeout(() => btn.style.transform = '', 150);
     });
   });
 
@@ -120,8 +141,96 @@ const updateCounter = (form, allCheckboxes) => {
   }
 };
 
+/**
+ * Animation functions for smooth micro-interactions
+ */
+
+/**
+ * Animate select-all with a ripple effect
+ */
+const animateSelectAll = (checkboxes) => {
+  checkboxes.forEach((cb, index) => {
+    const tile = cb.closest('.rp-permission-tile');
+    if (tile) {
+      setTimeout(() => {
+        tile.style.transform = 'scale(0.98)';
+        setTimeout(() => {
+          tile.style.transform = '';
+        }, 100);
+      }, index * 10);
+    }
+  });
+};
+
+/**
+ * Animate deselect-all with a fade effect
+ */
+const animateDeselectAll = (checkboxes) => {
+  checkboxes.forEach((cb, index) => {
+    const tile = cb.closest('.rp-permission-tile');
+    if (tile) {
+      setTimeout(() => {
+        tile.style.transition = 'all 150ms ease';
+        tile.style.opacity = '0.7';
+        setTimeout(() => {
+          tile.style.opacity = '';
+          tile.style.transition = '';
+        }, 150);
+      }, index * 8);
+    }
+  });
+};
+
+/**
+ * Animate invert with a pulse effect
+ */
+const animateInvertSelection = (checkboxes) => {
+  checkboxes.forEach((cb) => {
+    const tile = cb.closest('.rp-permission-tile');
+    if (tile) {
+      tile.style.transition = 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)';
+      tile.style.transform = 'scale(0.97)';
+      setTimeout(() => {
+        tile.style.transform = '';
+        tile.style.transition = '';
+      }, 200);
+    }
+  });
+};
+
+/**
+ * Add smooth collapse animation to permission groups
+ */
+const animateGroupCollapse = () => {
+  document.querySelectorAll('.rp-permission-group').forEach(group => {
+    const summary = group.querySelector('summary');
+    if (!summary) return;
+
+    summary.addEventListener('click', () => {
+      const isOpen = group.hasAttribute('open');
+      const grid = group.querySelector('.rp-permission-grid');
+      if (!grid) return;
+
+      if (!isOpen) {
+        // Opening
+        grid.style.opacity = '0';
+        grid.style.transform = 'translateY(-8px)';
+        setTimeout(() => {
+          grid.style.transition = 'all 250ms ease';
+          grid.style.opacity = '1';
+          grid.style.transform = '';
+        }, 50);
+      }
+    });
+  });
+};
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', () => {
+    init();
+    animateGroupCollapse();
+  });
 } else {
   init();
+  animateGroupCollapse();
 }
