@@ -51,6 +51,13 @@ REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [
     "rest_framework.renderers.BrowsableAPIRenderer",
 ]
 
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+SECURE_HSTS_SECONDS = 63072000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
+
 # CSRF_TRUSTED_ORIGINS: Required for CSRF protection when accessing from different domains/IPs
 # Must include the scheme (http:// or https://)
 CSRF_TRUSTED_ORIGINS = env.list(
