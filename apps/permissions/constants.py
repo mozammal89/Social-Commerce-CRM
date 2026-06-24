@@ -31,6 +31,8 @@ ACTION_CHOICES: list[tuple[str, str]] = [
     ("approve", "Approve"),
     ("assign", "Assign"),
     ("manage", "Manage (all actions)"),
+    ("override_grant", "Override grant"),
+    ("manage_system", "Manage system roles"),
 ]
 
 # ---------------------------------------------------------------------------

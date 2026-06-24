@@ -1,43 +1,46 @@
 {% load rbac %}
-{# Reusable "Roles & Permissions" sidebar block. Include from layouts/dashboard.html. #}
-{% can_any "roles.view" "members.view" "permissions.view" "audit.view" as show_rp_nav %}
+<!-- {# Reusable "Roles & Permissions" sidebar block.
+
+   The Members link is rendered by the parent Settings section
+   (``templates/components/sidebar.html``) as "Team Management", so this
+   block only renders the other admin pages.
+#} -->
+{% can_any "roles.view" "permissions.view" "audit.view" "permissions.override_grant" as show_rp_nav %}
 {% if show_rp_nav %}
-<div class="sidebar-section">
-    <div class="sidebar-section-title">
-        <i class="bi bi-shield-lock"></i>
-        <span>Roles & Permissions</span>
-    </div>
-
-    {% can "roles.view" %}
-    <a href="{% url 'role_permission:role_list' %}"
-       class="sidebar-nav-item {% if request.resolver_match.url_name == 'role_list' %}active{% endif %}">
-        <div class="sidebar-nav-icon"><i class="bi bi-person-badge"></i></div>
-        <span class="sidebar-nav-label">Roles</span>
-    </a>
-    {% endcan %}
-
-    {% can "members.view" %}
-    <a href="{% url 'role_permission:member_list' %}"
-       class="sidebar-nav-item {% if 'member_' in request.resolver_match.url_name %}active{% endif %}">
-        <div class="sidebar-nav-icon"><i class="bi bi-people"></i></div>
-        <span class="sidebar-nav-label">Members</span>
-    </a>
-    {% endcan %}
-
-    {% can "permissions.view" %}
-    <a href="{% url 'role_permission:permission_catalog' %}"
-       class="sidebar-nav-item {% if 'permission' in request.resolver_match.url_name %}active{% endif %}">
-        <div class="sidebar-nav-icon"><i class="bi bi-key"></i></div>
-        <span class="sidebar-nav-label">Permissions</span>
-    </a>
-    {% endcan %}
-
-    {% can "audit.view" %}
-    <a href="{% url 'role_permission:audit_log' %}"
-       class="sidebar-nav-item {% if 'audit' in request.resolver_match.url_name %}active{% endif %}">
-        <div class="sidebar-nav-icon"><i class="bi bi-journal-text"></i></div>
-        <span class="sidebar-nav-label">Audit log</span>
-    </a>
-    {% endcan %}
+<div class="sidebar-section-title" style="padding-left: var(--space-3); margin-top: var(--space-3);">
+    <i class="bi bi-shield-lock"></i>
+    <span>Roles & Permissions</span>
 </div>
+
+{% can "roles.view" %}
+<a href="{% url 'role_permission:role_list' %}"
+   class="sidebar-nav-item {% if request.resolver_match.app_name == 'role_permission' and 'role_' in request.resolver_match.url_name %}active{% endif %}">
+    <div class="sidebar-nav-icon"><i class="bi bi-person-badge"></i></div>
+    <span class="sidebar-nav-label">Roles</span>
+</a>
+{% endcan %}
+
+{% can "permissions.view" %}
+<a href="{% url 'role_permission:permission_catalog' %}"
+   class="sidebar-nav-item {% if request.resolver_match.app_name == 'role_permission' and 'permission' in request.resolver_match.url_name %}active{% endif %}">
+    <div class="sidebar-nav-icon"><i class="bi bi-key"></i></div>
+    <span class="sidebar-nav-label">Permissions</span>
+</a>
+{% endcan %}
+
+{% can "audit.view" %}
+<a href="{% url 'role_permission:audit_log' %}"
+   class="sidebar-nav-item {% if request.resolver_match.app_name == 'role_permission' and 'audit' in request.resolver_match.url_name %}active{% endif %}">
+    <div class="sidebar-nav-icon"><i class="bi bi-journal-text"></i></div>
+    <span class="sidebar-nav-label">Audit log</span>
+</a>
+{% endcan %}
+
+{% can "permissions.override_grant" %}
+<a href="{% url 'role_permission:override_list' %}"
+   class="sidebar-nav-item {% if request.resolver_match.app_name == 'role_permission' and 'override' in request.resolver_match.url_name %}active{% endif %}">
+    <div class="sidebar-nav-icon"><i class="bi bi-person-check"></i></div>
+    <span class="sidebar-nav-label">User overrides</span>
+</a>
+{% endcan %}
 {% endif %}

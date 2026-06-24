@@ -3,6 +3,10 @@
 
 {% block title %}Add member - {{ APP_NAME }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'permissions/css/role_permission.css' %}">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid p-0">
     {% include "components/messages.html" %}

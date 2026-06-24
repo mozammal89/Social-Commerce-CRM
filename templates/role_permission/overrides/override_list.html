@@ -1,0 +1,198 @@
+{% extends "layouts/dashboard.html" %}
+{% load rbac %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}User overrides - {{ APP_NAME }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'permissions/css/role_permission.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    {% include "components/messages.html" %}
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">
+                {% if is_superuser %}All overrides{% else %}User overrides{% endif %}
+            </h1>
+            <p class="text-muted mb-0">
+                Grant or deny a specific permission to a single user, independent of their role.
+                {% if not is_superuser %}
+                Overrides here apply to {{ current_store.name }} unless set globally.
+                {% endif %}
+            </p>
+        </div>
+        {% if can_manage %}
+        <a href="{% url 'role_permission:override_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i> New override
+        </a>
+        {% endif %}
+    </div>
+
+    {# Filters #}
+    <form method="get" class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="q" class="visually-hidden">Search</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input
+                            id="q" name="q" type="search"
+                            value="{{ search_query }}"
+                            placeholder="Search by user, permission, or reason…"
+                            class="form-control"
+                            data-debounce="300" data-auto-submit
+                        />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label for="kind" class="visually-hidden">Kind</label>
+                    <select id="kind" name="kind" class="form-select" data-auto-submit>
+                        <option value="">All kinds</option>
+                        <option value="grant" {% if kind_filter == "grant" %}selected{% endif %}>Grants</option>
+                        <option value="deny" {% if kind_filter == "deny" %}selected{% endif %}>Denies</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="active" class="visually-hidden">Active</label>
+                    <select id="active" name="active" class="form-select" data-auto-submit>
+                        <option value="">All</option>
+                        <option value="yes" {% if active_filter == "yes" %}selected{% endif %}>Active now</option>
+                        <option value="no" {% if active_filter == "no" %}selected{% endif %}>Expired</option>
+                    </select>
+                </div>
+                {% if is_superuser %}
+                <div class="col-md-2">
+                    <label for="store" class="visually-hidden">Store</label>
+                    <select id="store" name="store" class="form-select" data-auto-submit>
+                        <option value="">All stores</option>
+                        {% for s in admin_stores %}
+                        <option value="{{ s.id }}" {% if store_filter == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+
+    {% if not overrides %}
+        <div class="card">
+            <div class="card-body">
+                {% if search_query or kind_filter or active_filter %}
+                    {% include "components/empty_state.html" with empty_state_icon="search" empty_state_title="No matches" empty_state_message="Try adjusting your filters." %}
+                {% else %}
+                    {% include "components/empty_state.html" with empty_state_icon="person-check" empty_state_title="No overrides yet" empty_state_message="Create one to grant or deny a specific permission to a single user." %}
+                    {% if can_manage %}
+                    <div class="text-center mt-3">
+                        <a href="{% url 'role_permission:override_create' %}" class="btn btn-primary">
+                            <i class="bi bi-plus-lg me-1"></i> Create override
+                        </a>
+                    </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    {% else %}
+        <div class="card border-0 shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>User</th>
+                            <th>Permission</th>
+                            <th>Scope</th>
+                            <th>Kind</th>
+                            <th>Reason / Expires</th>
+                            {% if can_manage %}<th class="text-end">Actions</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for o in overrides %}
+                        <tr data-override-id="{{ o.id }}">
+                            <td>
+                                <div class="fw-semibold">{% if o.user.get_full_name %}{{ o.user.get_full_name }}{% else %}{{ o.user.email }}{% endif %}</div>
+                                <div class="text-muted small">{{ o.user.email }}</div>
+                            </td>
+                            <td>
+                                <code class="small">{{ o.permission.code }}</code>
+                                <div class="text-muted small">{{ o.permission.name }}</div>
+                            </td>
+                            <td>
+                                {% if o.store %}
+                                <span class="badge bg-light text-dark">{{ o.store.name }}</span>
+                                {% else %}
+                                <span class="badge bg-info-subtle text-info-emphasis">All stores</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if o.is_granted %}
+                                <span class="badge bg-success-subtle text-success-emphasis">
+                                    <i class="bi bi-check-circle me-1"></i>Grant
+                                </span>
+                                {% else %}
+                                <span class="badge bg-danger-subtle text-danger-emphasis">
+                                    <i class="bi bi-slash-circle me-1"></i>Deny
+                                </span>
+                                {% endif %}
+                                {% if not o.is_active %}
+                                <div class="text-muted small mt-1">
+                                    <i class="bi bi-clock-history"></i> Expired
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if o.reason %}
+                                <div class="small">{{ o.reason|truncatechars:40 }}</div>
+                                {% endif %}
+                                {% if o.expires_at %}
+                                <div class="text-muted small">
+                                    expires {{ o.expires_at|date:"M j, Y H:i" }}
+                                </div>
+                                {% elif o.granted_by %}
+                                <div class="text-muted small">
+                                    by {{ o.granted_by.email }}
+                                </div>
+                                {% endif %}
+                            </td>
+                            {% if can_manage %}
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'role_permission:override_edit' override_id=o.id %}"
+                                       class="btn btn-outline-secondary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <form method="post" action="{% url 'role_permission:override_delete' override_id=o.id %}"
+                                          class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-outline-danger"
+                                                data-action="confirm"
+                                                data-confirm-message="Remove this override? The user will fall back to their role permissions.">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            {% include "components/pagination.html" %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_bottom_content %}
+{{ block.super }}
+<script type="module" src="{% static 'permissions/js/rp/app.js' %}"></script>
+{% endblock %}

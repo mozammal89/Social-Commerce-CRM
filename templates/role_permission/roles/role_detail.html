@@ -5,6 +5,10 @@
 
 {% block title %}{{ role.name }} - {{ APP_NAME }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'permissions/css/role_permission.css' %}">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid p-0">
     {% include "components/messages.html" %}
@@ -126,8 +130,7 @@
                         <span class="badge bg-light text-dark ms-2">{{ group.resource.category }}</span>
                     </div>
                     <span class="text-muted small">
-                        {% with granted=0 %}{% for p in group.permissions %}{% if p.granted %}{% endif %}{% endfor %}{% endwith %}
-                        {{ group.permissions|length }} actions
+                        {{ group.granted_count }} / {{ group.total_count }} actions
                     </span>
                 </div>
             </summary>
@@ -185,4 +188,5 @@
 {{ block.super }}
 <script type="module" src="{% static 'permissions/js/rp/app.js' %}"></script>
 <script type="module" src="{% static 'permissions/js/rp/matrix.js' %}"></script>
+<script type="module" src="{% static 'permissions/js/rp/matrix-controls.js' %}"></script>
 {% endblock %}

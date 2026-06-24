@@ -1,0 +1,185 @@
+{% extends "layouts/dashboard.html" %}
+{% load rbac %}
+{% load static %}
+
+{% block title %}{% if object %}Edit override - {{ APP_NAME }}{% else %}New user override - {{ APP_NAME }}{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'permissions/css/role_permission.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    {% include "components/messages.html" %}
+
+    {# ---------- Header ---------- #}
+    <div class="d-flex flex-wrap justify-content-between align-items-start mb-4">
+        <div>
+            <nav aria-label="breadcrumb" class="mb-2">
+                <ol class="breadcrumb mb-0 small">
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'role_permission:override_list' %}" class="text-decoration-none">
+                            User overrides
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">
+                        {% if object %}Edit{% else %}New{% endif %}
+                    </li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-1 d-flex align-items-center gap-2">
+                <span class="rp-icon-bubble rp-icon-bubble--brand">
+                    <i class="bi bi-person-gear"></i>
+                </span>
+                {% if object %}Edit override{% else %}New user override{% endif %}
+            </h1>
+            <p class="text-muted mb-0">
+                {% if object %}
+                Update the override for <strong>{{ object.user.email }}</strong>.
+                {% else %}
+                Grant or deny a specific permission for a single user.
+                {% endif %}
+            </p>
+        </div>
+        <div class="d-flex gap-2 mt-3 mt-md-0">
+            <a href="{% url 'role_permission:override_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-x-lg me-1"></i> Cancel
+            </a>
+        </div>
+    </div>
+
+    <form method="post" novalidate>
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">
+            {% for err in form.non_field_errors %}<p class="mb-0">{{ err }}</p>{% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="row g-4">
+            {# =================== Left column — main fields =================== #}
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm rp-override-card">
+                    <div class="card-header bg-white border-0 pb-0">
+                        <h2 class="h6 mb-0 d-flex align-items-center gap-2">
+                            <i class="bi bi-person-badge text-primary"></i> Override details
+                        </h2>
+                    </div>
+                    <div class="card-body">
+
+                        {# User #}
+                        <div class="mb-3">
+                            <label for="{{ form.user.id_for_label }}" class="form-label fw-semibold">
+                                User <span class="text-danger">*</span>
+                            </label>
+                            {{ form.user }}
+                            {% if form.user.errors %}<div class="invalid-feedback d-block">{{ form.user.errors.0 }}</div>{% endif %}
+                            <div class="form-text">The user receiving this override.</div>
+                        </div>
+
+                        {# Permission #}
+                        <div class="mb-3">
+                            <label for="{{ form.permission.id_for_label }}" class="form-label fw-semibold">
+                                Permission <span class="text-danger">*</span>
+                            </label>
+                            {{ form.permission }}
+                            {% if form.permission.errors %}<div class="invalid-feedback d-block">{{ form.permission.errors.0 }}</div>{% endif %}
+                            <div class="form-text">The specific permission code, e.g. <code>orders.refund</code>.</div>
+                        </div>
+
+                        {# Type — large segmented toggle #}
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold d-block">
+                                Type <span class="text-danger">*</span>
+                            </label>
+                            <div class="rp-grant-radios d-flex gap-2 flex-wrap">
+                                {% for radio in form.is_granted %}
+                                <label class="rp-grant-radio flex-fill" for="{{ radio.id_for_label }}">
+                                    <input type="radio" name="{{ radio.data.name }}" value="{{ radio.data.value }}"
+                                           id="{{ radio.id_for_label }}"
+                                           {% if radio.data.selected %}checked{% endif %}>
+                                    <div class="rp-grant-radio__inner {% if radio.data.value == 'True' %}rp-grant-radio--grant{% else %}rp-grant-radio--deny{% endif %}">
+                                        <i class="bi {% if radio.data.value == 'True' %}bi-check-circle-fill{% else %}bi-slash-circle-fill{% endif %}"></i>
+                                        <strong>{% if radio.data.value == 'True' %}Grant{% else %}Deny{% endif %}</strong>
+                                        <small class="d-block text-muted">
+                                            {% if radio.data.value == 'True' %}Adds the permission.{% else %}Blocks the permission absolutely.{% endif %}
+                                        </small>
+                                    </div>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            {% if form.is_granted.errors %}<div class="invalid-feedback d-block">{{ form.is_granted.errors.0 }}</div>{% endif %}
+                        </div>
+
+                        {# Expires at + Reason in 2 cols #}
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.expires_at.id_for_label }}" class="form-label fw-semibold">
+                                    Expires at
+                                    <span class="badge bg-light text-muted ms-1">Optional</span>
+                                </label>
+                                {{ form.expires_at }}
+                                {% if form.expires_at.errors %}<div class="invalid-feedback d-block">{{ form.expires_at.errors.0 }}</div>{% endif %}
+                                <div class="form-text">If set, the override stops applying at this time.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="{{ form.reason.id_for_label }}" class="form-label fw-semibold">
+                                    Reason
+                                    <span class="badge bg-light text-muted ms-1">Recommended</span>
+                                </label>
+                                {{ form.reason }}
+                                {% if form.reason.errors %}<div class="invalid-feedback d-block">{{ form.reason.errors.0 }}</div>{% endif %}
+                                <div class="form-text">Shown in the audit log (ticket #, short note).</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# =================== Right column — help =================== #}
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm mb-3 bg-light-subtle">
+                    <div class="card-body">
+                        <h2 class="h6 mb-2 d-flex align-items-center gap-2">
+                            <i class="bi bi-info-circle text-info"></i> How overrides work
+                        </h2>
+                        <ul class="small mb-0 ps-3 text-muted">
+                            <li>An override applies <strong>on top of</strong> the user's role.</li>
+                            <li><strong>Grant</strong> gives a permission the user does not have.</li>
+                            <li><strong>Deny</strong> blocks a permission even if a role grants it.</li>
+                            <li>If both Grant and Deny exist, <strong>Deny wins</strong>.</li>
+                            <li>Cross-store overrides are reserved for super admins.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                {% if not is_superuser %}
+                <div class="alert alert-warning small mb-0" role="alert">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    You can only create overrides within <strong>{{ current_store.name }}</strong>.
+                    Cross-store overrides require super admin privileges.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ---------- Sticky action bar ---------- #}
+        <div class="rp-action-bar mt-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="text-muted small">
+                <i class="bi bi-info-circle me-1"></i>
+                Changes are recorded in the audit log.
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'role_permission:override_list' %}" class="btn btn-outline-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>
+                    {% if object %}Save changes{% else %}Create override{% endif %}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

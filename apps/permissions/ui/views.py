@@ -24,12 +24,16 @@ from django.db.models import Count, Prefetch, Q
 from django.http import (
     HttpRequest,
     HttpResponse,
+    HttpResponseRedirect,
     JsonResponse,
 )
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
 from django.views import View
 from django.views.generic import (
     CreateView,
+    DeleteView,
     DetailView,
     ListView,
     UpdateView,
@@ -41,6 +45,7 @@ from apps.permissions.models import (
     Resource,
     Role,
     StoreMembership,
+    UserPermissionOverride,
 )
 from apps.permissions.services import user_has_permission
 from apps.stores.models import Store
@@ -49,11 +54,12 @@ from .constants import (
     PERM_AUDIT_VIEW,
     PERM_MEMBERS_MANAGE,
     PERM_MEMBERS_VIEW,
+    PERM_PERMISSIONS_OVERRIDE,
     PERM_PERMISSIONS_VIEW,
     PERM_ROLES_MANAGE,
     PERM_ROLES_VIEW,
 )
-from .forms import MembershipForm, RoleCloneForm, RoleForm
+from .forms import MembershipForm, RoleCloneForm, RoleForm, UserOverrideForm
 from .mixins import (
     StoreScopedPermissionMixin,
     SuperuserOnlyMixin,
@@ -175,18 +181,21 @@ class RoleDetailView(StoreScopedPermissionMixin, DetailView):
         grouped = []
         for resource in resources:
             perms = list(resource.permissions.all())
+            perm_data = [
+                {
+                    "id": str(p.id),
+                    "code": p.code,
+                    "action": p.action,
+                    "name": p.name,
+                    "granted": str(p.id) in role_perm_ids,
+                }
+                for p in perms
+            ]
             grouped.append({
                 "resource": resource,
-                "permissions": [
-                    {
-                        "id": str(p.id),
-                        "code": p.code,
-                        "action": p.action,
-                        "name": p.name,
-                        "granted": str(p.id) in role_perm_ids,
-                    }
-                    for p in perms
-                ],
+                "permissions": perm_data,
+                "granted_count": sum(1 for p in perm_data if p["granted"]),
+                "total_count": len(perm_data),
             })
 
         ctx["grouped_permissions"] = grouped
@@ -221,6 +230,13 @@ class RoleCreateView(StoreScopedPermissionMixin, CreateView):
     def get_initial(self):
         return super().get_initial() | {"is_active": True}
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        ctx = super().get_context_data(**kwargs)
+        ctx["grouped_permissions"] = build_permission_groups(self.object, ctx.get("form"))
+        ctx["current_store"] = self.get_current_store()
+        ctx["is_superuser"] = self.request.user.is_superuser
+        return ctx
+
     def form_valid(self, form):
         store = self.get_current_store()
         is_system = (
@@ -240,8 +256,8 @@ class RoleCreateView(StoreScopedPermissionMixin, CreateView):
             services.set_role_permissions(
                 actor=self.request.user,
                 role=role,
-                permission_ids=form.cleaned_data.get("permissions", []),
-                modifier=form.cleaned_data.get("modifier", "grant"),
+                permission_ids=[p.id for p in form.cleaned_data.get("permissions", [])],
+                modifier="grant",
                 request=self.request,
             )
         except (PermissionError, ValueError) as exc:
@@ -270,6 +286,13 @@ class RoleUpdateView(StoreScopedPermissionMixin, UpdateView):
         kwargs["store"] = self.get_current_store()
         return kwargs
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        ctx = super().get_context_data(**kwargs)
+        ctx["grouped_permissions"] = build_permission_groups(self.object, ctx.get("form"))
+        ctx["current_store"] = self.get_current_store()
+        ctx["is_superuser"] = self.request.user.is_superuser
+        return ctx
+
     def form_valid(self, form):
         role = self.object
         try:
@@ -285,8 +308,8 @@ class RoleUpdateView(StoreScopedPermissionMixin, UpdateView):
             services.set_role_permissions(
                 actor=self.request.user,
                 role=role,
-                permission_ids=form.cleaned_data.get("permissions", []),
-                modifier=form.cleaned_data.get("modifier", "grant"),
+                permission_ids=[p.id for p in form.cleaned_data.get("permissions", [])],
+                modifier="grant",
                 request=self.request,
             )
         except (PermissionError, ValueError) as exc:
@@ -526,6 +549,190 @@ class MemberDeactivateView(StoreScopedPermissionMixin, View):
         return JsonResponse({"membership_id": str(membership.id), "is_active": False})
 
 
+class MemberReactivateView(StoreScopedPermissionMixin, View):
+    """Reactivate a previously deactivated membership (AJAX)."""
+
+    required_permission = PERM_MEMBERS_MANAGE
+
+    def post(self, request: HttpRequest, membership_id: str) -> JsonResponse:
+        membership = get_object_or_404(
+            StoreMembership,
+            id=membership_id,
+            store=self.get_current_store(),
+        )
+        try:
+            services.reactivate_member(
+                actor=request.user, membership=membership, request=request,
+            )
+        except PermissionError as exc:
+            return JsonResponse({"error": str(exc)}, status=403)
+        return JsonResponse({"membership_id": str(membership.id), "is_active": True})
+
+
+# ---------------------------------------------------------------------------
+# User permission overrides
+# ---------------------------------------------------------------------------
+class OverrideListView(StoreScopedPermissionMixin, ListView):
+    """List per-user permission overrides (grants and denies)."""
+
+    template_name = "role_permission/overrides/override_list.html"
+    context_object_name = "overrides"
+    paginate_by = 25
+    required_permission = PERM_PERMISSIONS_OVERRIDE
+
+    def get_queryset(self):
+        qs = (
+            UserPermissionOverride.objects
+            .select_related("user", "permission", "permission__resource", "store", "granted_by")
+        )
+
+        if self.request.user.is_superuser:
+            store_filter = self.request.GET.get("store")
+            if store_filter:
+                qs = qs.filter(store_id=store_filter)
+        else:
+            store = self.get_current_store()
+            qs = qs.filter(Q(store__isnull=True) | Q(store=store))
+
+        search = self.request.GET.get("q", "").strip()
+        if search:
+            qs = qs.filter(
+                Q(user__email__icontains=search)
+                | Q(user__first_name__icontains=search)
+                | Q(user__last_name__icontains=search)
+                | Q(permission__code__icontains=search)
+                | Q(reason__icontains=search)
+            )
+
+        kind = self.request.GET.get("kind")
+        if kind in ("grant", "deny"):
+            qs = qs.filter(is_granted=(kind == "grant"))
+
+        active = self.request.GET.get("active")
+        if active == "yes":
+            qs = qs.filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
+        elif active == "no":
+            qs = qs.filter(expires_at__lte=timezone.now())
+
+        return qs.order_by("-created_at")
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        ctx = super().get_context_data(**kwargs)
+        ctx["current_store"] = self.get_current_store()
+        ctx["is_superuser"] = self.request.user.is_superuser
+
+        if self.request.user.is_superuser:
+            ctx["admin_stores"] = get_user_stores_for_admin(self.request.user)
+        else:
+            store = self.get_current_store()
+            ctx["admin_stores"] = (
+                Store.objects.filter(id=store.id) if store else Store.objects.none()
+            )
+
+        ctx["can_manage"] = (
+            self.request.user.is_superuser
+            or (ctx["current_store"] and user_has_permission(
+                self.request.user, ctx["current_store"], PERM_PERMISSIONS_OVERRIDE,
+            ))
+        )
+        ctx["search_query"] = self.request.GET.get("q", "")
+        ctx["kind_filter"] = self.request.GET.get("kind", "")
+        ctx["active_filter"] = self.request.GET.get("active", "")
+        ctx["store_filter"] = self.request.GET.get("store", "")
+        return ctx
+
+
+class OverrideCreateView(StoreScopedPermissionMixin, CreateView):
+    """Create a new per-user override."""
+
+    template_name = "role_permission/overrides/override_form.html"
+    form_class = UserOverrideForm
+    required_permission = PERM_PERMISSIONS_OVERRIDE
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["actor"] = self.request.user
+        kwargs["store"] = self.get_current_store()
+        return kwargs
+
+    def form_valid(self, form):
+        try:
+            override = services.set_user_override(
+                actor=self.request.user,
+                target_user=form.cleaned_data["user"],
+                store=self.get_current_store(),
+                permission=form.cleaned_data["permission"],
+                is_granted=form.cleaned_data["is_granted"],
+                reason=form.cleaned_data.get("reason", ""),
+                expires_at=form.cleaned_data.get("expires_at"),
+                request=self.request,
+            )
+        except PermissionError as exc:
+            messages.error(self.request, str(exc))
+            return self.form_invalid(form)
+
+        messages.success(
+            self.request,
+            f"Override for {form.cleaned_data['user'].email} saved.",
+        )
+        return redirect("role_permission:override_list")
+
+
+class OverrideUpdateView(StoreScopedPermissionMixin, UpdateView):
+    """Edit an existing override."""
+
+    template_name = "role_permission/overrides/override_form.html"
+    form_class = UserOverrideForm
+    model = UserPermissionOverride
+    required_permission = PERM_PERMISSIONS_OVERRIDE
+    pk_url_kwarg = "override_id"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["actor"] = self.request.user
+        kwargs["store"] = self.get_current_store()
+        return kwargs
+
+    def form_valid(self, form):
+        override = self.object
+        try:
+            services.set_user_override(
+                actor=self.request.user,
+                target_user=form.cleaned_data["user"],
+                store=override.store,
+                permission=form.cleaned_data["permission"],
+                is_granted=form.cleaned_data["is_granted"],
+                reason=form.cleaned_data.get("reason", ""),
+                expires_at=form.cleaned_data.get("expires_at"),
+                request=self.request,
+            )
+        except PermissionError as exc:
+            messages.error(self.request, str(exc))
+            return self.form_invalid(form)
+
+        messages.success(self.request, "Override updated.")
+        return redirect("role_permission:override_list")
+
+
+class OverrideDeleteView(StoreScopedPermissionMixin, View):
+    """Remove a per-user override (POST-only)."""
+
+    required_permission = PERM_PERMISSIONS_OVERRIDE
+
+    def post(self, request: HttpRequest, override_id: str) -> HttpResponse:
+        override = get_object_or_404(UserPermissionOverride, id=override_id)
+        try:
+            services.clear_user_override(
+                actor=request.user, override=override, request=request,
+            )
+        except PermissionError as exc:
+            messages.error(request, str(exc))
+            return redirect("role_permission:override_list")
+
+        messages.success(request, "Override removed.")
+        return redirect("role_permission:override_list")
+
+
 # ---------------------------------------------------------------------------
 # Permission catalog (read-only)
 # ---------------------------------------------------------------------------
@@ -621,3 +828,75 @@ class AuditLogExportView(SuperuserOnlyMixin, View):
                 row.request_id or "",
             ])
         return response
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def build_permission_groups(role, form):
+    """
+    Return the permission registry grouped by Resource, ready for rendering.
+
+    Each entry is a dict suitable for the role form's grouped layout:
+        {
+            "resource": Resource instance,
+            "permissions": [ {id, code, action, name, granted, choice} ],
+            "granted_count": int,
+            "total_count": int,
+        }
+    Where ``choice`` is the BoundField for the form's `permissions` M2M
+    field that matches the permission id, so the template can render
+    `<input type="checkbox">` without iterating the whole flat M2M.
+    """
+    # Index BoundField choices by permission id (string)
+    field = form["permissions"] if form else None
+    choices_by_id: dict[str, Any] = {}
+    if field is not None:
+        # `field` is a BoundField; its subwidgets are the checkboxes
+        for choice in field:
+            # subwidget name ends with the value; the value is at the end
+            value = choice.data.get("value") if isinstance(choice.data, dict) else None
+            if value is not None:
+                choices_by_id[str(value)] = choice
+
+    selected_ids: set[str] = set()
+    if role is not None and getattr(role, "pk", None):
+        selected_ids = {
+            str(pid)
+            for pid in role.role_permissions.values_list("permission_id", flat=True)
+        }
+
+    resources = (
+        Resource.objects
+        .filter(is_active=True)
+        .prefetch_related(
+            Prefetch("permissions", queryset=Permission.objects.order_by("action"))
+        )
+        .order_by("category", "code")
+    )
+
+    groups = []
+    for resource in resources:
+        perms = list(resource.permissions.all())
+        perm_data = []
+        granted = 0
+        for p in perms:
+            pid = str(p.id)
+            is_selected = pid in selected_ids
+            if is_selected:
+                granted += 1
+            perm_data.append({
+                "id": pid,
+                "code": p.code,
+                "action": p.action,
+                "name": p.name,
+                "granted": is_selected,
+                "choice": choices_by_id.get(pid),
+            })
+        groups.append({
+            "resource": resource,
+            "permissions": perm_data,
+            "granted_count": granted,
+            "total_count": len(perm_data),
+        })
+    return groups

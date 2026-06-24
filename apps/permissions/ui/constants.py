@@ -17,5 +17,10 @@ PERM_AUDIT_VIEW = "audit.view"
 # Mutating resources managed by the UI.
 PERM_ROLES_MANAGE = "roles.manage"
 PERM_MEMBERS_MANAGE = "members.manage"
-PERM_OVERRIDE_GRANT = "permissions.override_grant"
+PERM_PERMISSIONS_OVERRIDE = "permissions.override_grant"
 PERM_SYSTEM_ROLES_MANAGE = "roles.manage_system"  # superuser only
+
+# ---- Backwards-compatible aliases ----------------------------------------
+# Older code referenced ``PERM_OVERRIDE_GRANT``; keep it as an alias so
+# external imports don't break.
+PERM_OVERRIDE_GRANT = PERM_PERMISSIONS_OVERRIDE
