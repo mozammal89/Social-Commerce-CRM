@@ -31,6 +31,18 @@ CORS_ALLOWED_ORIGINS = []
 AXES_FAILURE_LIMIT = 10
 AXES_COOLOFF_TIME = 1800
 
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=[
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:8003",
+        "http://localhost:8003",
+    ],
+)
+
 # LOGGING["loggers"]["django"]["level"] = "DEBUG"
 # LOGGING["loggers"]["apps"]["level"] = "DEBUG"
 
@@ -38,3 +50,17 @@ REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [
     "rest_framework.renderers.JSONRenderer",
     "rest_framework.renderers.BrowsableAPIRenderer",
 ]
+
+# CSRF_TRUSTED_ORIGINS: Required for CSRF protection when accessing from different domains/IPs
+# Must include the scheme (http:// or https://)
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=[
+        "http://localhost",
+        "http://localhost:8000",
+        "http://127.0.0.1",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:8003",
+        "http://localhost:8003",
+    ],
+)
