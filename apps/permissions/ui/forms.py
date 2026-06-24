@@ -5,9 +5,10 @@ Forms for the role/permission management UI.
 from __future__ import annotations
 
 from django import forms
+from django.contrib.auth import get_user_model
 from django.db.models import Q
 
-from apps.permissions.constants import MODIFIER_CHOICES, MODIFIER_GRANT
+from apps.permissions.constants import MODIFIER_GRANT
 from apps.permissions.models import (
     Permission,
     Role,
@@ -27,13 +28,6 @@ class RoleForm(forms.ModelForm):
         help_text="Select which permissions this role grants.",
     )
 
-    modifier = forms.ChoiceField(
-        choices=MODIFIER_CHOICES,
-        initial=MODIFIER_GRANT,
-        widget=forms.RadioSelect,
-        help_text="Grant allows the action; Deny explicitly forbids it.",
-    )
-
     class Meta:
         model = Role
         fields = ("name", "description", "level", "is_active", "inherits_from")
@@ -42,7 +36,7 @@ class RoleForm(forms.ModelForm):
         }
 
     def __init__(self, *args, actor=None, store=None, **kwargs):
-        super().__init__(*args)
+        super().__init__(*args, **kwargs)
         self.fields["permissions"].queryset = (
             Permission.objects
             .select_related("resource")
@@ -107,7 +101,7 @@ class MembershipForm(forms.Form):
     )
 
     def __init__(self, *args, store=None, **kwargs):
-        super().__init__(*args)
+        super().__init__(*args, **kwargs)
         if store is not None:
             self.fields["role"].queryset = (
                 Role.objects
@@ -146,19 +140,30 @@ class MembershipForm(forms.Form):
 class UserOverrideForm(forms.ModelForm):
     """Form for setting a per-user permission override."""
 
+    user = forms.ModelChoiceField(
+        queryset=get_user_model().objects.all().order_by("email"),
+        label="User",
+        help_text="The user receiving the override.",
+    )
+
     class Meta:
         model = UserPermissionOverride
-        fields = ("permission", "is_granted", "reason", "expires_at")
+        fields = ("user", "permission", "is_granted", "reason", "expires_at")
         widgets = {
             "expires_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
         }
 
     def __init__(self, *args, actor=None, store=None, **kwargs):
-        super().__init__(*args)
+        super().__init__(*args, **kwargs)
         self.fields["permission"].queryset = (
             Permission.objects.select_related("resource")
             .order_by("resource__code", "action")
         )
+        # Only set initial user + lock the field if the override already
+        # has a user assigned. A fresh instance has no `user_id` yet.
+        if self.instance and self.instance.pk and getattr(self.instance, "user_id", None):
+            self.fields["user"].initial = self.instance.user
+            self.fields["user"].disabled = True
         if not (actor and actor.is_superuser):
             self.fields["store"] = forms.ModelChoiceField(
                 queryset=Store.objects.filter(id=store.id) if store else Store.objects.none(),

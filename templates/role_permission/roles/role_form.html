@@ -2,26 +2,62 @@
 {% load rbac %}
 {% load static %}
 
-{% block title %}{% if object %}Edit role - {{ APP_NAME }}{% else %}New role - {{ APP_NAME }}{% endif %}{% endblock %}
+{% block title %}{% if object %}Edit role - {{ APP_NAME }}{{ object.name }}{% else %}New role - {{ APP_NAME }}{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'permissions/css/role_permission.css' %}">
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid p-0">
     {% include "components/messages.html" %}
 
-    <div class="mb-4">
-        <h1 class="h3 mb-1">
-            {% if object %}Edit role: {{ object.name }}{% else %}Create new role{% endif %}
-        </h1>
-        <p class="text-muted mb-0">
-            {% if object %}
-                Update role details and the permission set.
-            {% else %}
-                Define a new role and choose which permissions it grants.
-            {% endif %}
-        </p>
+    {# ---------- Header ---------- #}
+    <div class="rp-page-header d-flex flex-wrap justify-content-between align-items-start mb-4">
+        <div>
+            <nav aria-label="breadcrumb" class="mb-2">
+                <ol class="breadcrumb mb-0 small">
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'role_permission:role_list' %}" class="text-decoration-none">Roles</a>
+                    </li>
+                    {% if object %}
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'role_permission:role_detail' role_id=object.id %}" class="text-decoration-none">
+                            {{ object.name }}
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">Edit</li>
+                    {% else %}
+                    <li class="breadcrumb-item active" aria-current="page">New role</li>
+                    {% endif %}
+                </ol>
+            </nav>
+            <h1 class="h3 mb-1 d-flex align-items-center gap-2">
+                <span class="rp-icon-bubble rp-icon-bubble--brand">
+                    <i class="bi bi-shield-plus"></i>
+                </span>
+                {% if object %}Edit role: {{ object.name }}{% else %}Create new role{% endif %}
+            </h1>
+            <p class="text-muted mb-0">
+                {% if object %}
+                    Update role details and the permission set.
+                {% else %}
+                    Define a new role and choose which permissions it grants.
+                {% endif %}
+            </p>
+        </div>
+        <div class="d-flex gap-2 mt-3 mt-md-0">
+            <a href="{% if object %}{% url 'role_permission:role_detail' role_id=object.id %}{% else %}{% url 'role_permission:role_list' %}{% endif %}"
+               class="btn btn-outline-secondary">
+                <i class="bi bi-x-lg me-1"></i> Cancel
+            </a>
+            <button type="submit" form="rp-role-form" class="btn btn-primary">
+                {% if object %}<i class="bi bi-check-lg me-1"></i>Save changes{% else %}<i class="bi bi-plus-lg me-1"></i>Create role{% endif %}
+            </button>
+        </div>
     </div>
 
-    <form method="post" novalidate>
+    <form method="post" novalidate id="rp-role-form" data-component="role-form">
         {% csrf_token %}
 
         {% if form.non_field_errors %}
@@ -31,86 +67,173 @@
         {% endif %}
 
         <div class="row g-4">
-            {# Left column — meta #}
+            {# =================== Left column — meta =================== #}
             <div class="col-lg-4">
+                {# Role details #}
                 <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-header bg-white border-0 pb-0">
+                        <h2 class="h6 mb-0 d-flex align-items-center gap-2">
+                            <i class="bi bi-card-text text-primary"></i> Role details
+                        </h2>
+                    </div>
                     <div class="card-body">
-                        <h2 class="h6 mb-3">Role details</h2>
-
                         <div class="mb-3">
-                            <label for="{{ form.name.id_for_label }}" class="form-label">Name *</label>
+                            <label for="{{ form.name.id_for_label }}" class="form-label fw-semibold">
+                                Name <span class="text-danger">*</span>
+                            </label>
                             {{ form.name }}
                             {% if form.name.errors %}<div class="invalid-feedback d-block">{{ form.name.errors.0 }}</div>{% endif %}
                         </div>
 
                         <div class="mb-3">
-                            <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
+                            <label for="{{ form.description.id_for_label }}" class="form-label fw-semibold">
+                                Description
+                            </label>
                             {{ form.description }}
                             <div class="form-text">Internal note shown to admins.</div>
                         </div>
 
                         <div class="mb-3">
-                            <label for="{{ form.level.id_for_label }}" class="form-label">Level</label>
-                            {{ form.level }}
-                            <div class="form-text">Higher levels are listed first; affects UI ordering only.</div>
+                            <label for="{{ form.level.id_for_label }}" class="form-label fw-semibold">
+                                Level
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-bar-chart-steps"></i></span>
+                                {{ form.level }}
+                            </div>
+                            <div class="form-text">Higher levels appear first in role lists.</div>
                         </div>
 
                         <div class="mb-3">
-                            <label for="{{ form.inherits_from.id_for_label }}" class="form-label">Inherits from</label>
+                            <label for="{{ form.inherits_from.id_for_label }}" class="form-label fw-semibold">
+                                Inherits from
+                            </label>
                             {{ form.inherits_from }}
+                            <div class="form-text">Used when cloning; new role starts with the parent's permission set.</div>
                         </div>
 
-                        <div class="form-check">
+                        <div class="form-check form-switch">
                             {{ form.is_active }}
-                            <label class="form-check-label" for="{{ form.is_active.id_for_label }}">Active</label>
+                            <label class="form-check-label fw-semibold" for="{{ form.is_active.id_for_label }}">
+                                Active
+                            </label>
+                            <div class="form-text">Inactive roles cannot be assigned to members.</div>
                         </div>
                     </div>
                 </div>
 
-                <div class="card border-0 shadow-sm">
+                {# Tips #}
+                <div class="card border-0 shadow-sm bg-light-subtle">
                     <div class="card-body">
-                        <h2 class="h6 mb-3">Modifier</h2>
-                        {% for radio in form.modifier %}
-                        <div class="form-check">
-                            {{ radio.tag }}
-                            <label class="form-check-label" for="{{ radio.id_for_label }}">
-                                <strong>{{ radio.choice_label }}</strong>
-                            </label>
-                        </div>
-                        {% endfor %}
+                        <h2 class="h6 mb-2 d-flex align-items-center gap-2">
+                            <i class="bi bi-lightbulb text-warning"></i> Tips
+                        </h2>
+                        <ul class="small mb-0 ps-3 text-muted">
+                            <li>Higher levels appear first in role lists.</li>
+                            <li>Custom roles inherit from a parent role's permission set when cloning.</li>
+                            <li>System roles can only be modified by super admins.</li>
+                            <li>Use the per-resource <kbd>Select all</kbd> to grant an entire module at once.</li>
+                        </ul>
                     </div>
                 </div>
             </div>
 
-            {# Right column — permissions #}
+            {# =================== Right column — permissions =================== #}
             <div class="col-lg-8">
                 <div class="card border-0 shadow-sm">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h2 class="h6 mb-0">Permissions</h2>
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="select-all">
-                                    <i class="bi bi-check-all"></i> Select all
+                    <div class="card-header bg-white border-0 pb-0">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <h2 class="h6 mb-0 d-flex align-items-center gap-2">
+                                <i class="bi bi-key text-primary"></i> Permissions
+                                <span class="badge bg-primary-subtle text-primary-emphasis ms-2"
+                                      data-permission-counter>
+                                    0 of 0 selected
+                                </span>
+                            </h2>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button type="button" class="btn btn-sm btn-outline-primary"
+                                        data-action="select-all">
+                                    <i class="bi bi-check-all me-1"></i> Select all
                                 </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="deselect-all">
-                                    <i class="bi bi-x-lg"></i> Deselect all
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        data-action="deselect-all">
+                                    <i class="bi bi-x-lg me-1"></i> Deselect all
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        data-action="invert-selection">
+                                    <i class="bi bi-arrow-left-right me-1"></i> Invert
                                 </button>
                             </div>
                         </div>
+                    </div>
 
+                    <div class="card-body">
                         {% if form.permissions.errors %}
                         <div class="alert alert-danger" role="alert">{{ form.permissions.errors.0 }}</div>
                         {% endif %}
 
-                        <div class="row g-2">
-                            {% for checkbox in form.permissions %}
-                            <div class="col-12 col-md-6">
-                                <div class="form-check">
-                                    {{ checkbox.tag }}
-                                    <label class="form-check-label" for="{{ checkbox.id_for_label }}">
-                                        <code class="small">{{ checkbox.choice_label }}</code>
-                                    </label>
+                        <div class="rp-permission-groups">
+                            {% for group in grouped_permissions %}
+                            <details class="rp-permission-group" open
+                                     data-permission-group="{{ group.resource.id }}">
+                                <summary class="rp-permission-group__header">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="bi bi-chevron-right rp-permission-group__chevron"></i>
+                                        <strong>{{ group.resource.name }}</strong>
+                                        <span class="badge bg-light text-dark border">
+                                            {{ group.resource.category }}
+                                        </span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="text-muted small">
+                                            <span data-group-counter>0 / {{ group.total_count }}</span>
+                                            <span class="d-none d-md-inline">actions</span>
+                                        </span>
+                                        <button type="button" class="btn btn-sm btn-link p-0"
+                                                data-action="group-select-all"
+                                                title="Select all in this group">
+                                            <i class="bi bi-check-all"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-link text-muted p-0"
+                                                data-action="group-deselect-all"
+                                                title="Deselect all in this group">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                </summary>
+
+                                {% if group.resource.description %}
+                                <p class="text-muted small mb-3 mt-2 ps-4">
+                                    {{ group.resource.description }}
+                                </p>
+                                {% endif %}
+
+                                <div class="rp-permission-grid">
+                                    {% for perm in group.permissions %}
+                                        {% if perm.choice %}
+                                        <label class="rp-permission-tile"
+                                               for="{{ perm.choice.id_for_label }}">
+                                            {{ perm.choice.tag }}
+                                            <div class="rp-permission-tile__body">
+                                                <code class="rp-permission-tile__code">{{ perm.code }}</code>
+                                                <span class="rp-permission-tile__action badge bg-secondary-subtle text-secondary-emphasis">
+                                                    {{ perm.action }}
+                                                </span>
+                                                {% if perm.name and perm.name != perm.code %}
+                                                <div class="rp-permission-tile__name small text-muted mt-1">
+                                                    {{ perm.name }}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </label>
+                                        {% endif %}
+                                    {% endfor %}
                                 </div>
+                            </details>
+                            {% empty %}
+                            <div class="text-center text-muted py-5">
+                                <i class="bi bi-key fs-1 d-block mb-2"></i>
+                                No resources registered. Run <code>python manage.py sync_permissions</code>.
                             </div>
                             {% endfor %}
                         </div>
@@ -119,11 +242,21 @@
             </div>
         </div>
 
-        <div class="d-flex justify-content-end gap-2 mt-4">
-            <a href="{% url 'role_permission:role_list' %}" class="btn btn-outline-secondary">Cancel</a>
-            <button type="submit" class="btn btn-primary">
-                {% if object %}<i class="bi bi-check-lg me-1"></i>Save changes{% else %}<i class="bi bi-plus-lg me-1"></i>Create role{% endif %}
-            </button>
+        {# ---------- Sticky action bar (bottom) ---------- #}
+        <div class="rp-action-bar mt-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="text-muted small">
+                <i class="bi bi-info-circle me-1"></i>
+                Permissions are saved when you click <strong>{% if object %}Save changes{% else %}Create role{% endif %}</strong>.
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% if object %}{% url 'role_permission:role_detail' role_id=object.id %}{% else %}{% url 'role_permission:role_list' %}{% endif %}"
+                   class="btn btn-outline-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    {% if object %}<i class="bi bi-check-lg me-1"></i>Save changes{% else %}<i class="bi bi-plus-lg me-1"></i>Create role{% endif %}
+                </button>
+            </div>
         </div>
     </form>
 </div>
@@ -131,5 +264,6 @@
 
 {% block extra_bottom_content %}
 {{ block.super }}
+<script type="module" src="{% static 'permissions/js/rp/app.js' %}"></script>
 <script type="module" src="{% static 'permissions/js/rp/role-form.js' %}"></script>
 {% endblock %}
