@@ -41,7 +41,7 @@ const initChangeRole = () => {
       select.disabled = true;
       try {
         await api.post(
-          `/dashboard/members/${membershipId}/change-role/`,
+          `/dashboard/roles/members/${membershipId}/change-role/`,
           { role_id: newRoleId },
         );
       } catch (err) {
@@ -67,7 +67,7 @@ const initDeactivate = () => {
       const membershipId = btn.dataset.membershipId;
       btn.disabled = true;
       try {
-        await api.post(`/dashboard/members/${membershipId}/deactivate/`);
+        await api.post(`/dashboard/roles/members/${membershipId}/deactivate/`);
         const row = btn.closest('tr');
         setRowInactive(row);
         // Swap the button to a Reactivate button.
@@ -103,7 +103,7 @@ const initReactivate = () => {
       const membershipId = btn.dataset.membershipId;
       btn.disabled = true;
       try {
-        await api.post(`/dashboard/members/${membershipId}/reactivate/`);
+        await api.post(`/dashboard/roles/members/${membershipId}/reactivate/`);
         const row = btn.closest('tr');
         setRowActive(row);
         // Swap the button to a Deactivate button.

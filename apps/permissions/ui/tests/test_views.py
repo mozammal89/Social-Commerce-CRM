@@ -642,6 +642,58 @@ class TestPermissionCatalogView:
 
 
 # ---------------------------------------------------------------------------
+# RoleCreateView / RoleUpdateView — grouped permission context
+# ---------------------------------------------------------------------------
+@pytest.mark.django_db
+class TestRoleFormGroupedPermissions:
+    def test_role_create_provides_grouped_permissions(
+        self, superuser, make_store, system_roles, permissions, rp_client,
+    ):
+        s = make_store("S")
+        login_as(rp_client, superuser)
+        set_store(rp_client, s)
+        res = rp_client.get(reverse("role_permission:role_create"))
+        assert res.status_code == 200
+        groups = res.context["grouped_permissions"]
+        assert len(groups) > 0
+        # Each group has resource, permissions, granted_count, total_count
+        for g in groups:
+            assert "resource" in g
+            assert "permissions" in g
+            assert "granted_count" in g
+            assert "total_count" in g
+            # Each permission has choice (BoundField) and code
+            for p in g["permissions"]:
+                assert p["choice"] is not None
+                assert p["code"]
+                assert "id" in p
+
+    def test_role_edit_marks_granted_permissions(
+        self, superuser, make_store, system_roles, permissions, rp_client,
+    ):
+        from apps.permissions.ui.services import create_role
+        from apps.permissions.models import RolePermission
+        from apps.permissions.constants import MODIFIER_GRANT
+
+        s = make_store("S")
+        login_as(rp_client, superuser)
+        set_store(rp_client, s)
+        role = create_role(actor=superuser, store=s, name="Custom")
+        RolePermission.objects.create(
+            role=role, permission=permissions["orders.view"], modifier=MODIFIER_GRANT,
+        )
+        res = rp_client.get(
+            reverse("role_permission:role_edit", kwargs={"role_id": str(role.id)}),
+        )
+        assert res.status_code == 200
+        groups = res.context["grouped_permissions"]
+        # Find the orders.view permission across all groups
+        granted = [p for g in groups for p in g["permissions"] if p["code"] == "orders.view"]
+        assert granted, "orders.view not present in groups"
+        assert granted[0]["granted"] is True
+
+
+# ---------------------------------------------------------------------------
 # AuditLogListView
 # ---------------------------------------------------------------------------
 @pytest.mark.django_db

@@ -230,6 +230,13 @@ class RoleCreateView(StoreScopedPermissionMixin, CreateView):
     def get_initial(self):
         return super().get_initial() | {"is_active": True}
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        ctx = super().get_context_data(**kwargs)
+        ctx["grouped_permissions"] = build_permission_groups(self.object, ctx.get("form"))
+        ctx["current_store"] = self.get_current_store()
+        ctx["is_superuser"] = self.request.user.is_superuser
+        return ctx
+
     def form_valid(self, form):
         store = self.get_current_store()
         is_system = (
@@ -278,6 +285,13 @@ class RoleUpdateView(StoreScopedPermissionMixin, UpdateView):
         kwargs["actor"] = self.request.user
         kwargs["store"] = self.get_current_store()
         return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        ctx = super().get_context_data(**kwargs)
+        ctx["grouped_permissions"] = build_permission_groups(self.object, ctx.get("form"))
+        ctx["current_store"] = self.get_current_store()
+        ctx["is_superuser"] = self.request.user.is_superuser
+        return ctx
 
     def form_valid(self, form):
         role = self.object
@@ -814,3 +828,75 @@ class AuditLogExportView(SuperuserOnlyMixin, View):
                 row.request_id or "",
             ])
         return response
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def build_permission_groups(role, form):
+    """
+    Return the permission registry grouped by Resource, ready for rendering.
+
+    Each entry is a dict suitable for the role form's grouped layout:
+        {
+            "resource": Resource instance,
+            "permissions": [ {id, code, action, name, granted, choice} ],
+            "granted_count": int,
+            "total_count": int,
+        }
+    Where ``choice`` is the BoundField for the form's `permissions` M2M
+    field that matches the permission id, so the template can render
+    `<input type="checkbox">` without iterating the whole flat M2M.
+    """
+    # Index BoundField choices by permission id (string)
+    field = form["permissions"] if form else None
+    choices_by_id: dict[str, Any] = {}
+    if field is not None:
+        # `field` is a BoundField; its subwidgets are the checkboxes
+        for choice in field:
+            # subwidget name ends with the value; the value is at the end
+            value = choice.data.get("value") if isinstance(choice.data, dict) else None
+            if value is not None:
+                choices_by_id[str(value)] = choice
+
+    selected_ids: set[str] = set()
+    if role is not None and getattr(role, "pk", None):
+        selected_ids = {
+            str(pid)
+            for pid in role.role_permissions.values_list("permission_id", flat=True)
+        }
+
+    resources = (
+        Resource.objects
+        .filter(is_active=True)
+        .prefetch_related(
+            Prefetch("permissions", queryset=Permission.objects.order_by("action"))
+        )
+        .order_by("category", "code")
+    )
+
+    groups = []
+    for resource in resources:
+        perms = list(resource.permissions.all())
+        perm_data = []
+        granted = 0
+        for p in perms:
+            pid = str(p.id)
+            is_selected = pid in selected_ids
+            if is_selected:
+                granted += 1
+            perm_data.append({
+                "id": pid,
+                "code": p.code,
+                "action": p.action,
+                "name": p.name,
+                "granted": is_selected,
+                "choice": choices_by_id.get(pid),
+            })
+        groups.append({
+            "resource": resource,
+            "permissions": perm_data,
+            "granted_count": granted,
+            "total_count": len(perm_data),
+        })
+    return groups
