@@ -17,7 +17,18 @@ class PlanLimitExceeded(SubscriptionError):
         self.current_value = current_value
         self.limit_value = limit_value
         if message is None:
-            message = f"Plan limit '{limit_type}' exceeded: {current_value}/{limit_value}"
+            # Make the error message more user-friendly
+            if limit_type == "max_users":
+                current_count = max(
+                    0, current_value - 1
+                )  # Subtract 1 to show current count before adding
+                message = (
+                    f"Unable to add team member. This would exceed your plan's limit of "
+                    f"{limit_value} team members (current: {current_count}/{limit_value}). "
+                    f"Please upgrade your subscription to add more members."
+                )
+            else:
+                message = f"Plan limit '{limit_type}' exceeded: {current_value}/{limit_value}"
         super().__init__(message)
 
 

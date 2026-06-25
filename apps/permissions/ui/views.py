@@ -82,10 +82,8 @@ class RoleListView(StoreScopedPermissionMixin, ListView):
     required_permission = PERM_ROLES_VIEW
 
     def get_queryset(self):
-        qs = (
-            Role.objects
-            .select_related("store", "inherits_from")
-            .annotate(permission_count=Count("role_permissions"))
+        qs = Role.objects.select_related("store", "inherits_from").annotate(
+            permission_count=Count("role_permissions")
         )
 
         if self.request.user.is_superuser:
@@ -99,7 +97,8 @@ class RoleListView(StoreScopedPermissionMixin, ListView):
         search = self.request.GET.get("q", "").strip()
         if search:
             qs = qs.filter(
-                Q(name__icontains=search) | Q(slug__icontains=search)
+                Q(name__icontains=search)
+                | Q(slug__icontains=search)
                 | Q(description__icontains=search)
             )
 
@@ -130,11 +129,13 @@ class RoleListView(StoreScopedPermissionMixin, ListView):
             (Role.LEVEL_VIEWER, "Viewer"),
             (Role.LEVEL_CUSTOM, "Custom"),
         ]
-        ctx["can_manage"] = (
-            self.request.user.is_superuser
-            or (current_store and user_has_permission(
-                self.request.user, current_store, PERM_ROLES_MANAGE,
-            ))
+        ctx["can_manage"] = self.request.user.is_superuser or (
+            current_store
+            and user_has_permission(
+                self.request.user,
+                current_store,
+                PERM_ROLES_MANAGE,
+            )
         )
         ctx["search_query"] = self.request.GET.get("q", "")
         ctx["level_filter"] = self.request.GET.get("level", "")
@@ -156,6 +157,7 @@ class RoleDetailView(StoreScopedPermissionMixin, DetailView):
             store = self.get_current_store()
             if role.store_id and role.store_id != store.id:
                 from django.core.exceptions import PermissionDenied
+
                 raise PermissionDenied
         return role
 
@@ -165,13 +167,11 @@ class RoleDetailView(StoreScopedPermissionMixin, DetailView):
         current_store = self.get_current_store()
 
         role_perm_ids = {
-            str(p) for p in
-            role.role_permissions.values_list("permission_id", flat=True)
+            str(p) for p in role.role_permissions.values_list("permission_id", flat=True)
         }
 
         resources = (
-            Resource.objects
-            .filter(is_active=True)
+            Resource.objects.filter(is_active=True)
             .prefetch_related(
                 Prefetch("permissions", queryset=Permission.objects.order_by("action"))
             )
@@ -191,12 +191,14 @@ class RoleDetailView(StoreScopedPermissionMixin, DetailView):
                 }
                 for p in perms
             ]
-            grouped.append({
-                "resource": resource,
-                "permissions": perm_data,
-                "granted_count": sum(1 for p in perm_data if p["granted"]),
-                "total_count": len(perm_data),
-            })
+            grouped.append(
+                {
+                    "resource": resource,
+                    "permissions": perm_data,
+                    "granted_count": sum(1 for p in perm_data if p["granted"]),
+                    "total_count": len(perm_data),
+                }
+            )
 
         ctx["grouped_permissions"] = grouped
         ctx["granted_count"] = len(role_perm_ids)
@@ -205,8 +207,11 @@ class RoleDetailView(StoreScopedPermissionMixin, DetailView):
         ctx["is_superuser"] = self.request.user.is_superuser
 
         can_manage = self.request.user.is_superuser or (
-            current_store and user_has_permission(
-                self.request.user, current_store, PERM_ROLES_MANAGE,
+            current_store
+            and user_has_permission(
+                self.request.user,
+                current_store,
+                PERM_ROLES_MANAGE,
             )
         )
         ctx["can_manage"] = can_manage and (not role.is_system or self.request.user.is_superuser)
@@ -239,9 +244,7 @@ class RoleCreateView(StoreScopedPermissionMixin, CreateView):
 
     def form_valid(self, form):
         store = self.get_current_store()
-        is_system = (
-            form.cleaned_data.get("is_system", False) and self.request.user.is_superuser
-        )
+        is_system = form.cleaned_data.get("is_system", False) and self.request.user.is_superuser
         try:
             role = services.create_role(
                 actor=self.request.user,
@@ -390,11 +393,13 @@ class RolePermissionToggleView(StoreScopedPermissionMixin, View):
         except json.JSONDecodeError:
             return JsonResponse({"error": "Invalid JSON body"}, status=400)
 
-        return JsonResponse({
-            "role_id": str(role.id),
-            "permission_id": str(permission_id),
-            "granted": granted,
-        })
+        return JsonResponse(
+            {
+                "role_id": str(role.id),
+                "permission_id": str(permission_id),
+                "granted": granted,
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -410,10 +415,8 @@ class MemberListView(StoreScopedPermissionMixin, ListView):
 
     def get_queryset(self):
         store = self.get_current_store()
-        qs = (
-            StoreMembership.objects
-            .filter(store=store)
-            .select_related("user", "role", "invited_by")
+        qs = StoreMembership.objects.filter(store=store).select_related(
+            "user", "role", "invited_by"
         )
         search = self.request.GET.get("q", "").strip()
         if search:
@@ -437,11 +440,13 @@ class MemberListView(StoreScopedPermissionMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         current_store = self.get_current_store()
         ctx["current_store"] = current_store
-        ctx["can_manage"] = (
-            self.request.user.is_superuser
-            or (current_store and user_has_permission(
-                self.request.user, current_store, PERM_MEMBERS_MANAGE,
-            ))
+        ctx["can_manage"] = self.request.user.is_superuser or (
+            current_store
+            and user_has_permission(
+                self.request.user,
+                current_store,
+                PERM_MEMBERS_MANAGE,
+            )
         )
         ctx["available_roles"] = (
             Role.objects.filter(is_active=True)
@@ -462,36 +467,113 @@ class MemberAddView(StoreScopedPermissionMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         store = self.get_current_store()
         form = MembershipForm(store=store)
-        return render(request, "role_permission/members/member_add.html", {
-            "form": form,
-            "current_store": store,
-        })
+        return render(
+            request,
+            "role_permission/members/member_add.html",
+            {
+                "form": form,
+                "current_store": store,
+            },
+        )
 
     def post(self, request: HttpRequest) -> HttpResponse:
         store = self.get_current_store()
         form = MembershipForm(request.POST, store=store)
         if not form.is_valid():
-            return render(request, "role_permission/members/member_add.html", {
-                "form": form,
-                "current_store": store,
-            }, status=400)
+            return render(
+                request,
+                "role_permission/members/member_add.html",
+                {
+                    "form": form,
+                    "current_store": store,
+                },
+                status=400,
+            )
+
+        user_to_add = form.cleaned_data["_user"]
+        role = form.cleaned_data["role"]
+
+        # Prevent self-invitation
+        if user_to_add.id == request.user.id:
+            messages.error(
+                request, "You cannot add yourself as a member. You are already the store owner."
+            )
+            return redirect("role_permission:member_add")
+
+        # Check if user is already a member
+        existing_membership = StoreMembership.objects.filter(user=user_to_add, store=store).first()
+
+        if existing_membership:
+            if existing_membership.is_active:
+                messages.error(
+                    request,
+                    f"{user_to_add.email} is already a member of this store with role '{existing_membership.role.name}'.",
+                )
+            else:
+                # User exists but is inactive - offer to reactivate
+                messages.error(
+                    request,
+                    f"{user_to_add.email} was previously a member but is currently inactive. "
+                    f"Please reactivate them instead of adding a new membership.",
+                )
+            return redirect("role_permission:member_add")
+
+        # Check seat limits before adding member
+        try:
+            from apps.subscriptions.services import check_plan_limits, get_active_subscription
+            from apps.subscriptions.exceptions import PlanLimitExceeded
+
+            subscription = get_active_subscription(store)
+            if subscription and subscription.plan.max_users:
+                limits_info = check_plan_limits(store)
+                current_usage = limits_info.get("usage", {}).get("users", 0)
+                max_users = limits_info.get("limits", {}).get("max_users", 0)
+
+                # Check if we would exceed the limit
+                if current_usage >= max_users:
+                    messages.error(
+                        request,
+                        f"Seat limit reached. Your plan allows {max_users} team members. "
+                        f"Please upgrade your subscription to add more members.",
+                    )
+                    return redirect("role_permission:member_add")
+        except PlanLimitExceeded as exc:
+            messages.error(request, str(exc))
+            return redirect("role_permission:member_add")
+        except Exception:
+            # If subscription check fails, log but continue
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning("Failed to check seat limits before adding member")
 
         try:
             services.add_member(
                 actor=request.user,
                 store=store,
-                user=form.cleaned_data["_user"],
-                role=form.cleaned_data["role"],
+                user=user_to_add,
+                role=role,
                 expires_at=form.cleaned_data.get("expires_at"),
                 request=request,
             )
         except PermissionError as exc:
             messages.error(request, str(exc))
             return redirect("role_permission:member_add")
+        except Exception as exc:
+            # Handle PlanLimitExceeded and other exceptions
+            error_msg = str(exc)
+            if "max_users" in error_msg or "seat" in error_msg.lower():
+                messages.error(
+                    request,
+                    "Seat limit reached. Please upgrade your subscription to add more members.",
+                )
+            else:
+                messages.error(request, f"Failed to add member: {error_msg}")
+            return redirect("role_permission:member_add")
 
         messages.success(
             request,
-            f"Added {form.cleaned_data['_user'].email} as {form.cleaned_data['role'].name}.",
+            f"Added {user_to_add.email} as {role.name}.",
         )
         return redirect("role_permission:member_list")
 
@@ -522,11 +604,13 @@ class MemberChangeRoleView(StoreScopedPermissionMixin, View):
         except (ValueError, json.JSONDecodeError) as exc:
             return JsonResponse({"error": str(exc)}, status=400)
 
-        return JsonResponse({
-            "membership_id": str(membership.id),
-            "new_role_id": str(new_role.id),
-            "new_role_name": new_role.name,
-        })
+        return JsonResponse(
+            {
+                "membership_id": str(membership.id),
+                "new_role_id": str(new_role.id),
+                "new_role_name": new_role.name,
+            }
+        )
 
 
 class MemberDeactivateView(StoreScopedPermissionMixin, View):
@@ -542,7 +626,9 @@ class MemberDeactivateView(StoreScopedPermissionMixin, View):
         )
         try:
             services.deactivate_member(
-                actor=request.user, membership=membership, request=request,
+                actor=request.user,
+                membership=membership,
+                request=request,
             )
         except PermissionError as exc:
             return JsonResponse({"error": str(exc)}, status=403)
@@ -562,7 +648,9 @@ class MemberReactivateView(StoreScopedPermissionMixin, View):
         )
         try:
             services.reactivate_member(
-                actor=request.user, membership=membership, request=request,
+                actor=request.user,
+                membership=membership,
+                request=request,
             )
         except PermissionError as exc:
             return JsonResponse({"error": str(exc)}, status=403)
@@ -581,9 +669,8 @@ class OverrideListView(StoreScopedPermissionMixin, ListView):
     required_permission = PERM_PERMISSIONS_OVERRIDE
 
     def get_queryset(self):
-        qs = (
-            UserPermissionOverride.objects
-            .select_related("user", "permission", "permission__resource", "store", "granted_by")
+        qs = UserPermissionOverride.objects.select_related(
+            "user", "permission", "permission__resource", "store", "granted_by"
         )
 
         if self.request.user.is_superuser:
@@ -629,11 +716,13 @@ class OverrideListView(StoreScopedPermissionMixin, ListView):
                 Store.objects.filter(id=store.id) if store else Store.objects.none()
             )
 
-        ctx["can_manage"] = (
-            self.request.user.is_superuser
-            or (ctx["current_store"] and user_has_permission(
-                self.request.user, ctx["current_store"], PERM_PERMISSIONS_OVERRIDE,
-            ))
+        ctx["can_manage"] = self.request.user.is_superuser or (
+            ctx["current_store"]
+            and user_has_permission(
+                self.request.user,
+                ctx["current_store"],
+                PERM_PERMISSIONS_OVERRIDE,
+            )
         )
         ctx["search_query"] = self.request.GET.get("q", "")
         ctx["kind_filter"] = self.request.GET.get("kind", "")
@@ -723,7 +812,9 @@ class OverrideDeleteView(StoreScopedPermissionMixin, View):
         override = get_object_or_404(UserPermissionOverride, id=override_id)
         try:
             services.clear_user_override(
-                actor=request.user, override=override, request=request,
+                actor=request.user,
+                override=override,
+                request=request,
             )
         except PermissionError as exc:
             messages.error(request, str(exc))
@@ -746,8 +837,7 @@ class PermissionCatalogView(StoreScopedPermissionMixin, ListView):
 
     def get_queryset(self):
         return (
-            Resource.objects
-            .filter(is_active=True)
+            Resource.objects.filter(is_active=True)
             .prefetch_related(
                 Prefetch("permissions", queryset=Permission.objects.order_by("action"))
             )
@@ -808,25 +898,35 @@ class AuditLogExportView(SuperuserOnlyMixin, View):
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="audit_log.csv"'
         writer = csv.writer(response)
-        writer.writerow([
-            "created_at", "action", "target_type", "target_id",
-            "actor_email", "store_id", "ip", "request_id",
-        ])
+        writer.writerow(
+            [
+                "created_at",
+                "action",
+                "target_type",
+                "target_id",
+                "actor_email",
+                "store_id",
+                "ip",
+                "request_id",
+            ]
+        )
         qs = AuditLog.objects.select_related("actor", "store")
         action = request.GET.get("action")
         if action:
             qs = qs.filter(action=action)
         for row in qs.order_by("-created_at")[:5000]:
-            writer.writerow([
-                row.created_at.isoformat(),
-                row.action,
-                row.target_type,
-                row.target_id,
-                row.actor.email if row.actor else "",
-                str(row.store_id) if row.store_id else "",
-                row.ip_address or "",
-                row.request_id or "",
-            ])
+            writer.writerow(
+                [
+                    row.created_at.isoformat(),
+                    row.action,
+                    row.target_type,
+                    row.target_id,
+                    row.actor.email if row.actor else "",
+                    str(row.store_id) if row.store_id else "",
+                    row.ip_address or "",
+                    row.request_id or "",
+                ]
+            )
         return response
 
 
@@ -862,16 +962,12 @@ def build_permission_groups(role, form):
     selected_ids: set[str] = set()
     if role is not None and getattr(role, "pk", None):
         selected_ids = {
-            str(pid)
-            for pid in role.role_permissions.values_list("permission_id", flat=True)
+            str(pid) for pid in role.role_permissions.values_list("permission_id", flat=True)
         }
 
     resources = (
-        Resource.objects
-        .filter(is_active=True)
-        .prefetch_related(
-            Prefetch("permissions", queryset=Permission.objects.order_by("action"))
-        )
+        Resource.objects.filter(is_active=True)
+        .prefetch_related(Prefetch("permissions", queryset=Permission.objects.order_by("action")))
         .order_by("category", "code")
     )
 
@@ -885,18 +981,22 @@ def build_permission_groups(role, form):
             is_selected = pid in selected_ids
             if is_selected:
                 granted += 1
-            perm_data.append({
-                "id": pid,
-                "code": p.code,
-                "action": p.action,
-                "name": p.name,
-                "granted": is_selected,
-                "choice": choices_by_id.get(pid),
-            })
-        groups.append({
-            "resource": resource,
-            "permissions": perm_data,
-            "granted_count": granted,
-            "total_count": len(perm_data),
-        })
+            perm_data.append(
+                {
+                    "id": pid,
+                    "code": p.code,
+                    "action": p.action,
+                    "name": p.name,
+                    "granted": is_selected,
+                    "choice": choices_by_id.get(pid),
+                }
+            )
+        groups.append(
+            {
+                "resource": resource,
+                "permissions": perm_data,
+                "granted_count": granted,
+                "total_count": len(perm_data),
+            }
+        )
     return groups

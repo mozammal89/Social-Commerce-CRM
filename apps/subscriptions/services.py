@@ -707,10 +707,40 @@ def check_plan_limits(store: Store) -> Dict[str, Any]:
         .count()
     )
 
-    users_count = StoreMembership.objects.filter(
-        store=store,
-        is_active=True,
-    ).count()
+    # Count users excluding store owners (they don't consume seats)
+    try:
+        from apps.permissions.models import Role
+
+        # Get store owners by their role
+        owner_role = Role.objects.filter(slug="store-owner", store__isnull=True).first()
+        if owner_role:
+            owner_memberships = StoreMembership.objects.filter(
+                store=store, role=owner_role, is_active=True
+            )
+            owner_ids = list(owner_memberships.values_list("user_id", flat=True))
+            logger.info(
+                f"Store {store.id}: Found {len(owner_ids)} owners with role 'store-owner': {owner_ids}"
+            )
+        else:
+            owner_ids = []
+            logger.warning(f"Store {store.id}: No 'store-owner' role found")
+
+        users_count = (
+            StoreMembership.objects.filter(store=store, is_active=True)
+            .exclude(user_id__in=owner_ids)
+            .count()
+        )
+
+        total_active = StoreMembership.objects.filter(store=store, is_active=True).count()
+        logger.info(
+            f"Store {store.id} seat count: {users_count} used (excluding owners), "
+            f"{total_active} total active members, {len(owner_ids)} owners excluded"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to count users excluding owners: {str(e)}")
+        # Fallback to counting all active memberships
+        users_count = StoreMembership.objects.filter(store=store, is_active=True).count()
+        logger.info(f"Store {store.id} seat count (fallback): {users_count}")
 
     limits = {
         "max_stores": plan.max_stores,
@@ -764,15 +794,20 @@ def enforce_plan_limit(store: Store, limit_type: str, current_value: int) -> Non
     Args:
         store: The store to enforce limit for
         limit_type: Type of limit (e.g., 'max_stores', 'max_users')
-        current_value: Current usage value
+        current_value: Current usage value (BEFORE adding the new item)
 
     Raises:
         PlanLimitExceeded: If limit would be exceeded
+
+    Note:
+        This function checks if adding ONE MORE item would exceed the limit.
+        For example, if current_value is 4 and limit is 5, this allows the operation.
+        If current_value is 5 and limit is 5, this raises an exception.
     """
     subscription = get_active_subscription(store)
 
     if not subscription:
-        raise PlanLimitExceeded(limit_type, current_value, 0)
+        raise PlanLimitExceeded(limit_type, current_value + 1, 0)
 
     plan = subscription.plan
     limit_value = getattr(plan, limit_type, None)
@@ -781,8 +816,9 @@ def enforce_plan_limit(store: Store, limit_type: str, current_value: int) -> Non
         logger.warning(f"Plan limit {limit_type} not found for plan {plan.slug}")
         return
 
+    # Check if adding ONE MORE item would exceed the limit
     if current_value >= limit_value:
-        raise PlanLimitExceeded(limit_type, current_value, limit_value)
+        raise PlanLimitExceeded(limit_type, current_value + 1, limit_value)
 
 
 def check_trial_expiry(subscription: Subscription) -> bool:
