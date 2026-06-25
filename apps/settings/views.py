@@ -96,6 +96,20 @@ def team_management(request, store_id):
         messages.error(request, "Store not found")
         return redirect("stores:store_list_html")
 
+    # Clear any cached subscription data to ensure fresh seat counts
+    try:
+        from django.core.cache import cache
+        from apps.subscriptions.constants import CACHE_SUBSCRIPTION_PREFIX
+
+        cache_key = f"{CACHE_SUBSCRIPTION_PREFIX}{store.id}"
+        cache.delete(cache_key)
+
+        # Also clear plan limits cache
+        plan_cache_key = f"plan_limits_{store.id}"
+        cache.delete(plan_cache_key)
+    except Exception:
+        pass  # Cache clearing errors shouldn't block the page
+
     # Check permissions
     can_manage = request.user.is_superuser or user_has_permission(
         request.user, store, PERM_MEMBERS_MANAGE
@@ -127,7 +141,9 @@ def team_management(request, store_id):
     seat_info = calculate_seat_usage(store)
 
     total_members = seat_info["total_members"]
-    active_members = total_members  # Since we only count active in calculate_seat_usage
+    active_members = seat_info[
+        "total_members"
+    ]  # All members counted in calculate_seat_usage are active
     available_roles = roles.filter(is_active=True).count()
     used_seats = seat_info["used_seats"]
 
@@ -135,13 +151,26 @@ def team_management(request, store_id):
     remaining_seats = None
     max_seats = None
     try:
-        from apps.subscriptions.services import get_active_subscription
+        from apps.subscriptions.services import get_active_subscription, check_plan_limits
 
         subscription = get_active_subscription(store)
         if subscription and subscription.plan.max_users:
             max_seats = subscription.plan.max_users
+
+            # Double-check seat usage with fresh calculation
+            limits_info = check_plan_limits(store)
+            fresh_used_seats = limits_info.get("usage", {}).get("users", 0)
+
+            # Use the higher of the two calculations to be conservative
+            used_seats = max(used_seats, fresh_used_seats)
             remaining_seats = max(0, max_seats - used_seats)
-    except Exception:
+
+            logger.info(
+                f"Store {store.id} seat info: used={used_seats}, max={max_seats}, "
+                f"remaining={remaining_seats}, owners={seat_info['owner_count']}"
+            )
+    except Exception as e:
+        logger.warning(f"Failed to get subscription limits: {str(e)}")
         pass  # If subscription service fails, just continue without seat limits
 
     context = {
@@ -191,6 +220,10 @@ def change_member_role(request, store_id, membership_id):
             new_role=new_role,
             request=request,
         )
+
+        # Clear cache to update seat counts immediately
+        clear_store_subscription_cache(request.store)
+
         return JsonResponse(
             {"success": True, "message": f"Role changed to {new_role.name} successfully"}
         )
@@ -313,6 +346,9 @@ def invite_member(request, store_id):
                     },
                 )
 
+                # Clear cache to update seat counts immediately
+                clear_store_subscription_cache(request.store)
+
                 return JsonResponse(
                     {"success": True, "message": f"{email} has been reinvited to the team"}
                 )
@@ -354,12 +390,33 @@ def invite_member(request, store_id):
             },
         )
 
+        # Clear cache to update seat counts immediately
+        clear_store_subscription_cache(request.store)
+
         # TODO: Send invitation email with token
         # This would typically involve creating an invitation token and sending an email
 
         return JsonResponse({"success": True, "message": f"Invitation sent to {email}"})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+
+def clear_store_subscription_cache(store):
+    """Helper function to clear subscription cache for a store."""
+    try:
+        from django.core.cache import cache
+        from apps.subscriptions.constants import CACHE_SUBSCRIPTION_PREFIX
+
+        cache_key = f"{CACHE_SUBSCRIPTION_PREFIX}{store.id}"
+        cache.delete(cache_key)
+
+        # Also clear any plan-related cache for this store
+        plan_cache_key = f"plan_limits_{store.id}"
+        cache.delete(plan_cache_key)
+
+        logger.info(f"Cleared subscription cache for store {store.id}")
+    except Exception as e:
+        logger.warning(f"Failed to clear subscription cache for store {store.id}: {str(e)}")
 
 
 @login_required
@@ -401,6 +458,9 @@ def deactivate_member(request, store_id, membership_id):
                 "previous_role": membership.role.name,
             },
         )
+
+        # Clear cache to update seat counts immediately
+        clear_store_subscription_cache(request.store)
 
         return JsonResponse(
             {
@@ -449,6 +509,9 @@ def activate_member(request, store_id, membership_id):
                 "current_role": membership.role.name,
             },
         )
+
+        # Clear cache to update seat counts immediately
+        clear_store_subscription_cache(request.store)
 
         return JsonResponse(
             {
@@ -502,6 +565,9 @@ def remove_member(request, store_id, membership_id):
                 },
             )
             membership.delete()
+
+        # Clear cache to update seat counts immediately
+        clear_store_subscription_cache(request.store)
 
         return JsonResponse(
             {"success": True, "message": f"{user_email} has been removed from the team"}
