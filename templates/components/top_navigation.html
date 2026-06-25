@@ -78,7 +78,7 @@
                         {% if show_store_link %}
                         <li><hr class="dropdown-divider"></li>
                         <li>
-                            <a class="dropdown-item" href="{% url 'settings:store' %}">
+                            <a class="dropdown-item" href="{% url 'settings:store' current_store.id %}">
                                 <i class="bi bi-gear me-2"></i>Manage Store
                             </a>
                         </li>
@@ -195,12 +195,14 @@
                     </li>
                     {% can_any "employees.view" "roles.view" as show_team_link %}
                     {% if show_team_link %}
+                    {% if current_store %}
                     <li>
-                        <a class="dropdown-item" href="{% url 'settings:team' %}">
+                        <a class="dropdown-item" href="{% url 'settings:team' current_store.id %}">
                             <i class="bi bi-people me-3" style="color: var(--brand-600);"></i>
                             Team Settings
                         </a>
                     </li>
+                    {% endif %}
                     {% endif %}
                     <li><hr class="dropdown-divider"></li>
                     <li>
