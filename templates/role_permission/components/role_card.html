@@ -80,11 +80,11 @@
         </div>
         {% endif %}
 
-        {# ---- Action buttons ---- #}
-        {# Edit visible to: superusers (any role) OR store admins on non-system roles. #}
+        <!-- {# ---- Action buttons ---- #}
+        {# Edit visible to: superusers (any role) OR store admins on non-system roles. #} -->
         <div class="rp-role-card__actions">
             <a href="{% url 'role_permission:role_detail' role_id=role.id %}"
-               class="btn btn-sm btn-outline-secondary flex-fill">
+               class="btn btn-sm btn-outline-primary flex-fill">
                 <i class="bi bi-eye me-1"></i> View
             </a>
             {% if is_superuser or can_manage and not role.is_system %}

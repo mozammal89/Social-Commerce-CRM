@@ -219,12 +219,14 @@
                 </div>
                 {% can_any "settings.view" "settings.update" as show_store_settings %}
                 {% if show_store_settings %}
-                <a href="{% url 'settings:store' %}" class="sidebar-nav-item {% if 'store' in request.resolver_match.url_name and request.resolver_match.app_name == 'settings' %}active{% endif %}">
+                {% if current_store %}
+                <a href="{% url 'settings:store' current_store.id %}" class="sidebar-nav-item {% if 'store' in request.resolver_match.url_name and request.resolver_match.app_name == 'settings' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-shop"></i>
                     </div>
                     <span class="sidebar-nav-label">Store Settings</span>
                 </a>
+                {% endif %}
                 {% endif %}
                 {% can_any "employees.view" "roles.view" as show_team_settings %}
                 {% if show_team_settings %}
@@ -236,19 +238,23 @@
                 </a>
                 {% endif %}
                 {% can "integrations.view" %}
-                <a href="{% url 'settings:integrations' %}" class="sidebar-nav-item {% if 'integrations' in request.resolver_match.url_name %}active{% endif %}">
+                {% if current_store %}
+                <a href="{% url 'settings:integrations' current_store.id %}" class="sidebar-nav-item {% if 'integrations' in request.resolver_match.url_name %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-plug"></i>
                     </div>
                     <span class="sidebar-nav-label">Integrations</span>
                 </a>
+                {% endif %}
                 {% endcan %}
-                <a href="{% url 'settings:billing' %}" class="sidebar-nav-item {% if 'billing' in request.resolver_match.url_name %}active{% endif %}">
+                {% if current_store %}
+                <a href="{% url 'settings:billing' current_store.id %}" class="sidebar-nav-item {% if 'billing' in request.resolver_match.url_name %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-credit-card"></i>
                     </div>
                     <span class="sidebar-nav-label">Billing</span>
                 </a>
+                {% endif %}
 
                 {% include "role_permission/components/sidebar_section.html" %}
             </div>

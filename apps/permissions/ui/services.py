@@ -252,17 +252,20 @@ def clone_role(*, actor, role: Role, new_name: str, request=None) -> Role:
 
         source_perms = list(
             RolePermission.objects.filter(role=role).values(
-                "permission_id", "modifier",
+                "permission_id",
+                "modifier",
             )
         )
-        RolePermission.objects.bulk_create([
-            RolePermission(
-                role=new_role,
-                permission_id=row["permission_id"],
-                modifier=row["modifier"],
-            )
-            for row in source_perms
-        ])
+        RolePermission.objects.bulk_create(
+            [
+                RolePermission(
+                    role=new_role,
+                    permission_id=row["permission_id"],
+                    modifier=row["modifier"],
+                )
+                for row in source_perms
+            ]
+        )
 
         _emit_audit_log(
             actor=actor,
@@ -303,30 +306,21 @@ def set_role_permissions(
         raise PermissionError("Cannot modify system role permissions.")
 
     perm_ids = list({str(p) for p in permission_ids})
-    valid_ids = set(
-        Permission.objects.filter(id__in=perm_ids).values_list("id", flat=True)
-    )
+    valid_ids = set(Permission.objects.filter(id__in=perm_ids).values_list("id", flat=True))
 
     with transaction.atomic():
         before_perms = set(
-            RolePermission.objects
-            .filter(role=role)
-            .values_list("permission_id", flat=True)
+            RolePermission.objects.filter(role=role).values_list("permission_id", flat=True)
         )
 
         RolePermission.objects.filter(role=role).delete()
 
         perms = Permission.objects.filter(id__in=valid_ids)
-        new_bindings = [
-            RolePermission(role=role, permission=p, modifier=modifier)
-            for p in perms
-        ]
+        new_bindings = [RolePermission(role=role, permission=p, modifier=modifier) for p in perms]
         RolePermission.objects.bulk_create(new_bindings)
 
         after_perms = set(
-            RolePermission.objects
-            .filter(role=role)
-            .values_list("permission_id", flat=True)
+            RolePermission.objects.filter(role=role).values_list("permission_id", flat=True)
         )
 
         _emit_audit_log(
@@ -402,12 +396,81 @@ def add_member(
     role: Role,
     expires_at=None,
     request=None,
+    check_seats=True,
 ) -> StoreMembership:
     """Add a user to a store with a given role (idempotent on user+store+role)."""
     _require_members_manage(actor, store)
 
     if role.store_id is not None and role.store_id != store.id:
         raise ValueError("Role does not belong to this store.")
+
+    # Prevent self-invitation
+    if actor == user:
+        raise PermissionError(
+            "You cannot add yourself as a member. You are already the store owner."
+        )
+
+    # Check if user is already a member (including inactive)
+    existing_membership = StoreMembership.objects.filter(user=user, store=store).first()
+
+    if existing_membership:
+        # If reactivating an existing membership, check if they're a store owner
+        # Store owners don't consume seats, so no seat check needed
+        if not existing_membership.is_active and check_seats:
+            try:
+                from apps.permissions.models import Role as RoleModel
+
+                # Check if this is a store owner role
+                is_owner_role = role.slug == "store-owner" or (
+                    role.store_id is None and role.slug == "store-owner"
+                )
+
+                if not is_owner_role:
+                    # For non-owners, check seat availability when reactivating
+                    from apps.subscriptions.services import check_plan_limits
+                    from apps.subscriptions.exceptions import PlanLimitExceeded
+
+                    limits_info = check_plan_limits(store)
+                    current_usage = limits_info.get("usage", {}).get("users", 0)
+                    max_users = limits_info.get("limits", {}).get("max_users", 0)
+
+                    if current_usage >= max_users:
+                        raise PlanLimitExceeded("max_users", current_usage + 1, max_users)
+            except PlanLimitExceeded:
+                raise
+            except Exception:
+                # If seat check fails, log but continue (better to allow than block)
+                logger.warning("Failed to check seat limits during membership reactivation")
+
+    # If creating a new membership, check seat availability
+    if not existing_membership and check_seats:
+        try:
+            from apps.subscriptions.services import check_plan_limits
+            from apps.subscriptions.exceptions import PlanLimitExceeded
+
+            # Check if this is a store owner role
+            is_owner_role = role.slug == "store-owner" or (
+                role.store_id is None and role.slug == "store-owner"
+            )
+
+            # Store owners don't consume seats
+            if not is_owner_role:
+                limits_info = check_plan_limits(store)
+                current_usage = limits_info.get("usage", {}).get("users", 0)
+                max_users = limits_info.get("limits", {}).get("max_users", 0)
+
+                logger.info(
+                    f"Seat check for adding user {user.id} to store {store.id}: "
+                    f"current={current_usage}, max={max_users}, role={role.slug}"
+                )
+
+                if current_usage >= max_users:
+                    raise PlanLimitExceeded("max_users", current_usage + 1, max_users)
+        except PlanLimitExceeded:
+            raise
+        except Exception:
+            # If seat check fails, log but continue (better to allow than block)
+            logger.warning("Failed to check seat limits during membership creation")
 
     with transaction.atomic():
         membership, created = StoreMembership.objects.get_or_create(
@@ -439,6 +502,12 @@ def add_member(
             },
             request=request,
         )
+
+        if created:
+            logger.info(
+                f"Created new membership: user {user.id}, store {store.id}, "
+                f"role {role.id} ({role.slug})"
+            )
 
     return membership
 
