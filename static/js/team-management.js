@@ -303,7 +303,42 @@ const TeamManagement = (function() {
                 form.reset();
                 location.reload();
             } else {
-                showNotification(data.error || 'Error inviting member', 'error');
+                // Check if this is a seat limit error
+                if (data.upgrade_required) {
+                    // Show a more detailed error message with upgrade option
+                    const errorMessage = data.error || 'Seat limit reached';
+                    const upgradeMessage = `
+                        <div class="alert alert-warning">
+                            <strong>${errorMessage}</strong><br>
+                            <small>Current usage: ${data.current_usage || 0} / ${data.max_users || 0} seats</small>
+                        </div>
+                        <div class="mt-2">
+                            <a href="/subscriptions/manage/" class="btn btn-primary btn-sm">
+                                <i class="bi bi-arrow-up-circle me-1"></i>Upgrade Plan
+                            </a>
+                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+                                Close
+                            </button>
+                        </div>
+                    `;
+                    
+                    // Replace modal content with upgrade message
+                    const modalBody = document.querySelector('#inviteMemberModal .modal-body');
+                    if (modalBody) {
+                        const originalContent = modalBody.innerHTML;
+                        modalBody.innerHTML = upgradeMessage;
+                        
+                        // Add reset handler to close button
+                        const closeButton = modalBody.querySelector('[data-bs-dismiss="modal"]');
+                        if (closeButton) {
+                            closeButton.addEventListener('click', () => {
+                                modalBody.innerHTML = originalContent;
+                            });
+                        }
+                    }
+                } else {
+                    showNotification(data.error || 'Error inviting member', 'error');
+                }
             }
         })
         .catch(error => {

@@ -20,16 +20,25 @@
             Team Stats
         </button>
         {% can_any PERM_MEMBERS_MANAGE as can_manage %}
-        <button type="button" class="btn btn-primary {% if remaining_seats == 0 %}disabled{% endif %}" 
+        {% if remaining_seats == 0 %}
+        <button type="button" 
+                class="btn btn-warning" 
+                onclick="window.location.href='/subscriptions/manage/'">
+            <i class="bi bi-arrow-up-circle me-1"></i>
+            Upgrade Plan
+            <span class="badge bg-light text-dark ms-2">0 seats remaining</span>
+        </button>
+        {% else %}
+        <button type="button" class="btn btn-primary" 
                 data-bs-toggle="modal" 
-                data-bs-target="#inviteMemberModal"
-                {% if remaining_seats == 0 %}disabled title="No remaining seats"{% endif %}>
+                data-bs-target="#inviteMemberModal">
             <i class="bi bi-person-plus me-1"></i>
             Invite Member
             {% if remaining_seats is not None %}
             <span class="badge bg-light text-dark ms-2">{{ remaining_seats }} remaining</span>
             {% endif %}
         </button>
+        {% endif %}
         {% endcan %}
     </div>
 </div>
@@ -162,10 +171,17 @@
                             <i class="bi bi-people text-muted" style="font-size: 3rem;"></i>
                             <p class="text-muted mt-3">No team members yet</p>
                             {% can_any PERM_MEMBERS_MANAGE as can_manage %}
+                            {% if remaining_seats == 0 %}
+                            <button class="btn btn-warning" onclick="window.location.href='/subscriptions/manage/'">
+                                <i class="bi bi-arrow-up-circle me-1"></i>
+                                Upgrade to Add Members
+                            </button>
+                            {% else %}
                             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#inviteMemberModal">
                                 <i class="bi bi-person-plus me-1"></i>
                                 Invite First Member
                             </button>
+                            {% endif %}
                             {% endcan %}
                         </td>
                     </tr>
