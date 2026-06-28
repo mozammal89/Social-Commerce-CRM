@@ -655,6 +655,63 @@ def set_user_override(
     return override
 
 
+def set_user_overrides_bulk(
+    *,
+    actor,
+    target_user,
+    store: Store | None,
+    permissions: Iterable[Permission],
+    is_granted: bool,
+    reason: str = "",
+    expires_at=None,
+    request=None,
+) -> list[UserPermissionOverride]:
+    """
+    Create or update per-user overrides for multiple permissions.
+
+    Superusers can set overrides anywhere. Store admins can only set
+    overrides within stores they administer.
+
+    Returns a list of created/updated overrides.
+    """
+    if not actor.is_superuser:
+        if store is None:
+            raise PermissionError("Only superusers can set cross-store overrides.")
+        if not user_has_permission(actor, store, PERM_OVERRIDE_GRANT):
+            raise PermissionError("You don't have permission to grant overrides in this store.")
+
+    overrides = []
+    with transaction.atomic():
+        for permission in permissions:
+            override, created = UserPermissionOverride.objects.update_or_create(
+                user=target_user,
+                store=store,
+                permission=permission,
+                defaults={
+                    "is_granted": is_granted,
+                    "reason": reason,
+                    "granted_by": actor if actor.is_authenticated else None,
+                    "expires_at": expires_at,
+                },
+            )
+            overrides.append(override)
+            _emit_audit_log(
+                actor=actor,
+                store=store,
+                action="override.set" if created else "override.update",
+                target_type="user_permission_override",
+                target_id=str(override.id),
+                after={
+                    "user_id": str(target_user.id),
+                    "permission_id": str(permission.id),
+                    "is_granted": is_granted,
+                    "expires_at": expires_at.isoformat() if expires_at else None,
+                },
+                request=request,
+            )
+    return overrides
+
+
 def clear_user_override(
     *,
     actor,

@@ -762,8 +762,13 @@ class OverrideCreateView(StoreScopedPermissionMixin, CreateView):
 
         messages.success(
             self.request,
-            f"Override for {form.cleaned_data['user'].email} saved.",
+            f"Override for {form.cleaned_data['user'].email} created successfully.",
         )
+
+        # Check if "Create and add another" was clicked
+        if "_add_another" in self.request.POST:
+            return redirect("role_permission:override_create")
+
         return redirect("role_permission:override_list")
 
 

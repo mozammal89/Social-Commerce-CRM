@@ -74,8 +74,8 @@ body {
 }
 
 .btn-outline-primary:hover {
-    background: var(--brand-50);
-    border-color: var(--brand-600);
+    /* background: var(--brand-50);
+    border-color: var(--brand-600); */
 }
 
 /* =====================================================================
