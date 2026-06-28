@@ -74,8 +74,8 @@ body {
 }
 
 .btn-outline-primary:hover {
-    background: var(--brand-50);
-    border-color: var(--brand-600);
+    /* background: var(--brand-50);
+    border-color: var(--brand-600); */
 }
 
 /* =====================================================================
@@ -234,20 +234,73 @@ body {
 }
 
 /* =====================================================================
-   MESSAGES CONTAINER
+   MESSAGES CONTAINER - Enhanced styling
    ===================================================================== */
 
 .messages-container {
     position: fixed;
-    top: var(--navbar-height);
-    right: var(--space-4);
+    top: calc(var(--navbar-height) + var(--space-4));
+    right: var(--space-6);
     z-index: var(--z-tooltip);
-    max-width: 400px;
+    max-width: 420px;
+    animation: slideInRight 300ms ease-out;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
 .messages-container .alert {
-    min-width: 300px;
-    max-width: 400px;
+    min-width: 320px;
+    max-width: 420px;
+    margin-bottom: var(--space-3);
+    position: relative;
+    backdrop-filter: blur(8px);
+    border-width: 1.5px;
+    animation: alertFadeIn 250ms ease-out;
+}
+
+@keyframes alertFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Ensure proper text color in alerts */
+.messages-container .alert div {
+    color: inherit;
+    flex: 1;
+}
+
+/* Close button styling */
+.messages-container .alert .btn-close {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity var(--transition-fast);
+}
+
+.messages-container .alert .btn-close:hover {
+    opacity: 1;
 }
 
 /* =====================================================================

@@ -1744,8 +1744,14 @@ textarea.form-control {
 
 .alert {
     padding: var(--space-4);
-    border-radius: var(--radius);
+    border-radius: var(--radius-lg);
     border: 1px solid transparent;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    box-shadow: var(--shadow-sm);
 }
 
 .alert-icon {
@@ -1754,28 +1760,111 @@ textarea.form-control {
     flex-shrink: 0;
 }
 
+/* Bootstrap-compatible alert classes (single dash) */
+.alert-success {
+    background: linear-gradient(135deg, var(--success-50) 0%, var(--success-100) 100%);
+    border-color: var(--success-200);
+    color: var(--success-700);
+}
+
+.alert-danger,
+.alert-error {
+    background: linear-gradient(135deg, var(--danger-50) 0%, var(--danger-100) 100%);
+    border-color: var(--danger-200);
+    color: var(--danger-700);
+}
+
+.alert-warning {
+    background: linear-gradient(135deg, var(--warning-50) 0%, var(--warning-100) 100%);
+    border-color: var(--warning-200);
+    color: var(--warning-700);
+}
+
+.alert-info {
+    background: linear-gradient(135deg, var(--info-50) 0%, var(--info-100) 100%);
+    border-color: var(--info-200);
+    color: var(--info-700);
+}
+
+/* Custom alert classes (double dash) */
 .alert--success {
-    background: var(--success-50);
-    border-color: var(--success-100);
+    background: linear-gradient(135deg, var(--success-50) 0%, var(--success-100) 100%);
+    border-color: var(--success-200);
     color: var(--success-700);
 }
 
 .alert--warning {
-    background: var(--warning-50);
-    border-color: var(--warning-100);
+    background: linear-gradient(135deg, var(--warning-50) 0%, var(--warning-100) 100%);
+    border-color: var(--warning-200);
     color: var(--warning-700);
 }
 
 .alert--danger {
-    background: var(--danger-50);
-    border-color: var(--danger-100);
+    background: linear-gradient(135deg, var(--danger-50) 0%, var(--danger-100) 100%);
+    border-color: var(--danger-200);
     color: var(--danger-700);
 }
 
 .alert--info {
-    background: var(--info-50);
-    border-color: var(--info-100);
+    background: linear-gradient(135deg, var(--info-50) 0%, var(--info-100) 100%);
+    border-color: var(--info-200);
     color: var(--info-700);
+}
+
+/* Alert icons coloring */
+.alert-success i,
+.alert--success i {
+    color: var(--success-600);
+}
+
+.alert-danger i,
+.alert-error i,
+.alert--danger i {
+    color: var(--danger-600);
+}
+
+.alert-warning i,
+.alert--warning i {
+    color: var(--warning-600);
+}
+
+.alert-info i,
+.alert--info i {
+    color: var(--info-600);
+}
+
+/* Alert close button styling */
+.alert .btn-close {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    opacity: 0.5;
+    transition: opacity var(--transition-fast);
+}
+
+.alert .btn-close:hover {
+    opacity: 0.8;
+}
+
+/* Alert dismissible padding adjustment */
+.alert-dismissible {
+    padding-right: calc(var(--space-4) + 24px);
+}
+
+/* Alert link styling */
+.alert a {
+    color: inherit;
+    text-decoration: underline;
+    font-weight: var(--font-weight-semibold);
+}
+
+.alert a:hover {
+    text-decoration: none;
 }
 
 /* =====================================================================

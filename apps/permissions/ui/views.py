@@ -762,8 +762,13 @@ class OverrideCreateView(StoreScopedPermissionMixin, CreateView):
 
         messages.success(
             self.request,
-            f"Override for {form.cleaned_data['user'].email} saved.",
+            f"Override for {form.cleaned_data['user'].email} created successfully.",
         )
+
+        # Check if "Create and add another" was clicked
+        if "_add_another" in self.request.POST:
+            return redirect("role_permission:override_create")
+
         return redirect("role_permission:override_list")
 
 
@@ -863,6 +868,7 @@ class AuditLogListView(StoreScopedPermissionMixin, ListView):
 
     def get_queryset(self):
         store = self.get_current_store()
+        # Optimize query by selecting related objects for name resolution
         qs = AuditLog.objects.select_related("actor", "store")
 
         if not self.request.user.is_superuser:

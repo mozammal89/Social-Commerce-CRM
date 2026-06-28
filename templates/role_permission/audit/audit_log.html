@@ -2,6 +2,7 @@
 {% load rbac %}
 {% load static %}
 {% load humanize %}
+{% load rp_ui %}
 
 {% block title %}Audit log - {{ APP_NAME }}{% endblock %}
 
@@ -77,20 +78,28 @@
                     <div class="flex-grow-1 min-w-0">
                         <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                             <span class="badge bg-{% if 'create' in ev.action %}success{% elif 'delete' in ev.action or 'deactivate' in ev.action %}danger{% elif 'update' in ev.action or 'toggle' in ev.action or 'change' in ev.action %}warning{% else %}info{% endif %}-subtle text-{% if 'create' in ev.action %}success{% elif 'delete' in ev.action or 'deactivate' in ev.action %}danger{% elif 'update' in ev.action or 'toggle' in ev.action or 'change' in ev.action %}warning{% else %}info{% endif %}-emphasis">
-                                {{ ev.action }}
+                                {{ ev.action|get_audit_action_description }}
                             </span>
-                            <code class="small text-muted">{{ ev.target_type }}#{{ ev.target_id|truncatechars:8 }}</code>
+                            <code class="small text-muted">{{ ev.target_type }}: {{ ev.target_id|get_target_name:ev.target_type }}</code>
                         </div>
                         <div class="d-flex flex-wrap gap-3 small text-muted">
                             <span>by <strong class="text-dark">{% if ev.actor %}{{ ev.actor.email }}{% else %}<em>system</em>{% endif %}</strong></span>
                             {% if ev.store %}<span>in {{ ev.store.name }}</span>{% endif %}
                             {% if ev.ip_address %}<span><i class="bi bi-globe"></i> {{ ev.ip_address }}</span>{% endif %}
                         </div>
+                        
                         {% if ev.after %}
-                        <details class="mt-2">
-                            <summary class="text-primary small" style="cursor: pointer;">View details</summary>
-                            <pre class="bg-light p-2 rounded small mt-2 mb-0" style="max-height: 200px; overflow: auto;"><code>{{ ev.after|pprint }}</code></pre>
-                        </details>
+                            {% if is_superuser %}
+                            <details class="mt-2">
+                                <summary class="text-primary small" style="cursor: pointer;">View details</summary>
+                                <pre class="bg-light p-2 rounded small mt-2 mb-0" style="max-height: 200px; overflow: auto;"><code>{{ ev.after|resolve_audit_metadata:ev.action|pprint }}</code></pre>
+                            </details>
+                            {% else %}
+                            <div class="mt-2 p-2 bg-light-subtle rounded small border">
+                                <div class="text-muted small mb-1 fw-semibold">Details:</div>
+                                <div class="small">{{ ev.after|format_audit_metadata:ev.action }}</div>
+                            </div>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </li>
