@@ -3,6 +3,7 @@ URL configuration for Social Commerce CRM project.
 """
 
 from django.conf import settings
+from django.http import HttpResponse
 from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import RedirectView
@@ -61,6 +62,9 @@ urlpatterns = [
     path(
         "accounts/", RedirectView.as_view(url="/auth/", permanent=False), name="accounts_redirect"
     ),
+
+    path('.well-known/appspecific/com.chrome.devtools.json', 
+         lambda r: HttpResponse('{"name":"Chrome DevTools"}', content_type='application/json')),
 ]
 
 if settings.DEBUG:

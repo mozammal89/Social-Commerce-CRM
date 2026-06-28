@@ -270,10 +270,17 @@ LOGGING = {
             "style": "{",
         },
     },
+    'filters': {
+        'ignore_chrome_devtools': {
+            'class': 'logging.Filter',
+            'path': '/.well-known/appspecific/com.chrome.devtools.json',
+        },
+    },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "verbose",
+            'filters': ['ignore_chrome_devtools'],
         },
     },
     "root": {

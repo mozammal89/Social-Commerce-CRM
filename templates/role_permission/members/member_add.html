@@ -7,6 +7,10 @@
 <link rel="stylesheet" href="{% static 'permissions/css/role_permission.css' %}">
 {% endblock %}
 
+{% block extra_js %}
+<script src="{% static 'permissions/js/rp/member-add.js' %}"></script>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid p-0">
     {% include "components/messages.html" %}

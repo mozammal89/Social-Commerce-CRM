@@ -7,6 +7,7 @@ from __future__ import annotations
 from django import forms
 from django.contrib.auth import get_user_model
 from django.db.models import Q
+from django.utils.text import slugify
 
 from apps.permissions.constants import MODIFIER_GRANT
 from apps.permissions.models import (
@@ -32,7 +33,12 @@ class RoleForm(forms.ModelForm):
         model = Role
         fields = ("name", "description", "level", "is_active", "inherits_from")
         widgets = {
-            "description": forms.Textarea(attrs={"rows": 3}),
+            "name": forms.TextInput(attrs={"required": "required", "class": "form-control"}),
+            "description": forms.Textarea(attrs={"rows": 3, "class": "form-control"}),
+            "level": forms.NumberInput(attrs={"class": "form-control"}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "inherits_from": forms.Select(attrs={"class": "form-select"}),
+
         }
 
     def __init__(self, *args, actor=None, store=None, **kwargs):
@@ -60,7 +66,6 @@ class RoleForm(forms.ModelForm):
         cleaned = super().clean()
         name = cleaned.get("name")
         if name:
-            from django.utils.text import slugify
             slug = slugify(name)
             qs = Role.objects.filter(slug=slug)
             if self.instance and self.instance.pk:
@@ -88,15 +93,19 @@ class MembershipForm(forms.Form):
     email = forms.EmailField(
         label="User email",
         help_text="The user must already have an account.",
+        required=True,
+        widget=forms.EmailInput(attrs={"required": "required", "class": "form-control"}),
     )
     role = forms.ModelChoiceField(
         queryset=Role.objects.none(),
         label="Role",
         help_text="The role to assign in this store.",
+        required=True,
+        widget=forms.Select(attrs={"required": "required", "class": "form-select"}),
     )
     expires_at = forms.DateTimeField(
         required=False,
-        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "form-control"}),
         help_text="Optional: membership auto-expires at this time.",
     )
 
@@ -144,13 +153,17 @@ class UserOverrideForm(forms.ModelForm):
         queryset=get_user_model().objects.all().order_by("email"),
         label="User",
         help_text="The user receiving the override.",
+        widget=forms.Select(attrs={"class": "form-select"}),
     )
 
     class Meta:
         model = UserPermissionOverride
         fields = ("user", "permission", "is_granted", "reason", "expires_at")
         widgets = {
-            "expires_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
+            "permission": forms.Select(attrs={"class": "form-select"}),
+            "is_granted": forms.Select(attrs={"class": "form-select"}),
+            "reason": forms.Textarea(attrs={"rows": 3, "class": "form-control"}),
+            "expires_at": forms.DateTimeInput(attrs={"type": "datetime-local", "class": "form-control"}),
         }
 
     def __init__(self, *args, actor=None, store=None, **kwargs):
