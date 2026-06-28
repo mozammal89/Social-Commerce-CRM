@@ -868,6 +868,7 @@ class AuditLogListView(StoreScopedPermissionMixin, ListView):
 
     def get_queryset(self):
         store = self.get_current_store()
+        # Optimize query by selecting related objects for name resolution
         qs = AuditLog.objects.select_related("actor", "store")
 
         if not self.request.user.is_superuser:
