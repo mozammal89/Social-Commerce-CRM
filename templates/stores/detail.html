@@ -178,19 +178,25 @@
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-sm-6 col-md-4">
-                            <a href="{% if can "products.create" %}{% url 'products:create' %}{% else %}#{% endif %}" class="btn btn-outline-primary w-100">
+                            {% can "products.create" %}
+                            <a href="{% url 'products:create' %}" class="btn btn-outline-primary w-100">
                                 <i class="bi bi-plus-lg me-2"></i>Add Product
                             </a>
+                            {% endcan %}
                         </div>
                         <div class="col-sm-6 col-md-4">
-                            <a href="{% if can "orders.create" %}{% url 'orders:create' %}{% else %}#{% endif %}" class="btn btn-outline-success w-100">
+                            {% can "orders.create" %}
+                            <a href="{% url 'orders:create' %}" class="btn btn-outline-success w-100">
                                 <i class="bi bi-receipt me-2"></i>Create Order
                             </a>
+                            {% endcan %}
                         </div>
                         <div class="col-sm-6 col-md-4">
-                            <a href="{% if can "customers.create" %}{% url 'customers:create' %}{% else %}#{% endif %}" class="btn btn-outline-info w-100">
+                            {% can "customers.create" %}
+                            <a href="{% url 'customers:create' %}" class="btn btn-outline-info w-100">
                                 <i class="bi bi-person-plus me-2"></i>Add Customer
                             </a>
+                            {% endcan %}
                         </div>
                     </div>
                 </div>

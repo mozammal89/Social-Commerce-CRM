@@ -528,43 +528,41 @@ def store_detail_template(request, store_id):
             messages.error(request, "Store not found.")
             return redirect("stores:store_list_html")
 
-        # Check if user has access to this store
-        if not getattr(user, "is_superuser", False):
+        # Initialize membership and role variables
+        membership = None
+        is_owner = False
+        is_manager = False
+
+        if getattr(user, "is_superuser", False):
+            # Superusers have full access
+            is_owner = True
+            is_manager = True
+        else:
+            # Check if user has access to this store and get their membership
             membership = StoreMembership.objects.filter(
                 user=user,
                 store=store,
                 is_active=True,
             ).first()
+
             if not membership:
                 messages.error(request, "You don't have access to this store.")
                 return redirect("stores:store_list_html")
 
-        # Check user's role in the store
-        from apps.permissions.models import Role
-
-        owner_role = Role.objects.filter(slug="store-owner").first()
-        manager_role = Role.objects.filter(slug="manager").first()
-
-        is_owner = False
-        is_manager = False
-
-        if getattr(user, "is_superuser", False):
-            is_owner = True
-            is_manager = True
-        else:
-            membership = StoreMembership.objects.filter(
-                user=user, store=store, is_active=True
-            ).first()
-            if membership:
-                if membership.role == owner_role:
+            # Check user's role in the store by comparing slugs
+            # This works for both system roles (store=None) and custom roles (store=specific_store)
+            if membership.role:
+                if membership.role.slug == "store-owner":
                     is_owner = True
-                elif membership.role == manager_role:
+                    is_manager = True  # Owners also have manager permissions
+                elif membership.role.slug == "manager":
                     is_manager = True
 
         # Count members
         member_count = StoreMembership.objects.filter(store=store, is_active=True).count()
 
-        # Get store stats (placeholder for now)
+        # Get store stats
+        # TODO: Implement actual stats when product/order/customer models are available
         products_count = 0
         orders_count = 0
         customers_count = 0

@@ -1,11 +1,11 @@
 {% load rbac %}
 <!-- Sidebar Navigation -->
-<div class="sidebar" x-data="{ open: false }">
+<div class="sidebar" x-data="{ open: false, marketingOpen: {% if 'campaigns' in request.resolver_match.url_name or 'promotions' in request.resolver_match.url_name or 'analytics' in request.resolver_match.url_name %}true{% else %}false{% endif %} }">
     <!-- Scrollable Content -->
     <div class="sidebar-content">
         <!-- User Profile Section -->
         <div class="sidebar-section">
-            <a href="{% url 'accounts:profile' %}" class="sidebar-nav-item" style="margin-bottom: var(--space-4);">
+            <a href="{% url 'accounts:profile' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'profile' %}active{% endif %}" style="margin-bottom: var(--space-4);">
                 <div class="sidebar-nav-icon">
                     {% if user.avatar %}
                         <img src="{{ user.avatar.url }}" alt="{{ user.email }}" class="navbar-user-avatar">
@@ -28,14 +28,14 @@
 
         <!-- Navigation Menu -->
         <nav class="sidebar-nav">
-            <!-- Main Section -->
+            <!-- Main Section - PRIORITY 1 -->
             {% can "dashboard.view" %}
             <div class="sidebar-section">
                 <div class="sidebar-section-title">
                     <i class="bi bi-grid"></i>
                     <span>Main</span>
                 </div>
-                <a href="{% url 'dashboard:home' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'dashboard:home' %}active{% endif %}">
+                <a href="{% url 'dashboard:home' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'home' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-speedometer2"></i>
                     </div>
@@ -44,68 +44,7 @@
             </div>
             {% endcan %}
 
-            <!-- Subscription Section -->
-            {% if has_user_subscription or has_pending_subscription or pending_plan %}
-            <div class="sidebar-section">
-                <div class="sidebar-section-title">
-                    <i class="bi bi-stars"></i>
-                    <span>Subscription</span>
-                </div>
-                {% if user_has_no_store %}
-                    {% if has_pending_subscription or pending_plan %}
-                    {# User has pending subscription but NO stores - guide to create store #}
-                    <a href="{% url 'stores:create' %}" class="sidebar-nav-item" style="background: var(--brand-50);">
-                        <div class="sidebar-nav-icon">
-                            <i class="bi bi-plus-lg"></i>
-                        </div>
-                        <span class="sidebar-nav-label">Create Your Store</span>
-                    </a>
-                    {% endif %}
-                {% elif has_user_subscription %}
-                    {# User has active subscription and stores - show management options #}
-                    <a href="{% url 'subscriptions:manage' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'subscriptions:manage' %}active{% endif %}">
-                        <div class="sidebar-nav-icon">
-                            <i class="bi bi-credit-card"></i>
-                        </div>
-                        <span class="sidebar-nav-label">Manage Subscription</span>
-                    </a>
-                    <a href="{% url 'stores:store_list_html' %}" class="sidebar-nav-item {% if 'store_list_html' in request.resolver_match.url_name or request.resolver_match.url_name == 'store_detail_html' or request.resolver_match.url_name == 'store_edit_html' %}active{% endif %}">
-                        <div class="sidebar-nav-icon">
-                            <i class="bi bi-shop"></i>
-                        </div>
-                        <span class="sidebar-nav-label">My Stores</span>
-                    </a>
-                    <a href="{% url 'stores:create' %}" class="sidebar-nav-item">
-                        <div class="sidebar-nav-icon">
-                            <i class="bi bi-plus-circle"></i>
-                        </div>
-                        <span class="sidebar-nav-label">Add New Store</span>
-                    </a>
-                {% endif %}
-            </div>
-            {% endif %}
-
-            <!-- Account Section -->
-            <div class="sidebar-section">
-                <div class="sidebar-section-title">
-                    <i class="bi bi-person"></i>
-                    <span>Account</span>
-                </div>
-                <a href="{% url 'accounts:profile' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'accounts:profile' %}active{% endif %}">
-                    <div class="sidebar-nav-icon">
-                        <i class="bi bi-person-circle"></i>
-                    </div>
-                    <span class="sidebar-nav-label">Profile</span>
-                </a>
-                <a href="{% url 'accounts:change_password' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'accounts:change_password' %}active{% endif %}">
-                    <div class="sidebar-nav-icon">
-                        <i class="bi bi-key"></i>
-                    </div>
-                    <span class="sidebar-nav-label">Change Password</span>
-                </a>
-            </div>
-
-            <!-- CRM Section -->
+            <!-- CRM Section - PRIORITY 2 (Core Business) -->
             {% can_any "customers.view" "products.view" "orders.view" as show_crm %}
             {% if show_crm %}
             <div class="sidebar-section">
@@ -114,7 +53,7 @@
                     <span>CRM</span>
                 </div>
                 {% can "customers.view" %}
-                <a href="{% url 'customers:list' %}" class="sidebar-nav-item {% if 'customers' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'customers:list' %}" class="sidebar-nav-item {% if request.resolver_match.app_name == 'customers' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-people"></i>
                     </div>
@@ -122,7 +61,7 @@
                 </a>
                 {% endcan %}
                 {% can "products.view" %}
-                <a href="{% url 'products:list' %}" class="sidebar-nav-item {% if 'products' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'products:list' %}" class="sidebar-nav-item {% if request.resolver_match.app_name == 'products' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-box"></i>
                     </div>
@@ -130,7 +69,7 @@
                 </a>
                 {% endcan %}
                 {% can "orders.view" %}
-                <a href="{% url 'orders:list' %}" class="sidebar-nav-item {% if 'orders' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'orders:list' %}" class="sidebar-nav-item {% if request.resolver_match.app_name == 'orders' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-cart3"></i>
                     </div>
@@ -140,14 +79,14 @@
             </div>
             {% endif %}
 
-            <!-- Marketing Section (Collapsible, feature-gated) -->
+            <!-- Marketing Section - PRIORITY 3 (Growth Tools) -->
             {% can_any "campaigns.view" "promo_codes.view" as show_marketing %}
             {% has_feature "marketing_campaigns" as has_marketing %}
             {% has_feature "promo_codes" as has_promos %}
             {% if show_marketing %}
             {% if has_marketing or has_promos %}
-            <div class="sidebar-section" x-data="{ marketingOpen: false }">
-                <button class="sidebar-nav-item" @click="marketingOpen = !marketingOpen" style="width: 100%; justify-content: space-between;">
+            <div class="sidebar-section">
+                <button class="sidebar-nav-item {% if request.resolver_match.app_name == 'marketing' %}active{% endif %}" @click="marketingOpen = !marketingOpen" style="width: 100%; justify-content: space-between; cursor: pointer; border: none; background: none;">
                     <div style="display: flex; align-items: center; gap: var(--space-3);">
                         <div class="sidebar-nav-icon">
                             <i class="bi bi-megaphone"></i>
@@ -160,18 +99,21 @@
                     <div style="padding-left: var(--space-8); margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1);">
                         {% can "campaigns.view" %}
                         {% if has_marketing %}
-                        <a href="{% url 'marketing:campaigns' %}" class="sidebar-nav-item {% if 'campaigns' in request.resolver_match.url_name %}active{% endif %}">
+                        <a href="{% url 'marketing:campaigns' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'campaigns' %}active{% endif %}">
+                            <div class="sidebar-nav-icon"><i class="bi bi-bullhorn"></i></div>
                             <span class="sidebar-nav-label">Campaigns</span>
                         </a>
                         {% endif %}
                         {% endcan %}
                         {% can "promo_codes.view" %}
-                        <a href="{% url 'marketing:promotions' %}" class="sidebar-nav-item {% if 'promotions' in request.resolver_match.url_name %}active{% endif %}">
+                        <a href="{% url 'marketing:promotions' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'promotions' %}active{% endif %}">
+                            <div class="sidebar-nav-icon"><i class="bi bi-tags"></i></div>
                             <span class="sidebar-nav-label">Promotions</span>
                         </a>
                         {% endcan %}
                         {% can "reports.view" %}
-                        <a href="{% url 'marketing:analytics' %}" class="sidebar-nav-item {% if 'analytics' in request.resolver_match.url_name %}active{% endif %}">
+                        <a href="{% url 'marketing:analytics' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'analytics' %}active{% endif %}">
+                            <div class="sidebar-nav-icon"><i class="bi bi-graph-up-arrow"></i></div>
                             <span class="sidebar-nav-label">Analytics</span>
                         </a>
                         {% endcan %}
@@ -181,26 +123,26 @@
             {% endif %}
             {% endif %}
 
-            <!-- Reports Section -->
+            <!-- Reports Section - PRIORITY 4 (Insights) -->
             {% can "reports.view" %}
             <div class="sidebar-section">
                 <div class="sidebar-section-title">
                     <i class="bi bi-bar-chart"></i>
                     <span>Reports</span>
                 </div>
-                <a href="{% url 'reports:sales' %}" class="sidebar-nav-item {% if 'sales' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'reports:sales' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'sales' and request.resolver_match.app_name == 'reports' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-currency-dollar"></i>
                     </div>
                     <span class="sidebar-nav-label">Sales Reports</span>
                 </a>
-                <a href="{% url 'reports:customers' %}" class="sidebar-nav-item {% if 'customers' in request.resolver_match.url_name and request.resolver_match.app_name == 'reports' %}active{% endif %}">
+                <a href="{% url 'reports:customers' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'customers' and request.resolver_match.app_name == 'reports' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-graph-up"></i>
                     </div>
                     <span class="sidebar-nav-label">Customer Reports</span>
                 </a>
-                <a href="{% url 'reports:products' %}" class="sidebar-nav-item {% if 'products' in request.resolver_match.url_name and request.resolver_match.app_name == 'reports' %}active{% endif %}">
+                <a href="{% url 'reports:products' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'products' and request.resolver_match.app_name == 'reports' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-pie-chart"></i>
                     </div>
@@ -209,7 +151,48 @@
             </div>
             {% endcan %}
 
-            <!-- Settings Section -->
+            <!-- Store Management Section - PRIORITY 5 -->
+            {% if has_user_subscription or has_pending_subscription or pending_plan %}
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">
+                    <i class="bi bi-shop"></i>
+                    <span>Store Management</span>
+                </div>
+                {% if user_has_no_store %}
+                    {% if has_pending_subscription or pending_plan %}
+                    <!-- User has pending subscription but NO stores - guide to create store  -->
+                    <a href="{% url 'stores:create' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'create' %}active{% endif %}" style="background: var(--brand-50);">
+                        <div class="sidebar-nav-icon">
+                            <i class="bi bi-plus-lg"></i>
+                        </div>
+                        <span class="sidebar-nav-label">Create Your Store</span>
+                    </a>
+                    {% endif %}
+                {% elif has_user_subscription %}
+                    {# User has active subscription and stores - show management options #}
+                    <a href="{% url 'stores:store_list_html' %}" class="sidebar-nav-item {% if request.resolver_match.app_name == 'stores' and request.resolver_match.url_name != 'create' %}active{% endif %}">
+                        <div class="sidebar-nav-icon">
+                            <i class="bi bi-shop-window"></i>
+                        </div>
+                        <span class="sidebar-nav-label">My Stores</span>
+                    </a>
+                    <a href="{% url 'stores:create' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'create' %}active{% endif %}">
+                        <div class="sidebar-nav-icon">
+                            <i class="bi bi-plus-circle"></i>
+                        </div>
+                        <span class="sidebar-nav-label">Add New Store</span>
+                    </a>
+                    <a href="{% url 'subscriptions:manage' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'manage' %}active{% endif %}">
+                        <div class="sidebar-nav-icon">
+                            <i class="bi bi-credit-card"></i>
+                        </div>
+                        <span class="sidebar-nav-label">Manage Subscription</span>
+                    </a>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Settings Section - PRIORITY 6 -->
             {% can_any "settings.view" "settings.update" "employees.view" "roles.view" "integrations.view" as show_settings %}
             {% if show_settings %}
             <div class="sidebar-section">
@@ -217,20 +200,9 @@
                     <i class="bi bi-gear"></i>
                     <span>Settings</span>
                 </div>
-                {% can_any "settings.view" "settings.update" as show_store_settings %}
-                {% if show_store_settings %}
-                {% if current_store %}
-                <a href="{% url 'settings:store' current_store.id %}" class="sidebar-nav-item {% if 'store' in request.resolver_match.url_name and request.resolver_match.app_name == 'settings' %}active{% endif %}">
-                    <div class="sidebar-nav-icon">
-                        <i class="bi bi-shop"></i>
-                    </div>
-                    <span class="sidebar-nav-label">Store Settings</span>
-                </a>
-                {% endif %}
-                {% endif %}
                 {% can_any "employees.view" "roles.view" as show_team_settings %}
                 {% if show_team_settings %}
-                <a href="{% url 'role_permission:member_list' %}" class="sidebar-nav-item {% if request.resolver_match.app_name == 'role_permission' and 'member' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'role_permission:member_list' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'member_list' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-people"></i>
                     </div>
@@ -239,7 +211,7 @@
                 {% endif %}
                 {% can "integrations.view" %}
                 {% if current_store %}
-                <a href="{% url 'settings:integrations' current_store.id %}" class="sidebar-nav-item {% if 'integrations' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'settings:integrations' current_store.id %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'integrations' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-plug"></i>
                     </div>
@@ -248,9 +220,9 @@
                 {% endif %}
                 {% endcan %}
                 {% if current_store %}
-                <a href="{% url 'settings:billing' current_store.id %}" class="sidebar-nav-item {% if 'billing' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'settings:billing' current_store.id %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'billing' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
-                        <i class="bi bi-credit-card"></i>
+                        <i class="bi bi-credit-card-2"></i>
                     </div>
                     <span class="sidebar-nav-label">Billing</span>
                 </a>
@@ -260,19 +232,39 @@
             </div>
             {% endif %}
 
-            <!-- Help Section -->
+            <!-- Account Section - PRIORITY 7 -->
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">
+                    <i class="bi bi-person"></i>
+                    <span>Account</span>
+                </div>
+                <a href="{% url 'accounts:profile' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'profile' %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-person-circle"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Profile</span>
+                </a>
+                <a href="{% url 'accounts:change_password' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'change_password' %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-key"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Change Password</span>
+                </a>
+            </div>
+
+            <!-- Help Section - PRIORITY 8 -->
             <div class="sidebar-section">
                 <div class="sidebar-section-title">
                     <i class="bi bi-question-circle"></i>
                     <span>Help</span>
                 </div>
-                <a href="{% url 'help:documentation' %}" class="sidebar-nav-item {% if 'documentation' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'help:documentation' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'documentation' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-book"></i>
                     </div>
                     <span class="sidebar-nav-label">Documentation</span>
                 </a>
-                <a href="{% url 'help:support' %}" class="sidebar-nav-item {% if 'support' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'help:support' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'support' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-life-preserver"></i>
                     </div>
