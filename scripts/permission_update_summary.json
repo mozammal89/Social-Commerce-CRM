@@ -1,0 +1,36 @@
+{
+  "total_permissions_found": 58,
+  "permissions_in_matrix": 55,
+  "missing_permissions": 3,
+  "missing_permissions_list": [
+    "anything.at_all",
+    "customers.delete",
+    "orders.delete"
+  ],
+  "role_suggestions": {
+    "manager": [
+      "customers.delete",
+      "orders.delete"
+    ]
+  },
+  "categorized_missing": {
+    "rbac": {},
+    "sales": {
+      "customers": [
+        "delete"
+      ],
+      "orders": [
+        "delete"
+      ]
+    },
+    "marketing": {},
+    "inventory": {},
+    "reporting": {},
+    "admin": {},
+    "other": {
+      "anything": [
+        "at_all"
+      ]
+    }
+  }
+}
