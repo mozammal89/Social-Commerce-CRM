@@ -38,6 +38,7 @@ def get_all_seeders():
     from apps.permissions.seeders import (
         features_seeder,
         plans_seeder,
+        resources_seeder,
         roles_seeder,
         permissions_seeder,
     )
@@ -50,6 +51,7 @@ def get_all_seeders():
         "stores": stores.StoreSeeder,
         "features": features_seeder.FeaturesSeeder,
         "plans": plans_seeder.PlansSeeder,
+        "resources": resources_seeder.ResourcesSeeder,
         "roles": roles_seeder.RolesSeeder,
         "role-permissions": permissions_seeder.RolePermissionsSeeder,
     }
@@ -78,9 +80,9 @@ def run_seeder(seeder_name, verbosity=1):
 
     try:
         if verbosity > 0:
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"🌱 Running {seeder_name.title()} Seeder")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
 
         seeder.run()
 
@@ -109,17 +111,17 @@ def run_all_seeders(verbosity=1):
     results = {}
 
     if verbosity > 0:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"🌱 Running All Seeders")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
     for seeder_name in sorted(seeders.keys()):
         results[seeder_name] = run_seeder(seeder_name, verbosity=verbosity)
 
     if verbosity > 0:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("📊 Seeder Summary")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         successful = sum(1 for v in results.values() if v)
         total = len(results)
         print(f"Completed: {successful}/{total}")
