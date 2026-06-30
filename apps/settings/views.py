@@ -86,7 +86,6 @@ def calculate_seat_usage(store):
     }
 
 
-
 @login_required
 @current_store
 def filter_team_members(request, store_id):
@@ -287,7 +286,12 @@ def change_member_role(request, store_id, membership_id):
         return JsonResponse({"success": False, "error": "Role ID is required"}, status=400)
 
     try:
-        new_role = Role.objects.get(id=new_role_id, store=request.store)
+        new_role = Role.objects.filter(
+            Q(id=new_role_id) & (Q(store=request.store) | Q(store__isnull=True))
+        ).first()
+        if not new_role:
+            return JsonResponse({"success": False, "error": "Invalid role"}, status=404)
+
         change_member_role_service(
             actor=request.user,
             membership=membership,
@@ -346,8 +350,12 @@ def invite_member(request, store_id):
         return JsonResponse({"success": False, "error": "Invalid email address"}, status=400)
 
     try:
-        role = Role.objects.get(id=role_id, store=request.store)
-    except Role.DoesNotExist:
+        role = Role.objects.filter(
+            Q(id=role_id) & (Q(store=request.store) | Q(store__isnull=True))
+        ).first()
+        if not role:
+            return JsonResponse({"success": False, "error": "Invalid role"}, status=400)
+    except Exception as e:
         return JsonResponse({"success": False, "error": "Invalid role"}, status=400)
 
     from django.contrib.auth import get_user_model
@@ -388,6 +396,9 @@ def invite_member(request, store_id):
         logger = logging.getLogger(__name__)
         logger.warning(f"Failed to check subscription limits: {str(e)}")
 
+    # Flag to track if user was already handled
+    user_already_handled = False
+
     try:
         existing_user = User.objects.get(email=email)
         existing_membership = StoreMembership.objects.filter(
@@ -414,7 +425,7 @@ def invite_member(request, store_id):
                     target_type="StoreMembership",
                     target_id=str(existing_membership.id),
                     store=request.store,
-                    metadata={
+                    after={
                         "user": email,
                         "role": role.name,
                     },
@@ -426,22 +437,53 @@ def invite_member(request, store_id):
                 return JsonResponse(
                     {"success": True, "message": f"{email} has been reinvited to the team"}
                 )
+        else:
+            # User exists but doesn't have membership in this store
+            # Create membership for existing user
+            membership = add_member_service(
+                actor=request.user,
+                store=request.store,
+                user=existing_user,
+                role=role,
+            )
+
+            AuditLog.objects.create(
+                action="member.invited",
+                actor=request.user,
+                target_type="StoreMembership",
+                target_id=str(membership.id),
+                store=request.store,
+                after={
+                    "user": email,
+                    "role": role.name,
+                    "message": message,
+                },
+            )
+
+            # Clear cache to update seat counts immediately
+            clear_store_subscription_cache(request.store)
+
+            return JsonResponse(
+                {"success": True, "message": f"{email} has been invited to the team"}
+            )
     except User.DoesNotExist:
-        pass
+        pass  # User doesn't exist, will create new user below
 
+    # Only create new user if we haven't handled an existing user case
     try:
-        # Create user with temporary password
-        import random
-        import string
+        if not user_already_handled:
+            # Create user with temporary password
+            import random
+            import string
 
-        temp_password = "".join(random.choices(string.ascii_letters + string.digits, k=12))
+            temp_password = "".join(random.choices(string.ascii_letters + string.digits, k=12))
 
-        user = User.objects.create_user(
-            email=email,
-            first_name=email.split("@")[0],
-            password=temp_password,
-            is_active=False,  # User needs to accept invitation
-        )
+            user = User.objects.create_user(
+                email=email,
+                first_name=email.split("@")[0],
+                password=temp_password,
+                is_active=False,  # User needs to accept invitation
+            )
 
         # Create membership
         membership = add_member_service(
@@ -457,7 +499,7 @@ def invite_member(request, store_id):
             target_type="StoreMembership",
             target_id=str(membership.id),
             store=request.store,
-            metadata={
+            after={
                 "user": email,
                 "role": role.name,
                 "message": message,
@@ -527,7 +569,7 @@ def deactivate_member(request, store_id, membership_id):
             target_type="StoreMembership",
             target_id=str(membership.id),
             store=request.store,
-            metadata={
+            after={
                 "user": membership.user.email,
                 "previous_role": membership.role.name,
             },
@@ -578,7 +620,7 @@ def activate_member(request, store_id, membership_id):
             target_type="StoreMembership",
             target_id=str(membership.id),
             store=request.store,
-            metadata={
+            after={
                 "user": membership.user.email,
                 "current_role": membership.role.name,
             },
@@ -633,7 +675,7 @@ def remove_member(request, store_id, membership_id):
                 target_type="StoreMembership",
                 target_id=str(membership.id),
                 store=request.store,
-                metadata={
+                after={
                     "user": user_email,
                     "removed_role": membership.role.name,
                 },
