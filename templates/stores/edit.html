@@ -4,15 +4,6 @@
 
 {% block content %}
 <div class="dashboard-container">
-    <!-- Breadcrumb -->
-    <nav aria-label="breadcrumb" class="mb-3">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'stores:store_list_html' %}">My Stores</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'stores:store_detail_html' store_id=store.id %}">{{ store.name }}</a></li>
-            <li class="breadcrumb-item active">Edit</li>
-        </ol>
-    </nav>
-
     <!-- Page Header -->
     <div class="section-header">
         <div>

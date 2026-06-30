@@ -6,9 +6,135 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.template.loader import render_to_string
 from django.db import models
+from django.urls import reverse
 from apps.stores.models import Store
 
 User = get_user_model()
+
+
+def breadcrumbs(request):
+    """
+    Automatically generate breadcrumbs based on the current URL.
+
+    This context processor analyzes the current URL pattern and builds
+    appropriate breadcrumbs without requiring manual configuration in each view.
+    """
+    breadcrumbs = []
+    resolver_match = getattr(request, 'resolver_match', None)
+
+    if not resolver_match:
+        return {'breadcrumbs': breadcrumbs}
+
+    # Define breadcrumb mappings for different URL patterns
+    # Format: 'app_name:url_name' -> [breadcrumb_items]
+    breadcrumb_map = {
+        'dashboard:home': [],  # Just home, no additional breadcrumbs
+
+        # Stores breadcrumbs
+        'stores:store_list_html': [{'title': 'My Stores', 'url': reverse('stores:store_list_html')}],
+        'stores:create': [
+            {'title': 'My Stores', 'url': reverse('stores:store_list_html')},
+            {'title': 'Create Store', 'url': ''},
+        ],
+
+        # Products breadcrumbs
+        'products:list': [
+            {'title': 'Products', 'url': reverse('products:list')},
+        ],
+        'products:create': [
+            {'title': 'Products', 'url': reverse('products:list')},
+            {'title': 'Create Product', 'url': ''},
+        ],
+
+        # Orders breadcrumbs
+        'orders:list': [
+            {'title': 'Orders', 'url': reverse('orders:list')},
+        ],
+        'orders:create': [
+            {'title': 'Orders', 'url': reverse('orders:list')},
+            {'title': 'Create Order', 'url': ''},
+        ],
+
+        # Customers breadcrumbs
+        'customers:list': [
+            {'title': 'Customers', 'url': reverse('customers:list')},
+        ],
+        'customers:create': [
+            {'title': 'Customers', 'url': reverse('customers:list')},
+            {'title': 'Add Customer', 'url': ''},
+        ],
+
+        # Settings breadcrumbs
+        'settings:store': [{'title': 'Settings', 'url': '#'}],
+        'settings:integrations': [
+            {'title': 'Settings', 'url': '#'},
+            {'title': 'Integrations', 'url': ''},
+        ],
+        'settings:billing': [
+            {'title': 'Settings', 'url': '#'},
+            {'title': 'Billing', 'url': ''},
+        ],
+
+        # Account breadcrumbs
+        'accounts:profile': [{'title': 'Account', 'url': '#'}],
+        'accounts:change_password': [
+            {'title': 'Account', 'url': '#'},
+            {'title': 'Change Password', 'url': ''},
+        ],
+
+        # Help breadcrumbs
+        'help:documentation': [{'title': 'Help', 'url': '#'}],
+        'help:support': [{'title': 'Help', 'url': '#'}, {'title': 'Support', 'url': ''}],
+    }
+
+    # Get the base URL pattern
+    url_pattern = f"{resolver_match.app_name}:{resolver_match.url_name}" if resolver_match.app_name else resolver_match.url_name
+
+    # Get base breadcrumbs from map
+    base_breadcrumbs = breadcrumb_map.get(url_pattern, [])
+
+    # Handle dynamic pages that need additional data
+    if url_pattern == 'stores:store_detail_html':
+        # Store detail - add store name
+        breadcrumbs = base_breadcrumbs.copy()
+        # Try to get store from URL kwargs
+        store_id = resolver_match.kwargs.get('store_id')
+        if store_id:
+            try:
+                from apps.stores.models import Store
+                store = Store.objects.filter(id=store_id, is_deleted=False).first()
+                if store:
+                    breadcrumbs.append({'title': store.name, 'url': ''})
+                else:
+                    breadcrumbs.append({'title': 'Store Details', 'url': ''})
+            except:
+                breadcrumbs.append({'title': 'Store Details', 'url': ''})
+        else:
+            breadcrumbs.append({'title': 'Store Details', 'url': ''})
+
+    elif url_pattern == 'stores:store_edit_html':
+        # Store edit - add store name and Edit
+        breadcrumbs = base_breadcrumbs.copy()
+        store_id = resolver_match.kwargs.get('store_id')
+        if store_id:
+            try:
+                from apps.stores.models import Store
+                store = Store.objects.filter(id=store_id, is_deleted=False).first()
+                if store:
+                    breadcrumbs.append({'title': store.name, 'url': reverse('stores:store_detail_html', args=[store.id])})
+                    breadcrumbs.append({'title': 'Edit', 'url': ''})
+                else:
+                    breadcrumbs.append({'title': 'Edit Store', 'url': ''})
+            except:
+                breadcrumbs.append({'title': 'Edit Store', 'url': ''})
+        else:
+            breadcrumbs.append({'title': 'Edit Store', 'url': ''})
+
+    else:
+        # Use base breadcrumbs as is
+        breadcrumbs = base_breadcrumbs
+
+    return {'breadcrumbs': breadcrumbs}
 
 
 def _get_user_subscription_context(user):

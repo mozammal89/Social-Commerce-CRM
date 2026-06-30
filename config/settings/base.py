@@ -89,6 +89,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "apps.common.context_processors.app_settings",
                 "apps.common.context_processors.current_store",
+                "apps.common.context_processors.breadcrumbs",
                 "apps.permissions.context_processors.rbac",
                 "apps.permissions.ui.context_processors.role_permission_breadcrumbs",
                 "apps.permissions.ui.context_processors.role_permission_sidebar_extra",

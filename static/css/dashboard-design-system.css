@@ -1164,7 +1164,7 @@ body {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
     border-radius: var(--radius);
-    border: 1px solid transparent;
+    border: 1px solid;
     cursor: pointer;
     transition: all var(--transition-fast);
     text-decoration: none;
@@ -1205,7 +1205,7 @@ body {
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background: var(--surface-secondary);
+    /* background: var(--surface-secondary); */
     border-color: var(--border-strong);
 }
 
@@ -1713,29 +1713,75 @@ textarea.form-control {
    BREADCRUMBS
    ===================================================================== */
 
-.breadcrumb {
+/* Page Breadcrumb Container */
+.page-breadcrumb {
     padding: var(--space-3) var(--space-4);
-    background: var(--surface-primary);
-    border: 1px solid var(--border-light);
-    border-radius: var(--radius);
+    margin-bottom: var(--space-4);
+    background: var(--surface-secondary);
+    border-bottom: 1px solid var(--border-light);
 }
 
+/* Breadcrumb List */
+.breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border-radius: 0;
+}
+
+/* Breadcrumb Items */
 .breadcrumb-item {
+    display: flex;
+    align-items: center;
     font-size: var(--font-size-sm);
+    color: var(--text-secondary);
 }
 
-.breadcrumb-item a {
+/* Add separator between items */
+.breadcrumb-item + .breadcrumb-item::before {
+    content: "/";
+    margin-right: var(--space-2);
+    margin-left: var(--space-2);
     color: var(--text-tertiary);
+}
+
+/* Breadcrumb Links */
+.breadcrumb-link {
+    color: var(--text-secondary);
     text-decoration: none;
     transition: color var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
 }
 
-.breadcrumb-item a:hover {
+.breadcrumb-link:hover {
     color: var(--brand-600);
 }
 
+/* Active Breadcrumb */
 .breadcrumb-item.active {
     color: var(--text-primary);
+    font-weight: 500;
+}
+
+/* Home Icon in Breadcrumb */
+.breadcrumb-link .bi-house {
+    font-size: var(--font-size-base);
+}
+
+/* Responsive Design */
+@media (max-width: 767.98px) {
+    .page-breadcrumb {
+        padding: var(--space-2) var(--space-3);
+    }
+
+    .breadcrumb-item {
+        font-size: var(--font-size-xs);
+    }
 }
 
 /* =====================================================================

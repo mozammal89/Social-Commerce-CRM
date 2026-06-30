@@ -30,7 +30,9 @@ x-data="{
     <!-- Main Content Area -->
     <div id="main-content-area">
         <!-- Breadcrumbs -->
-        {% include 'components/breadcrumbs.html' %}
+        {% block breadcrumbs %}
+            {% include 'components/breadcrumbs.html' %}
+        {% endblock %}
 
         <!-- Page Content -->
         <div class="content-container">

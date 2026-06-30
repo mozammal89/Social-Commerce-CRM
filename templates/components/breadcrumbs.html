@@ -1,23 +1,51 @@
-{% if breadcrumbs %}
-<nav aria-label="breadcrumb">
-    <ol class="breadcrumb mb-4">
+{% if page_breadcrumbs %}
+<nav aria-label="breadcrumb" class="page-breadcrumb">
+    <ol class="breadcrumb">
         <li class="breadcrumb-item">
-            <a href="{% url 'dashboard:home' %}"><i class="bi bi-house"></i></a>
+            <a href="{% url 'dashboard:home' %}" class="breadcrumb-link">
+                <i class="bi bi-house"></i>
+                Home
+            </a>
+        </li>
+        {% for breadcrumb in page_breadcrumbs %}
+        {% if forloop.last %}
+        <li class="breadcrumb-item active" aria-current="page">{{ breadcrumb.title }}</li>
+        {% else %}
+        <li class="breadcrumb-item">
+            <a href="{{ breadcrumb.url }}" class="breadcrumb-link">{{ breadcrumb.title }}</a>
+        </li>
+        {% endif %}
+        {% endfor %}
+    </ol>
+</nav>
+{% elif breadcrumbs %}
+<nav aria-label="breadcrumb" class="page-breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'dashboard:home' %}" class="breadcrumb-link">
+                <i class="bi bi-house"></i>
+                Home
+            </a>
         </li>
         {% for breadcrumb in breadcrumbs %}
         {% if forloop.last %}
         <li class="breadcrumb-item active" aria-current="page">{{ breadcrumb.title }}</li>
         {% else %}
-        <li class="breadcrumb-item"><a href="{{ breadcrumb.url }}">{{ breadcrumb.title }}</a></li>
+        <li class="breadcrumb-item">
+            <a href="{{ breadcrumb.url }}" class="breadcrumb-link">{{ breadcrumb.title }}</a>
+        </li>
         {% endif %}
         {% endfor %}
     </ol>
 </nav>
 {% else %}
-<nav aria-label="breadcrumb">
-    <ol class="breadcrumb mb-4">
+<nav aria-label="breadcrumb" class="page-breadcrumb">
+    <ol class="breadcrumb">
         <li class="breadcrumb-item">
-            <a href="{% url 'dashboard:home' %}"><i class="bi bi-house"></i> Home</a>
+            <a href="{% url 'dashboard:home' %}" class="breadcrumb-link">
+                <i class="bi bi-house"></i>
+                Home
+            </a>
         </li>
         <li class="breadcrumb-item active" aria-current="page">Dashboard</li>
     </ol>
