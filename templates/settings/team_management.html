@@ -123,51 +123,38 @@
                             <span class="status-badge status-badge--inactive">Inactive</span>
                             {% endif %}
                         </td>
-                        <td>
-                            <small>{{ membership.created_at|date:"M d, Y" }}</small>
-                        </td>
-                        <td class="text-end">
-                            {% can_any "members.manage" as can_manage %}
-                            {% if can_manage %}
-                            <div class="dropdown d-inline-block">
-                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                    <i class="bi bi-three-dots"></i>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li>
-                                        <button class="dropdown-item change-role-btn" 
-                                                data-membership-id="{{ membership.id }}"
-                                                data-bs-toggle="modal" 
-                                                data-bs-target="#changeRoleModal">
-                                            <i class="bi bi-pencil me-2"></i>Change Role
-                                        </button>
-                                    </li>
-                                    {% if membership.is_active %}
-                                    <li>
-                                        <button class="dropdown-item deactivate-member-btn" 
-                                                data-membership-id="{{ membership.id }}">
-                                            <i class="bi bi-person-x me-2"></i>Deactivate
-                                        </button>
-                                    </li>
-                                    {% else %}
-                                    <li>
-                                        <button class="dropdown-item activate-member-btn" 
-                                                data-membership-id="{{ membership.id }}">
-                                            <i class="bi bi-person-check me-2"></i>Activate
-                                        </button>
-                                    </li>
-                                    {% endif %}
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li>
-                                        <button class="dropdown-item remove-member-btn text-danger" 
-                                                data-membership-id="{{ membership.id }}">
-                                            <i class="bi bi-trash me-2"></i>Remove
-                                        </button>
-                                    </li>
-                                </ul>
-                            </div>
-                            {% endif %}
-                        </td>
+                         <td>
+                             <small>{{ membership.created_at|date:"M d, Y" }}</small>
+                         </td>
+                          <td class="text-end">
+                              <div class="btn-group">
+                                  <button class="btn btn-sm btn-outline-secondary change-role-btn" 
+                                          data-membership-id="{{ membership.id }}"
+                                          data-bs-toggle="modal" 
+                                          data-bs-target="#changeRoleModal"
+                                          title="Change Role">
+                                      <i class="bi bi-pencil"></i>
+                                  </button>
+                                  {% if membership.is_active %}
+                                  <button class="btn btn-sm btn-outline-warning deactivate-member-btn" 
+                                          data-membership-id="{{ membership.id }}"
+                                          title="Deactivate">
+                                      <i class="bi bi-person-x"></i>
+                                  </button>
+                                  {% else %}
+                                  <button class="btn btn-sm btn-outline-success activate-member-btn" 
+                                          data-membership-id="{{ membership.id }}"
+                                          title="Activate">
+                                      <i class="bi bi-person-check"></i>
+                                  </button>
+                                  {% endif %}
+                                  <button class="btn btn-sm btn-outline-danger remove-member-btn" 
+                                          data-membership-id="{{ membership.id }}"
+                                          title="Remove">
+                                      <i class="bi bi-trash"></i>
+                                  </button>
+                              </div>
+                          </td>
                     </tr>
                     {% empty %}
                     <tr>
@@ -412,6 +399,9 @@
         </div>
     </div>
 </div>
+
+<!-- Confirmation Modal -->
+{% include "components/confirm_modal.html" %}
 
 <!-- Loading Overlay -->
 <div id="loadingOverlay" class="loading-overlay d-none">

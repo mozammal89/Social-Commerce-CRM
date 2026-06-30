@@ -39,8 +39,9 @@ const TeamManagement = (function() {
             applyFiltersBtn.addEventListener('click', handleFilterChange);
         }
 
-        // Event delegation for dynamically loaded buttons
+        // Event delegation for action buttons
         document.addEventListener('click', function(e) {
+            // Handle button clicks directly instead of dropdown
             if (e.target.closest('.deactivate-member-btn')) {
                 e.preventDefault();
                 const btn = e.target.closest('.deactivate-member-btn');
@@ -187,26 +188,39 @@ const TeamManagement = (function() {
         if (currentFilters.search) params.append('search', currentFilters.search);
         if (currentFilters.role) params.append('role', currentFilters.role);
         if (currentFilters.status) params.append('status', currentFilters.status);
-
+        
         const url = '/settings/team/' + storeId + '/filter/?' + params.toString();
-
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    renderMembersTable(data.members);
-                    updateMemberCount(data.total);
-                } else {
-                    showNotification(data.error || 'Error loading members', 'error');
-                }
-            })
-            .catch(error => {
-                showNotification('Error loading members', 'error');
-            })
-            .finally(() => {
-                isLoading = false;
-                hideLoading();
-            });
+        
+        console.log('Fetching members from:', url); // Debug logging
+        
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            console.log('Response status:', response.status); // Debug logging
+            return response.json();
+        })
+        .then(data => {
+            console.log('Response data:', data); // Debug logging
+            if (data.success) {
+                renderMembersTable(data.members);
+                updateMemberCount(data.total);
+            } else {
+                showNotification(data.error || 'Error loading members', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading members:', error); // Debug logging
+            showNotification('Error loading members', 'error');
+        })
+        .finally(() => {
+            isLoading = false;
+            hideLoading();
+        });
     }
 
     function renderMembersTable(members) {
@@ -232,9 +246,10 @@ const TeamManagement = (function() {
             const statusBadge = member.is_active 
                 ? '<span class="status-badge status-badge--active">Active</span>'
                 : '<span class="status-badge status-badge--inactive">Inactive</span>';
-
-            const dropdownItems = generateDropdownItems(member);
-
+            
+            const actionButtons = generateActionButtons(member);
+            console.log('Member:', member.name, 'Action buttons:', actionButtons.substring(0, 100)); // Debug
+            
             return `
                 <tr class="member-row animate-in" 
                     data-member-id="${member.id}"
@@ -259,41 +274,72 @@ const TeamManagement = (function() {
                         <small>${member.created_at}</small>
                     </td>
                     <td class="text-end">
-                        <div class="dropdown d-inline-block">
-                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                <i class="bi bi-three-dots"></i>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                ${dropdownItems}
-                            </ul>
+                        <div class="btn-group">
+                            ${actionButtons}
                         </div>
                     </td>
                 </tr>
             `;
         }).join('');
-
-        // Reinitialize Bootstrap dropdowns
-        const dropdownElements = document.querySelectorAll('.dropdown-toggle');
-        dropdownElements.forEach(element => {
-            new bootstrap.Dropdown(element);
-        });
+        
+        console.log('Table rendered successfully'); // Debug
+        
+        // Initialize action button event listeners
+        initializeActionButtonListeners();
     }
 
-    function generateDropdownItems(member) {
-        let items = '';
+    function initializeActionButtonListeners() {
+        console.log('Initializing action button listeners'); // Debug
+        // Event listeners are already set up via delegation in setupEventListeners
+        // This function is a placeholder if needed for specific initialization
+    }
+
+    function generateActionButtons(member) {
+        console.log('Generating action buttons for member:', member.name); // Debug logging
+        let buttons = '';
         
-        items += '<li><button class="dropdown-item change-role-btn" data-membership-id="' + member.id + '" data-bs-toggle="modal" data-bs-target="#changeRoleModal"><i class="bi bi-pencil me-2"></i>Change Role</button></li>';
+        // Change Role button (always visible)
+        buttons += `
+            <button class="btn btn-sm btn-outline-secondary change-role-btn" 
+                    data-membership-id="${member.id}"
+                    data-bs-toggle="modal" 
+                    data-bs-target="#changeRoleModal"
+                    title="Change Role">
+                <i class="bi bi-pencil"></i>
+            </button>
+        `;
 
         if (member.is_active) {
-            items += '<li><button class="dropdown-item deactivate-member-btn" data-membership-id="' + member.id + '"><i class="bi bi-person-x me-2"></i>Deactivate</button></li>';
+            // Deactivate button (for active members)
+            buttons += `
+                <button class="btn btn-sm btn-outline-warning deactivate-member-btn" 
+                        data-membership-id="${member.id}"
+                        title="Deactivate">
+                    <i class="bi bi-person-x"></i>
+                </button>
+            `;
         } else {
-            items += '<li><button class="dropdown-item activate-member-btn" data-membership-id="' + member.id + '"><i class="bi bi-person-check me-2"></i>Activate</button></li>';
+            // Activate button (for inactive members)
+            buttons += `
+                <button class="btn btn-sm btn-outline-success activate-member-btn" 
+                        data-membership-id="${member.id}"
+                        title="Activate">
+                    <i class="bi bi-person-check"></i>
+                </button>
+            `;
         }
 
-        items += '<li><hr class="dropdown-divider"></li>';
-        items += '<li><button class="dropdown-item remove-member-btn text-danger" data-membership-id="' + member.id + '"><i class="bi bi-trash me-2"></i>Remove</button></li>';
+        // Remove button (always visible)
+        buttons += `
+            <button class="btn btn-sm btn-outline-danger remove-member-btn" 
+                    data-membership-id="${member.id}"
+                    title="Remove">
+                <i class="bi bi-trash"></i>
+            </button>
+        `;
 
-        return items;
+        console.log('Generated buttons HTML:', buttons.substring(0, 200)); // Debug logging
+        return buttons;
     }
 
     function updateMemberCount(count) {
@@ -324,61 +370,71 @@ const TeamManagement = (function() {
     }
 
     function deactivateMember(membershipId) {
-        if (confirm('Are you sure you want to deactivate this member? They will lose access to this store.')) {
-            showLoading();
-
-            fetch('/settings/team/' + storeId + '/deactivate/' + membershipId + '/', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCsrfToken(),
-                },
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showNotification(data.message, 'success');
-                    loadMembers();
-                    updateSeatCounts();
-                } else {
-                    showNotification(data.error || 'Error deactivating member', 'error');
-                }
-            })
-            .catch(error => {
-                showNotification('Error deactivating member', 'error');
-            })
-            .finally(() => {
-                hideLoading();
-            });
-        }
+        window.confirmAction({
+            title: "Deactivate Team Member",
+            message: "Are you sure you want to deactivate this member? They will lose access to this store.",
+            confirmText: "Deactivate",
+            confirmClass: "btn-warning",
+            onConfirm: function() {
+                showLoading();
+                fetch('/settings/team/' + storeId + '/deactivate/' + membershipId + '/', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification(data.message, 'success');
+                        loadMembers();
+                        updateSeatCounts();
+                    } else {
+                        showNotification(data.error || 'Error deactivating member', 'error');
+                    }
+                })
+                .catch(error => {
+                    showNotification('Error deactivating member', 'error');
+                })
+                .finally(() => {
+                    hideLoading();
+                });
+            }
+        });
     }
 
     function activateMember(membershipId) {
-        if (confirm('Are you sure you want to activate this member? They will regain access to this store.')) {
-            showLoading();
-
-            fetch('/settings/team/' + storeId + '/activate/' + membershipId + '/', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCsrfToken(),
-                },
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showNotification(data.message, 'success');
-                    loadMembers();
-                    updateSeatCounts();
-                } else {
-                    showNotification(data.error || 'Error activating member', 'error');
-                }
-            })
-            .catch(error => {
-                showNotification('Error activating member', 'error');
-            })
-            .finally(() => {
-                hideLoading();
-            });
-        }
+        window.confirmAction({
+            title: "Activate Team Member",
+            message: "Are you sure you want to activate this member? They will regain access to this store.",
+            confirmText: "Activate",
+            confirmClass: "btn-success",
+            onConfirm: function() {
+                showLoading();
+                fetch('/settings/team/' + storeId + '/activate/' + membershipId + '/', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification(data.message, 'success');
+                        loadMembers();
+                        updateSeatCounts();
+                    } else {
+                        showNotification(data.error || 'Error activating member', 'error');
+                    }
+                })
+                .catch(error => {
+                    showNotification('Error activating member', 'error');
+                })
+                .finally(() => {
+                    hideLoading();
+                });
+            }
+        });
     }
 
     function openChangeRoleModal(membershipId) {
@@ -442,32 +498,37 @@ const TeamManagement = (function() {
     }
 
     function confirmRemoveMember(membershipId) {
-        if (confirm('Are you sure you want to remove this member from the team? This action cannot be undone.')) {
-            showLoading();
-
-            fetch('/settings/team/' + storeId + '/remove/' + membershipId + '/', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCsrfToken(),
-                },
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showNotification(data.message, 'success');
-                    loadMembers();
-                    updateSeatCounts();
-                } else {
-                    showNotification(data.error || 'Error removing member', 'error');
-                }
-            })
-            .catch(error => {
-                showNotification('Error removing member', 'error');
-            })
-            .finally(() => {
-                hideLoading();
-            });
-        }
+        window.confirmAction({
+            title: "Remove Team Member",
+            message: "Are you sure you want to remove this member from the team? This action cannot be undone.",
+            confirmText: "Remove",
+            confirmClass: "btn-danger",
+            onConfirm: function() {
+                showLoading();
+                fetch('/settings/team/' + storeId + '/remove/' + membershipId + '/', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification(data.message, 'success');
+                        loadMembers();
+                        updateSeatCounts();
+                    } else {
+                        showNotification(data.error || 'Error removing member', 'error');
+                    }
+                })
+                .catch(error => {
+                    showNotification('Error removing member', 'error');
+                })
+                .finally(() => {
+                    hideLoading();
+                });
+            }
+        });
     }
 
     function handleInviteMember(e) {

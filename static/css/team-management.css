@@ -89,6 +89,12 @@
     background-color: #f8f9fa;
 }
 
+/* Action column width */
+table td:last-child {
+    min-width: 120px;
+    white-space: nowrap;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .d-flex.justify-content-between {
@@ -130,4 +136,44 @@
 .notification-container .alert {
     margin-bottom: 0.5rem;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Action button group styling */
+.btn-group {
+    position: relative;
+    display: inline-flex;
+    vertical-align: middle;
+}
+
+.btn-group .btn {
+    position: relative;
+    flex: 0 1 auto;
+    z-index: 1050 !important;
+}
+
+.btn-group .btn + .btn {
+    margin-left: -1px;
+}
+
+.btn-group .btn:focus,
+.btn-group .btn:active,
+.btn-group .btn:hover {
+    z-index: 1051 !important;
+}
+
+/* Button icon sizing */
+.btn-group .btn i {
+    font-size: 0.875rem;
+}
+
+/* Action button spacing for smaller screens */
+@media (max-width: 768px) {
+    .btn-group .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    .btn-group .btn i {
+        font-size: 0.75rem;
+    }
 }
