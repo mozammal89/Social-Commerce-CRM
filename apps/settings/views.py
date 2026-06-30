@@ -86,6 +86,80 @@ def calculate_seat_usage(store):
     }
 
 
+
+@login_required
+@current_store
+def filter_team_members(request, store_id):
+    """AJAX endpoint to filter team members."""
+    if request.method != "GET":
+        return JsonResponse({"success": False, "error": "Method not allowed"}, status=405)
+
+    # Check permissions
+    can_view = request.user.is_superuser or user_has_permission(
+        request.user, request.store, PERM_MEMBERS_VIEW
+    )
+
+    if not can_view:
+        return JsonResponse({"success": False, "error": "Permission denied"}, status=403)
+
+    search_term = request.GET.get("search", "").strip()
+    role_filter = request.GET.get("role", "").strip()
+    status_filter = request.GET.get("status", "").strip()
+
+    # Build query filters
+    filters = Q(store=request.store) & Q(user__is_active=True)
+
+    if search_term:
+        filters = filters & (
+            Q(user__first_name__icontains=search_term)
+            | Q(user__last_name__icontains=search_term)
+            | Q(user__email__icontains=search_term)
+        )
+
+    if role_filter:
+        filters = filters & Q(role_id=role_filter)
+
+    if status_filter == "active":
+        filters = filters & Q(is_active=True)
+    elif status_filter == "inactive":
+        filters = filters & Q(is_active=False)
+
+    # Query filtered memberships
+    memberships = (
+        StoreMembership.objects.filter(filters)
+        .exclude(user=request.user)  # Exclude current user
+        .select_related("user", "role")
+        .order_by("-is_active", "role__level", "user__first_name")
+    )
+
+    # Serialize memberships
+    members_data = []
+    for membership in memberships:
+        # Generate avatar initials
+        first_initial = membership.user.first_name[0] if membership.user.first_name else ""
+        last_initial = membership.user.last_name[0] if membership.user.last_name else ""
+        avatar = (first_initial + last_initial).upper()
+
+        members_data.append(
+            {
+                "id": str(membership.id),
+                "user_id": str(membership.user.id),
+                "name": membership.user.get_full_name(),
+                "email": membership.user.email,
+                "first_name": membership.user.first_name,
+                "last_name": membership.user.last_name,
+                "avatar": avatar,
+                "role_id": str(membership.role.id),
+                "role_name": membership.role.name,
+                "is_active": membership.is_active,
+                "created_at": membership.created_at.strftime("%Y-%m-%d"),
+                "status": "active" if membership.is_active else "inactive",
+            }
+        )
+
+    return JsonResponse({"success": True, "members": members_data, "total": len(members_data)})
+
+
 @login_required
 @current_store
 def team_management(request, store_id):
