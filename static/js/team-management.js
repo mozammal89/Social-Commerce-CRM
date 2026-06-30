@@ -693,6 +693,15 @@ const TeamManagement = (function() {
         if (overlay) {
             overlay.remove();
         }
+        
+        // Also clean up any Bootstrap modal backdrops that might be stuck
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(backdrop => backdrop.remove());
+        
+        // Remove modal-open class from body
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
     }
 
     function getCsrfToken() {
