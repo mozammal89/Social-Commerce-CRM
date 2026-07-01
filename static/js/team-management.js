@@ -368,9 +368,9 @@ const TeamManagement = (function() {
         apply('used_seats', stats.used_seats);
         apply('remaining_seats', stats.remaining_seats);
 
-        // Toggle the danger highlight on Remaining Seats when at cap.
+        // Toggle the danger highlight on the Remaining Seats wrapper when at cap.
         const atCap = stats.remaining_seats === 0;
-        document.querySelectorAll('[data-stat="remaining_seats_wrap"]').forEach(el => {
+        document.querySelectorAll('[data-stat-wrap="remaining_seats"]').forEach(el => {
             el.classList.toggle('text-danger', atCap);
             el.classList.toggle('stat-card--danger', atCap);
         });
