@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, TYPE_CHECKING
 
 from django.db import transaction
+from django.db.models import Count, Q
 from django.utils import timezone
 from django.core.cache import cache
 
@@ -745,14 +746,26 @@ def check_plan_limits(store: Store) -> Dict[str, Any]:
             logger.warning(f"Failed to look up store owners: {str(e)}")
             owner_ids = []
 
-        # Count all active memberships across all tenant stores, excluding owners
-        users_count = (
-            StoreMembership.objects.filter(store__tenant=subscription.tenant, is_active=True)
+        # ``reserved_users`` is the value write-paths (add_member,
+        # reactivate_member, invite_member) MUST enforce against. A
+        # deactivated row still occupies its seat; only hard-delete
+        # frees it. Without this count the deactivate/reactivate
+        # bypass reopens under tenant-based subscriptions.
+        # ``users`` is the active-only count, kept for UI display.
+        counts = (
+            StoreMembership.objects.filter(store__tenant=subscription.tenant)
             .exclude(user_id__in=owner_ids)
-            .count()
+            .aggregate(
+                users=Count("id", filter=Q(is_active=True)),
+                reserved_users=Count("id"),
+            )
         )
+        users_count = counts["users"]
+        reserved_users_count = counts["reserved_users"]
         logger.info(
-            f"Tenant {subscription.tenant.id} usage: {stores_count} stores, {users_count} users (excluding {len(owner_ids)} owners)"
+            f"Tenant {subscription.tenant.id} usage: {stores_count} stores, "
+            f"{users_count} active / {reserved_users_count} reserved users "
+            f"(excluding {len(owner_ids)} owners)"
         )
     else:
         # Store-based: count for this store only
@@ -775,13 +788,23 @@ def check_plan_limits(store: Store) -> Dict[str, Any]:
             logger.warning(f"Failed to look up store owners: {str(e)}")
             owner_ids = []
 
-        users_count = (
-            StoreMembership.objects.filter(store=store, is_active=True)
+        # ``reserved_users`` is the value write-paths MUST enforce
+        # against. A deactivated row still occupies its seat; only
+        # hard-delete frees it. ``users`` (active-only) is kept for
+        # the UI's "X / Y active" display.
+        counts = (
+            StoreMembership.objects.filter(store=store)
             .exclude(user_id__in=owner_ids)
-            .count()
+            .aggregate(
+                users=Count("id", filter=Q(is_active=True)),
+                reserved_users=Count("id"),
+            )
         )
+        users_count = counts["users"]
+        reserved_users_count = counts["reserved_users"]
         logger.info(
-            f"Store {store.id} usage: {stores_count} stores, {users_count} users (excluding {len(owner_ids)} owners)"
+            f"Store {store.id} usage: {stores_count} stores, {users_count} active / "
+            f"{reserved_users_count} reserved users (excluding {len(owner_ids)} owners)"
         )
 
     limits = {
@@ -795,6 +818,11 @@ def check_plan_limits(store: Store) -> Dict[str, Any]:
     usage = {
         "stores": stores_count,
         "users": users_count,
+        # Reserved = active + inactive. A deactivated membership row still
+        # occupies its seat; only hard-delete frees it. This is the value
+        # write-paths (add_member, reactivate_member, invite_member) must
+        # enforce against to prevent the deactivate/reactivate bypass.
+        "reserved_users": reserved_users_count,
         # Add more usage metrics as needed
         "products": 0,  # Implement when products module is ready
         "orders_this_month": 0,  # Implement when orders module is ready
@@ -861,6 +889,81 @@ def enforce_plan_limit(store: Store, limit_type: str, current_value: int) -> Non
     # Check if adding ONE MORE item would exceed the limit
     if current_value >= limit_value:
         raise PlanLimitExceeded(limit_type, current_value + 1, limit_value)
+
+
+def enforce_reserved_seat_cap(
+    store: Store,
+    *,
+    action: str,
+    block_when_equal: bool = True,
+) -> None:
+    """Raise ``PlanLimitExceeded`` if the plan's seat cap is at/over limit.
+
+    Centralizes the seat-cap enforcement that previously lived as
+    copy-pasted logic in ``add_member``, ``reactivate_member``, and the
+    ``invite_member`` / ``activate_member`` views. Using this helper on
+    every write path is what closes the deactivate/reactivate bypass.
+
+    Args:
+        store: The store the membership belongs to.
+        action: Human label for the operation (e.g. "add", "reactivate").
+            Used in the exception message so the user sees a clear
+            description of what was blocked.
+        block_when_equal: If True, block when ``reserved_users >= max``
+            (default — write paths that *add* a row use this). If False,
+            block only when ``reserved_users > max`` — used by paths
+            that *flip an existing row* (e.g. reactivation), where the
+            row being modified is already counted in ``reserved_users``
+            so equality is not a bypass.
+
+    Raises:
+        PlanLimitExceeded: If the cap is at or beyond the limit.
+    """
+    limits_info = check_plan_limits(store)
+    reserved_users = limits_info["usage"].get("reserved_users")
+    if reserved_users is None:
+        # ``reserved_users`` is always present in current deployments.
+        # If it's absent we cannot enforce; log and let the request
+        # through rather than block on stale code.
+        logger.warning(
+            "check_plan_limits returned no reserved_users for store %s; "
+            "skipping seat-cap enforcement",
+            getattr(store, "id", None),
+        )
+        return
+
+    max_users = limits_info.get("limits", {}).get("max_users", 0) or 0
+    if not max_users:
+        return  # No plan / unlimited — nothing to enforce.
+
+    over_cap = (
+        reserved_users > max_users
+        if not block_when_equal
+        else reserved_users >= max_users
+    )
+    if not over_cap:
+        return
+
+    if action == "reactivate":
+        message = (
+            f"Cannot reactivate this member. Your plan allows "
+            f"{max_users} team members but {reserved_users} are "
+            f"currently reserved across your stores (including "
+            f"deactivated members). Remove a member or upgrade "
+            f"your plan to free up a seat."
+        )
+        # Reactivation doesn't change the reserved count, so the
+        # current "usage" we report equals ``reserved_users`` — no
+        # ``+1`` adjustment.
+        raise PlanLimitExceeded(
+            "max_users", reserved_users, max_users, message=message,
+        )
+
+    # Default ``add`` message — ``current_value`` is reported as the
+    # count AFTER the write so the UI can render the right CTA.
+    raise PlanLimitExceeded(
+        "max_users", reserved_users + 1, max_users,
+    )
 
 
 def check_trial_expiry(subscription: Subscription) -> bool:

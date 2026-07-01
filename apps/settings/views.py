@@ -25,6 +25,7 @@ from apps.permissions.ui.services import (
 )
 from apps.permissions.ui.constants import PERM_MEMBERS_MANAGE, PERM_MEMBERS_VIEW
 from apps.permissions.services import user_has_permission
+from apps.subscriptions.exceptions import PlanLimitExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -54,18 +55,32 @@ def calculate_seat_usage(store):
     """
     Calculate seat usage for a store.
 
-    Seats are counted as active memberships EXCLUDING store owners.
-    Store owners do not consume seats as they are the account holders.
+    Seats are counted as **all** memberships (active + inactive) excluding
+    store owners. Owners do not consume seats as they are the account
+    holders. Counting inactive rows here closes the deactivate/reactivate
+    bypass: a deactivated member still occupies its seat, and only
+    hard-deleting the row (via ``remove_member``) frees it.
+
+    Returns:
+        used_seats:    int — non-owner occupied seats (active + inactive)
+        active_members: int — active non-owner members, used for display
+        total_members: int — all active memberships (including owners)
+        owner_count, owner_ids: ownership metadata
     """
     # Get store owners using RBAC system
     owner_ids = get_store_owners(store)
 
-    # Count active memberships excluding owners
+    # Reserved = active + inactive. The single value that the
+    # seat-cap enforcement checks against.
     used_seats = (
-        StoreMembership.objects.filter(
-            store=store,
-            is_active=True,
-        )
+        StoreMembership.objects.filter(store=store)
+        .exclude(user_id__in=owner_ids)
+        .count()
+    )
+
+    # Active-only count, used purely for the UI display ("X / Y active").
+    active_non_owners = (
+        StoreMembership.objects.filter(store=store, is_active=True)
         .exclude(user_id__in=owner_ids)
         .count()
     )
@@ -78,12 +93,14 @@ def calculate_seat_usage(store):
 
     logger.info(
         f"Seat usage for store {store.id}: "
-        f"{used_seats} used seats, {total_members} total members, "
+        f"{used_seats} reserved seats ({active_non_owners} active), "
+        f"{total_members} total active members, "
         f"{owner_count} owners (IDs: {owner_ids})"
     )
 
     return {
         "used_seats": used_seats,
+        "active_members": active_non_owners,
         "total_members": total_members,
         "owner_count": owner_count,
         "owner_ids": owner_ids,
@@ -108,8 +125,13 @@ def _compute_team_stats(store):
     from apps.subscriptions.services import get_active_subscription, check_plan_limits
 
     seat_info = calculate_seat_usage(store)
-    total_members = StoreMembership.objects.filter(store=store).count()
-    active_members = seat_info["total_members"]
+    # ``total_members`` here is the active-only count from
+    # ``calculate_seat_usage``. We override the field name to be
+    # consistent with the JS contract: ``active_members`` is the
+    # active non-owner count, and ``total_members`` is the row count
+    # (active + inactive) — i.e. the reserved count.
+    total_members = seat_info["used_seats"]  # active + inactive non-owner
+    active_members = seat_info["active_members"]  # active non-owner
     used_seats = seat_info["used_seats"]
 
     # Available roles for this store (active only)
@@ -124,8 +146,12 @@ def _compute_team_stats(store):
         if subscription and subscription.plan.max_users:
             max_seats = subscription.plan.max_users
             limits_info = check_plan_limits(store)
-            fresh_used_seats = limits_info.get("usage", {}).get("users", 0)
-            used_seats = max(used_seats, fresh_used_seats)
+            # Prefer ``reserved_users`` (active + inactive) so the UI
+            # matches what the seat-cap enforcement actually checks.
+            reserved_from_sub = limits_info.get("usage", {}).get("reserved_users")
+            if reserved_from_sub is None:
+                reserved_from_sub = limits_info.get("usage", {}).get("users", 0)
+            used_seats = max(used_seats, reserved_from_sub)
             remaining_seats = max(0, max_seats - used_seats)
     except Exception:
         pass
@@ -429,39 +455,11 @@ def invite_member(request, store_id):
 
     User = get_user_model()
 
-    # Check seat limit before proceeding
-    try:
-        from apps.subscriptions.services import check_plan_limits, get_active_subscription
-        from apps.subscriptions.exceptions import PlanLimitExceeded
-
-        subscription = get_active_subscription(request.store)
-        if subscription and subscription.plan.max_users:
-            limits_info = check_plan_limits(request.store)
-            current_usage = limits_info.get("usage", {}).get("users", 0)
-            max_users = limits_info.get("limits", {}).get("max_users", 0)
-
-            # Check if we would exceed the limit
-            if current_usage >= max_users:
-                return JsonResponse(
-                    {
-                        "success": False,
-                        "error": f"Seat limit reached. Your plan allows {max_users} team members. Please upgrade your subscription to add more members.",
-                        "upgrade_required": True,
-                        "current_usage": current_usage,
-                        "max_users": max_users,
-                    },
-                    status=400,
-                )
-    except PlanLimitExceeded as e:
-        return JsonResponse(
-            {"success": False, "error": str(e), "upgrade_required": True}, status=400
-        )
-    except Exception as e:
-        # If subscription check fails, log but continue
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.warning(f"Failed to check subscription limits: {str(e)}")
+    # Seat-cap enforcement is delegated to the service layer
+    # (``add_member_service`` / ``reactivate_member_service``),
+    # which handles both new-member and reinvite cases with the
+    # correct ``reserved_users`` semantics. We translate the
+    # resulting ``PlanLimitExceeded`` into a JSON response below.
 
     # Flag to track if user was already handled
     user_already_handled = False
@@ -478,12 +476,38 @@ def invite_member(request, store_id):
                     {"success": False, "error": "This user is already a team member"}, status=400
                 )
             else:
-                # Reactivate existing membership - this doesn't consume a new seat
-                existing_membership.is_active = True
+                # Reactivate via the service so the seat-cap check
+                # (with ``reserved_users`` semantics) runs once. The
+                # pre-flight above already handled the new-member
+                # branch; this branch is the deactivated-row case
+                # where ``reserved_users`` already includes this row,
+                # so reactivation is safe unless the cap was already
+                # exceeded by other means.
+                try:
+                    reactivate_member_service(
+                        actor=request.user,
+                        membership=existing_membership,
+                        request=request,
+                    )
+                except PlanLimitExceeded as e:
+                    return JsonResponse(
+                        {
+                            "success": False,
+                            "error": str(e),
+                            "upgrade_required": True,
+                            "limit_type": e.limit_type,
+                            "current_usage": e.current_value,
+                            "limit_value": e.limit_value,
+                        },
+                        status=400,
+                    )
+
+                # ``reactivate_member_service`` flips ``is_active`` but
+                # doesn't update the role/invited_by — apply those.
                 existing_membership.role = role
                 existing_membership.invited_by = request.user
                 existing_membership.save(
-                    update_fields=["is_active", "role", "invited_by", "updated_at"]
+                    update_fields=["role", "invited_by", "updated_at"]
                 )
 
                 AuditLog.objects.create(
@@ -507,12 +531,15 @@ def invite_member(request, store_id):
         else:
             # User exists but doesn't have membership in this store
             # Create membership for existing user
-            membership = add_member_service(
-                actor=request.user,
-                store=request.store,
-                user=existing_user,
-                role=role,
-            )
+            try:
+                membership = add_member_service(
+                    actor=request.user,
+                    store=request.store,
+                    user=existing_user,
+                    role=role,
+                )
+            except PlanLimitExceeded as e:
+                return _plan_limit_response(e)
 
             AuditLog.objects.create(
                 action="member.invited",
@@ -553,12 +580,15 @@ def invite_member(request, store_id):
             )
 
         # Create membership
-        membership = add_member_service(
-            actor=request.user,
-            store=request.store,
-            user=user,
-            role=role,
-        )
+        try:
+            membership = add_member_service(
+                actor=request.user,
+                store=request.store,
+                user=user,
+                role=role,
+            )
+        except PlanLimitExceeded as e:
+            return _plan_limit_response(e)
 
         AuditLog.objects.create(
             action="member.invited",
@@ -600,6 +630,26 @@ def clear_store_subscription_cache(store):
         logger.info(f"Cleared subscription cache for store {store.id}")
     except Exception as e:
         logger.warning(f"Failed to clear subscription cache for store {store.id}: {str(e)}")
+
+
+def _plan_limit_response(exc: PlanLimitExceeded) -> JsonResponse:
+    """Render a ``PlanLimitExceeded`` as a JSON response with upgrade hint.
+
+    Centralizes the seat-cap error envelope so every write-path
+    endpoint can return the same shape to the client. The JS uses
+    ``upgrade_required`` to swap in a "Upgrade plan" CTA.
+    """
+    return JsonResponse(
+        {
+            "success": False,
+            "error": str(exc),
+            "upgrade_required": True,
+            "limit_type": exc.limit_type,
+            "current_usage": exc.current_value,
+            "limit_value": exc.limit_value,
+        },
+        status=400,
+    )
 
 
 @login_required
@@ -704,6 +754,8 @@ def activate_member(request, store_id, membership_id):
                 "is_active": True,
             }
         )
+    except PlanLimitExceeded as e:
+        return _plan_limit_response(e)
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=400)
 

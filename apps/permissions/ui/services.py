@@ -19,7 +19,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils.text import slugify
 
-from apps.permissions.constants import MODIFIER_GRANT
+from apps.permissions.constants import MODIFIER_GRANT, ROLE_STORE_OWNER
 from apps.permissions.models import (
     AuditLog,
     Permission,
@@ -413,64 +413,55 @@ def add_member(
     # Check if user is already a member (including inactive)
     existing_membership = StoreMembership.objects.filter(user=user, store=store).first()
 
-    if existing_membership:
-        # If reactivating an existing membership, check if they're a store owner
-        # Store owners don't consume seats, so no seat check needed
-        if not existing_membership.is_active and check_seats:
+    if check_seats and not _is_store_owner_role(role):
+        # Single helper closes the deactivate/reactivate bypass: it
+        # uses ``reserved_users`` (active + inactive), not the active
+        # count, so a deactivated member still occupies its seat.
+        #
+        # ``block_when_equal`` distinguishes the two write paths:
+        # * ``add`` (new row) — must enforce ``reserved >= max`` because
+        #   the new row would push reserved over the cap.
+        # * ``reactivate`` (existing row) — the row is already counted
+        #   in reserved, so equality is safe; only block when the cap
+        #   has already been breached (``reserved > max``).
+        from apps.subscriptions.services import enforce_reserved_seat_cap
+        from apps.subscriptions.exceptions import PlanLimitExceeded
+
+        if existing_membership and not existing_membership.is_active:
+            action, block_when_equal = "reactivate", False
+        elif existing_membership:
+            # Idempotent: membership already active, no seat change.
+            action = None
+        else:
+            action, block_when_equal = "add", True
+
+        if action is not None:
             try:
-                from apps.permissions.models import Role as RoleModel
-
-                # Check if this is a store owner role
-                is_owner_role = role.slug == "store-owner" or (
-                    role.store_id is None and role.slug == "store-owner"
+                enforce_reserved_seat_cap(
+                    store, action=action, block_when_equal=block_when_equal,
                 )
-
-                if not is_owner_role:
-                    # For non-owners, check seat availability when reactivating
-                    from apps.subscriptions.services import check_plan_limits
-                    from apps.subscriptions.exceptions import PlanLimitExceeded
-
-                    limits_info = check_plan_limits(store)
-                    current_usage = limits_info.get("usage", {}).get("users", 0)
-                    max_users = limits_info.get("limits", {}).get("max_users", 0)
-
-                    if current_usage >= max_users:
-                        raise PlanLimitExceeded("max_users", current_usage + 1, max_users)
             except PlanLimitExceeded:
                 raise
             except Exception:
-                # If seat check fails, log but continue (better to allow than block)
-                logger.warning("Failed to check seat limits during membership reactivation")
-
-    # If creating a new membership, check seat availability
-    if not existing_membership and check_seats:
-        try:
-            from apps.subscriptions.services import check_plan_limits
-            from apps.subscriptions.exceptions import PlanLimitExceeded
-
-            # Check if this is a store owner role
-            is_owner_role = role.slug == "store-owner" or (
-                role.store_id is None and role.slug == "store-owner"
-            )
-
-            # Store owners don't consume seats
-            if not is_owner_role:
-                limits_info = check_plan_limits(store)
-                current_usage = limits_info.get("usage", {}).get("users", 0)
-                max_users = limits_info.get("limits", {}).get("max_users", 0)
-
-                logger.info(
-                    f"Seat check for adding user {user.id} to store {store.id}: "
-                    f"current={current_usage}, max={max_users}, role={role.slug}"
+                # Fail open on infra errors (DB hiccup, cache miss).
+                # ``PlanLimitExceeded`` propagates above; only other
+                # exceptions are swallowed here.
+                logger.warning(
+                    "Seat-cap check failed for store=%s user=%s; "
+                    "failing open",
+                    store.id, getattr(user, "id", None),
+                    exc_info=True,
                 )
-
-                if current_usage >= max_users:
-                    raise PlanLimitExceeded("max_users", current_usage + 1, max_users)
-        except PlanLimitExceeded:
-            raise
-        except Exception:
-            # If seat check fails, log but continue (better to allow than block)
-            logger.warning("Failed to check seat limits during membership creation")
+            except Exception:
+                # Fail open on unexpected errors (DB hiccup, cache
+                # miss, etc.) — better to allow a write than block
+                # legitimate operations during infra incidents.
+                logger.warning(
+                    "Seat-cap check failed for store=%s user=%s; "
+                    "failing open",
+                    store.id, getattr(user, "id", None),
+                    exc_info=True,
+                )
 
     with transaction.atomic():
         membership, created = StoreMembership.objects.get_or_create(
@@ -580,8 +571,32 @@ def reactivate_member(
     membership: StoreMembership,
     request=None,
 ) -> StoreMembership:
-    """Reactivate a previously deactivated membership."""
+    """Reactivate a previously deactivated membership.
+
+    Enforces the seat-cap using ``reserved_users`` semantics: a
+    deactivated row still occupies its seat, so reactivation can only
+    succeed if there is a free seat. Without this check the team UI
+    can be abused to bypass the limit (deactivate A → invite B →
+    reactivate A → invite C → ... indefinitely).
+    """
     _require_members_manage(actor, membership.store)
+
+    # Idempotent: reactivating an already-active membership is a no-op.
+    if membership.is_active:
+        return membership
+
+    # Skip the seat check for store-owner roles — they don't consume
+    # seats (same exemption as ``add_member``).
+    if not _is_store_owner_role(membership.role):
+        # Reactivation doesn't change ``reserved_users`` (the row is
+        # already counted), so we block only when reserved > max
+        # (``block_when_equal=False``). The add/write-path enforces
+        # ``reserved >= max`` via the same helper.
+        from apps.subscriptions.services import enforce_reserved_seat_cap
+
+        enforce_reserved_seat_cap(
+            membership.store, action="reactivate", block_when_equal=False,
+        )
 
     with transaction.atomic():
         before = {"is_active": membership.is_active}
@@ -765,3 +780,11 @@ def _require_members_manage(actor, store: Store | None) -> None:
         raise PermissionError("Members must belong to a store.")
     if not user_has_permission(actor, store, PERM_MEMBERS_MANAGE):
         raise PermissionError("You don't have permission to manage members in this store.")
+
+
+def _is_store_owner_role(role: Role) -> bool:
+    """True if the role is the system store-owner role.
+
+    Store owners don't consume seats; the seat-cap check skips them.
+    """
+    return role.slug == ROLE_STORE_OWNER

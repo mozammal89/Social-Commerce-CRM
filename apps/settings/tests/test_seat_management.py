@@ -9,10 +9,12 @@ This test suite ensures:
 """
 
 import pytest
+from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.db import transaction
+from django.utils import timezone
 
 from apps.stores.models import Store
 from apps.permissions.models import StoreMembership, Role, SubscriptionPlan, Subscription
@@ -28,6 +30,15 @@ class SeatManagementTestCase(TestCase):
 
     def setUp(self):
         """Set up test data."""
+        # Seed the global system roles that the rest of the setUp depends on.
+        from apps.permissions.seeders.roles_seeder import RolesSeeder
+        from apps.permissions.seeders.permissions_seeder import RolePermissionsSeeder
+        from apps.permissions.seeders.resources_seeder import ResourcesSeeder
+
+        ResourcesSeeder().run()
+        RolesSeeder().run()
+        RolePermissionsSeeder(verbosity=0).run()
+
         # Create users
         self.owner_user = User.objects.create_user(
             email="owner@example.com", password="testpass123", first_name="Store", last_name="Owner"
@@ -60,7 +71,9 @@ class SeatManagementTestCase(TestCase):
         # Get roles
         self.owner_role = Role.objects.get(slug="store-owner", store__isnull=True)
         self.manager_role = Role.objects.get(slug="manager", store__isnull=True)
-        self.staff_role = Role.objects.get(slug="staff", store__isnull=True)
+        # No "staff" slug in the seeder; use "viewer" (lowest-privilege role
+        # that any plan can grant) as the seat-consuming role for tests.
+        self.staff_role = Role.objects.get(slug="viewer", store__isnull=True)
 
         # Create subscription plan with 5 seats
         self.plan = SubscriptionPlan.objects.create(
@@ -69,7 +82,9 @@ class SeatManagementTestCase(TestCase):
             price=29.99,
             currency="USD",
             max_users=5,
-            max_stores=1,
+            # Generous max_stores so this plan can host any test store
+            # without tripping the ``exceeded`` flag in check_plan_limits.
+            max_stores=10,
             billing_period="monthly",
         )
 
@@ -101,28 +116,41 @@ class SeatManagementTestCase(TestCase):
         self.client.force_login(self.owner_user)
 
     def test_get_store_owners_correctly_identifies_owners(self):
-        """Test that get_store_owners correctly identifies store owners."""
+        """Test that get_store_owners correctly identifies store owners.
+
+        ``get_store_owners`` returns a list of user IDs (UUIDs).
+        """
         owners = get_store_owners(self.store)
 
         self.assertEqual(len(owners), 1)
-        self.assertEqual(owners[0].id, self.owner_user.id)
-        self.assertNotIn(self.member_user1, owners)
-        self.assertNotIn(self.member_user2, owners)
+        self.assertEqual(owners[0], self.owner_user.id)
+        self.assertNotIn(self.member_user1.id, owners)
+        self.assertNotIn(self.member_user2.id, owners)
 
     def test_calculate_seat_usage_excludes_owners(self):
-        """Test that calculate_seat_usage excludes store owners from seat count."""
+        """Test that calculate_seat_usage excludes store owners from seat count.
+
+        Seats are counted as active + inactive non-owner memberships.
+        This closes the deactivate/reactivate bypass.
+        """
         seat_info = calculate_seat_usage(self.store)
 
         # Should have 2 members (member_user1 and member_user2), owner excluded
         self.assertEqual(seat_info["used_seats"], 2)
-        self.assertEqual(seat_info["total_members"], 3)  # 2 members + 1 owner
+        self.assertEqual(seat_info["active_members"], 2)
         self.assertEqual(seat_info["owner_count"], 1)
 
     def test_check_plan_limits_excludes_owners(self):
-        """Test that check_plan_limits excludes store owners from user count."""
+        """Test that check_plan_limits excludes store owners from user count.
+
+        The dict exposes ``reserved_users`` (active + inactive non-owner rows
+        — what the seat-cap enforcement checks against) and ``users`` (active
+        only — for UI display).
+        """
         limits_info = check_plan_limits(self.store)
 
-        self.assertEqual(limits_info["usage"]["users"], 2)  # 2 members, owner excluded
+        self.assertEqual(limits_info["usage"]["users"], 2)  # 2 active
+        self.assertEqual(limits_info["usage"]["reserved_users"], 2)
         self.assertEqual(limits_info["limits"]["max_users"], 5)
         self.assertEqual(limits_info["exceeded"], {})
 
@@ -141,7 +169,7 @@ class SeatManagementTestCase(TestCase):
         with self.assertRaises(PlanLimitExceeded) as context:
             enforce_plan_limit(self.store, "max_users", 5)
 
-        self.assertIn("max_users", str(context.exception))
+        self.assertIn("team members", str(context.exception))
 
     def test_can_add_members_within_limit(self):
         """Test that members can be added within the seat limit."""
@@ -158,6 +186,7 @@ class SeatManagementTestCase(TestCase):
         # Verify seat count increased
         limits_info = check_plan_limits(self.store)
         self.assertEqual(limits_info["usage"]["users"], 3)
+        self.assertEqual(limits_info["usage"]["reserved_users"], 3)
 
     def test_cannot_add_members_beyond_limit(self):
         """Test that members cannot be added beyond the seat limit."""
@@ -183,6 +212,7 @@ class SeatManagementTestCase(TestCase):
         # Current: 1 owner + 2 members = 2 seats used
         seat_info = calculate_seat_usage(self.store)
         self.assertEqual(seat_info["used_seats"], 2)
+        self.assertEqual(seat_info["active_members"], 2)
 
         # Add another owner (shouldn't increase seat count)
         new_owner = User.objects.create_user(email="owner2@example.com", password="testpass123")
@@ -191,19 +221,30 @@ class SeatManagementTestCase(TestCase):
             user=new_owner, store=self.store, role=self.owner_role, is_active=True
         )
 
-        # Seat count should still be 2
+        # Seat count should still be 2 (owners don't consume seats)
         seat_info = calculate_seat_usage(self.store)
         self.assertEqual(seat_info["used_seats"], 2)
         self.assertEqual(seat_info["owner_count"], 2)
 
-    def test_reactivating_member_checks_seat_limit(self):
-        """Test that reactivating an inactive member checks seat limit."""
+    def test_reactivating_member_at_reserved_cap_succeeds(self):
+        """Reactivating a row that's already counted in ``reserved_users``
+        is safe — it doesn't change the reserved count.
+
+        Bug-fix regression: reactivation must NOT block when
+        ``reserved_users == max_users``. The seat row is already in
+        the reserved count; flipping it active changes nothing.
+        The cap bypass is prevented at the ``add_member`` write path
+        which checks ``reserved + 1 > max`` before inserting a new
+        row.
+        """
+        from apps.permissions.ui.services import reactivate_member
+
         # Deactivate a member
         membership = StoreMembership.objects.get(user=self.member_user1, store=self.store)
         membership.is_active = False
         membership.save()
 
-        # Fill up seats to limit
+        # Fill up seats to limit (5 reserved: 4 active + 1 inactive)
         for i in range(3, 6):  # Add members 3, 4, 5
             new_member = User.objects.create_user(
                 email=f"member{i}@example.com", password="testpass123"
@@ -212,13 +253,143 @@ class SeatManagementTestCase(TestCase):
                 user=new_member, store=self.store, role=self.staff_role, is_active=True
             )
 
-        # Now at limit: 5 active members (excluding owner)
+        # 5 reserved seats (4 active + 1 inactive), 4 active seats
         limits_info = check_plan_limits(self.store)
-        self.assertEqual(limits_info["usage"]["users"], 5)
+        self.assertEqual(limits_info["usage"]["users"], 4)  # active only
+        self.assertEqual(limits_info["usage"]["reserved_users"], 5)
+        self.assertEqual(limits_info["limits"]["max_users"], 5)
 
-        # Try to reactivate - should fail due to seat limit
+        # Reactivate the deactivated member → reserved stays 5, which
+        # equals max_users. Reactivation is a no-op for the reserved
+        # count, so it must succeed.
+        result = reactivate_member(
+            actor=self.owner_user,
+            membership=membership,
+        )
+        self.assertTrue(result.is_active)
+
+        # Reserved count is still 5.
+        limits_info = check_plan_limits(self.store)
+        self.assertEqual(limits_info["usage"]["reserved_users"], 5)
+
+    def test_reactivating_member_blocks_only_when_cap_exceeded(self):
+        """Reactivation is blocked only when ``reserved > max``.
+
+        A reserved > max situation should be impossible in normal
+        flow (add_member enforces the cap on insert), but if it ever
+        occurs — e.g. legacy data, plan downgrade — reactivation
+        must not silently allow further growth. We simulate it by
+        inserting a row directly with is_active=False when the cap
+        is already at max, pushing reserved to max+1.
+        """
+        from apps.permissions.ui.services import reactivate_member
+
+        # Fill up to reserved == max (5).
+        for i in range(3, 6):
+            new_member = User.objects.create_user(
+                email=f"member{i}@example.com", password="testpass123"
+            )
+            StoreMembership.objects.create(
+                user=new_member, store=self.store, role=self.staff_role, is_active=True
+            )
+
+        # 5 reserved (5 active), max=5.
+        limits_info = check_plan_limits(self.store)
+        self.assertEqual(limits_info["usage"]["reserved_users"], 5)
+        self.assertEqual(limits_info["limits"]["max_users"], 5)
+
+        # Bypass add_member's seat check by inserting a 6th row directly
+        # with is_active=False. This pushes reserved to 6, exceeding max.
+        extra_user = User.objects.create_user(
+            email="extra@example.com", password="testpass123"
+        )
+        extra_membership = StoreMembership.objects.create(
+            user=extra_user, store=self.store, role=self.staff_role, is_active=False
+        )
+
+        limits_info = check_plan_limits(self.store)
+        self.assertEqual(limits_info["usage"]["reserved_users"], 6)
+        self.assertEqual(limits_info["usage"]["users"], 5)  # still 5 active
+
+        # Reactivation must now be blocked because reserved > max.
         with self.assertRaises(PlanLimitExceeded):
-            enforce_plan_limit(self.store, "max_users", 5)
+            reactivate_member(actor=self.owner_user, membership=extra_membership)
+
+        # The only path that frees a reserved seat is hard-delete.
+        extra_membership.delete()
+        limits_info = check_plan_limits(self.store)
+        self.assertEqual(limits_info["usage"]["reserved_users"], 5)
+
+    def test_add_member_blocks_when_reserved_at_cap(self):
+        """``add_member`` enforces the cap using reserved_users (>= max).
+
+        Regression: a tenant with reserved == max cannot insert a new
+        row — even if some of those reserved rows are inactive. The
+        only way to free a seat is hard-delete (remove_member).
+        """
+        from apps.permissions.ui.services import add_member
+
+        # Fill up to reserved == max (5).
+        for i in range(3, 6):
+            new_member = User.objects.create_user(
+                email=f"member{i}@example.com", password="testpass123"
+            )
+            StoreMembership.objects.create(
+                user=new_member, store=self.store, role=self.staff_role, is_active=True
+            )
+
+        limits_info = check_plan_limits(self.store)
+        self.assertEqual(limits_info["usage"]["reserved_users"], 5)
+
+        # Now try to add a 6th member — must fail.
+        overflow_user = User.objects.create_user(
+            email="overflow@example.com", password="testpass123"
+        )
+        with self.assertRaises(PlanLimitExceeded):
+            add_member(
+                actor=self.owner_user,
+                store=self.store,
+                user=overflow_user,
+                role=self.staff_role,
+            )
+
+        # Deactivate one — reserved still 5, active is 4. add_member
+        # is STILL blocked because reserved >= max.
+        active_memberships = StoreMembership.objects.filter(
+            store=self.store, role=self.staff_role, is_active=True
+        )[:1]
+        for m in active_memberships:
+            m.is_active = False
+            m.save()
+
+        limits_info = check_plan_limits(self.store)
+        self.assertEqual(limits_info["usage"]["users"], 4)
+        self.assertEqual(limits_info["usage"]["reserved_users"], 5)
+
+        with self.assertRaises(PlanLimitExceeded):
+            add_member(
+                actor=self.owner_user,
+                store=self.store,
+                user=overflow_user,
+                role=self.staff_role,
+            )
+
+        # Hard-delete one — reserved drops to 4. add_member succeeds.
+        inactive = StoreMembership.objects.filter(
+            store=self.store, role=self.staff_role, is_active=False
+        ).first()
+        inactive.delete()
+
+        limits_info = check_plan_limits(self.store)
+        self.assertEqual(limits_info["usage"]["reserved_users"], 4)
+
+        result = add_member(
+            actor=self.owner_user,
+            store=self.store,
+            user=overflow_user,
+            role=self.staff_role,
+        )
+        self.assertTrue(result.is_active)
 
     def test_changing_member_role_does_not_double_count(self):
         """Test that changing a member's role doesn't double count seats."""
@@ -237,8 +408,23 @@ class SeatManagementTestCase(TestCase):
         self.assertEqual(seat_info["used_seats"], initial_seats)
 
     def test_inviting_existing_user_ignores_seat_if_inactive(self):
-        """Test that inviting an existing inactive member ignores seat check for reactivation."""
-        # This is a placeholder - the actual invite logic is tested via the API
+        """Re-invite of an existing inactive member is gated by reserved seats.
+
+        Bug-fix regression: pre-fix, the invite_member view's "reinvite"
+        branch flipped ``is_active=True`` without consulting the seat
+        cap. Now it does, using the reserved-seat count. This test
+        documents the post-fix contract via the API layer below; here we
+        just make sure calculate_seat_usage correctly counts inactive
+        rows.
+        """
+        membership = StoreMembership.objects.get(user=self.member_user1, store=self.store)
+        membership.is_active = False
+        membership.save()
+
+        seat_info = calculate_seat_usage(self.store)
+        # member_user1 is inactive but still occupies its seat.
+        self.assertEqual(seat_info["used_seats"], 2)
+        self.assertEqual(seat_info["active_members"], 1)
 
 
 class SeatManagementAPITestCase(TestCase):
@@ -246,6 +432,15 @@ class SeatManagementAPITestCase(TestCase):
 
     def setUp(self):
         """Set up test data."""
+        # Seed the global system roles that the rest of the setUp depends on.
+        from apps.permissions.seeders.roles_seeder import RolesSeeder
+        from apps.permissions.seeders.permissions_seeder import RolePermissionsSeeder
+        from apps.permissions.seeders.resources_seeder import ResourcesSeeder
+
+        ResourcesSeeder().run()
+        RolesSeeder().run()
+        RolePermissionsSeeder(verbosity=0).run()
+
         # Create users
         self.owner_user = User.objects.create_user(
             email="owner@example.com", password="testpass123", first_name="Store", last_name="Owner"
@@ -260,7 +455,7 @@ class SeatManagementAPITestCase(TestCase):
             price=29.99,
             currency="USD",
             max_users=3,  # Only 3 seats for testing
-            max_stores=1,
+            max_stores=10,
             billing_period="monthly",
         )
 
@@ -275,7 +470,8 @@ class SeatManagementAPITestCase(TestCase):
 
         # Get roles
         self.owner_role = Role.objects.get(slug="store-owner", store__isnull=True)
-        self.staff_role = Role.objects.get(slug="staff", store__isnull=True)
+        # No "staff" slug in the seeder; use "viewer" as the seat-consuming role.
+        self.staff_role = Role.objects.get(slug="viewer", store__isnull=True)
 
         # Add owner
         StoreMembership.objects.create(
@@ -331,8 +527,12 @@ class SeatManagementAPITestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         data = response.json()
         self.assertFalse(data["success"])
-        self.assertIn("upgrade_required", data)
-        self.assertIn("Seat limit reached", data["error"])
+        self.assertTrue(data["upgrade_required"])
+        self.assertEqual(data["limit_type"], "max_users")
+        self.assertEqual(data["limit_value"], 3)
+        # New member would push reserved count from 3 → 4.
+        self.assertEqual(data["current_usage"], 4)
+        self.assertIn("team members", data["error"].lower())
 
     def _get_csrf_token(self):
         """Helper to get CSRF token."""

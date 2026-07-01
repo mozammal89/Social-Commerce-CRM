@@ -191,7 +191,18 @@ const MemberList = (function() {
                     showNotification(`${memberName} has been reactivated`, 'success');
                 })
                 .catch(error => {
-                    showNotification(`Error reactivating ${memberName}: ${error.message || 'Unknown error'}`, 'error');
+                    // If the server indicates a plan upgrade is required
+                    // (seat-cap block), surface the upgrade CTA inline so
+                    // the user has an obvious next step.
+                    if (error.upgrade_required) {
+                        showNotification(
+                            `${error.message || 'Seat limit reached.'} ` +
+                            `<a href="/subscriptions/manage/" class="alert-link ms-2">Upgrade plan</a>`,
+                            'warning'
+                        );
+                    } else {
+                        showNotification(`Error reactivating ${memberName}: ${error.message || 'Unknown error'}`, 'error');
+                    }
                 })
                 .finally(() => {
                     if (btn) {
@@ -268,7 +279,12 @@ const MemberList = (function() {
         .then(response => {
             if (!response.ok) {
                 return response.json().then(data => {
-                    throw new Error(data.error || 'Request failed');
+                    // Preserve the full payload (including
+                    // ``upgrade_required``) on the thrown Error so the
+                    // caller can branch on it without losing context.
+                    const err = new Error(data.error || 'Request failed');
+                    Object.assign(err, data);
+                    throw err;
                 });
             }
             return response.json();
