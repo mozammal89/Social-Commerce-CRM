@@ -208,7 +208,10 @@ const TeamManagement = (function() {
             console.log('Response data:', data); // Debug logging
             if (data.success) {
                 renderMembersTable(data.members);
-                updateMemberCount(data.total);
+                if (data.stats) {
+                    renderStats(data.stats);
+                    updateInviteButton(data.stats);
+                }
             } else {
                 showNotification(data.error || 'Error loading members', 'error');
             }
@@ -342,30 +345,97 @@ const TeamManagement = (function() {
         return buttons;
     }
 
-    function updateMemberCount(count) {
-        const statItems = document.querySelectorAll('.stat-item');
-        statItems.forEach(item => {
-            const label = item.querySelector('.stat-label');
-            if (label && label.textContent.includes('Total Members')) {
-                const value = item.querySelector('.stat-value');
-                if (value) {
-                    value.textContent = count;
-                }
-            }
+    /**
+     * Update the Team Statistics card AND the Team Stats modal in one pass.
+     * Stat values are looked up by data-stat attribute so we don't depend on
+     * label text matching.
+     */
+    function renderStats(stats) {
+        if (!stats) return;
+
+        const format = (val) => (val === null || val === undefined ? '∞' : val);
+
+        const apply = (key, value) => {
+            document.querySelectorAll(`[data-stat="${key}"]`).forEach(el => {
+                el.textContent = format(value);
+            });
+        };
+
+        apply('total_members', stats.total_members);
+        apply('active_members', stats.active_members);
+        apply('available_roles', stats.available_roles);
+        apply('max_seats', stats.max_seats);
+        apply('used_seats', stats.used_seats);
+        apply('remaining_seats', stats.remaining_seats);
+
+        // Toggle the danger highlight on Remaining Seats when at cap.
+        const atCap = stats.remaining_seats === 0;
+        document.querySelectorAll('[data-stat="remaining_seats_wrap"]').forEach(el => {
+            el.classList.toggle('text-danger', atCap);
+            el.classList.toggle('stat-card--danger', atCap);
         });
+    }
+
+    /**
+     * Toggle the Invite Member / Upgrade Plan button based on remaining_seats.
+     * The button sits inside #teamActionButtons; we replace it in place so
+     * Bootstrap attributes and event handlers stay consistent.
+     */
+    function updateInviteButton(stats) {
+        if (!stats) return;
+
+        const container = document.getElementById('teamActionButtons');
+        if (!container) return;
+
+        const canManage = container.querySelector('[data-bs-target="#inviteMemberModal"], .btn-warning');
+        if (!canManage) return; // User without manage perm — nothing to update.
+
+        const remaining = stats.remaining_seats;
+        const remainingKnown = remaining !== null && remaining !== undefined;
+        const atCap = remainingKnown && remaining === 0;
+
+        // Find the existing action button (the invite or upgrade button).
+        const existing = container.querySelector(
+            '[data-bs-target="#inviteMemberModal"], .btn-warning[onclick*="subscriptions/manage"]'
+        );
+        if (!existing) return;
+
+        if (atCap) {
+            existing.outerHTML = `
+                <button type="button" class="btn btn-warning"
+                        onclick="window.location.href='/subscriptions/manage/'">
+                    <i class="bi bi-arrow-up-circle me-1"></i>
+                    Upgrade Plan
+                    <span class="badge bg-light text-dark ms-2">0 seats remaining</span>
+                </button>
+            `;
+        } else {
+            const badge = remainingKnown
+                ? `<span class="badge bg-light text-dark ms-2">${remaining} remaining</span>`
+                : '';
+            existing.outerHTML = `
+                <button type="button" class="btn btn-primary"
+                        data-bs-toggle="modal"
+                        data-bs-target="#inviteMemberModal">
+                    <i class="bi bi-person-plus me-1"></i>
+                    Invite Member
+                    ${badge}
+                </button>
+            `;
+        }
     }
 
     function resetFilters() {
         document.getElementById('memberSearch').value = '';
         document.getElementById('roleFilter').value = '';
         document.getElementById('statusFilter').value = '';
-        
+
         currentFilters = {
             search: '',
             role: '',
             status: ''
         };
-        
+
         loadMembers();
     }
 
@@ -388,7 +458,6 @@ const TeamManagement = (function() {
                     if (data.success) {
                         showNotification(data.message, 'success');
                         loadMembers();
-                        updateSeatCounts();
                     } else {
                         showNotification(data.error || 'Error deactivating member', 'error');
                     }
@@ -422,7 +491,6 @@ const TeamManagement = (function() {
                     if (data.success) {
                         showNotification(data.message, 'success');
                         loadMembers();
-                        updateSeatCounts();
                     } else {
                         showNotification(data.error || 'Error activating member', 'error');
                     }
@@ -516,7 +584,6 @@ const TeamManagement = (function() {
                     if (data.success) {
                         showNotification(data.message, 'success');
                         loadMembers();
-                        updateSeatCounts();
                     } else {
                         showNotification(data.error || 'Error removing member', 'error');
                     }
@@ -585,8 +652,7 @@ const TeamManagement = (function() {
                 const modal = bootstrap.Modal.getInstance(document.getElementById('inviteMemberModal'));
                 if (modal) modal.hide();
                 form.reset();
-                loadMembers(); // Load members to show new member
-                updateSeatCounts();
+                loadMembers(); // Load members + stats to reflect new member
             } else {
                 if (data.upgrade_required) {
                     showUpgradeModal(data);
@@ -649,27 +715,6 @@ const TeamManagement = (function() {
             modalTitle.textContent = originalTitle;
             modal.removeEventListener('hidden.bs.modal', resetModal);
         }, { once: true });
-    }
-
-    function updateSeatCounts() {
-        fetch('/settings/team/' + storeId + '/filter/')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Update statistics if elements exist
-                    const statItems = document.querySelectorAll('.stat-item');
-                    statItems.forEach(item => {
-                        const label = item.querySelector('.stat-label');
-                        if (label && label.textContent.includes('Total Members')) {
-                            const value = item.querySelector('.stat-value');
-                            if (value) {
-                                value.textContent = data.total;
-                            }
-                        }
-                    });
-                }
-            })
-            .catch(error => console.error('Error updating seat counts:', error));
     }
 
     function showLoading() {
