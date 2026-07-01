@@ -202,12 +202,14 @@
                 </div>
                 {% can_any "employees.view" "roles.view" as show_team_settings %}
                 {% if show_team_settings %}
-                <a href="{% url 'role_permission:member_list' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'member_list' %}active{% endif %}">
+                {% if current_store %}
+                <a href="{% url 'settings:team' current_store.id %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'team' %}active{% endif %}">
                     <div class="sidebar-nav-icon">
                         <i class="bi bi-people"></i>
                     </div>
                     <span class="sidebar-nav-label">Team Management</span>
                 </a>
+                {% endif %}
                 {% endif %}
                 {% can "integrations.view" %}
                 {% if current_store %}
