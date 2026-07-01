@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import re
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum
@@ -244,8 +246,43 @@ def switch_store(request, store_id):
         allowed_hosts={request.get_host()},
         require_https=request.is_secure(),
     ):
-        return redirect(next_url)
+        return redirect(_swap_store_id_in_path(next_url, str(store_id)))
     return fallback
+
+
+# Match a UUID-shaped path segment so we can replace the old
+# ``<uuid:store_id>`` in a ``next`` URL with the newly-switched-to
+# store. The non-greedy ``.*?`` prefix anchors the match to the
+# *first* UUID in the path — every store-scoped route in this
+# project (e.g. ``/settings/team/<store_id>/``,
+# ``/stores/<store_id>/view/``) puts the store UUID before any other
+# UUIDs, so deeper ones like ``<membership_id>`` in
+# ``/settings/team/<store>/change-role/<member>/`` are left alone.
+_UUID_SEGMENT_RE = re.compile(
+    r"^(.*?)/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(.*)$"
+)
+
+
+def _swap_store_id_in_path(next_url: str, new_store_id: str) -> str:
+    """Replace the first UUID in ``next_url`` with ``new_store_id``.
+
+    Store-scoped URLs all put the store UUID in the path (e.g.
+    ``/settings/team/<store_id>/``). When the user switches stores
+    while on such a page, the original URL still references the old
+    store, so the new session value would be ignored — and
+    ``@current_store`` resolves the URL kwarg over the session. By
+    substituting the UUID, the user lands on the same view but with
+    the new store context.
+
+    URLs that don't contain a UUID (e.g. ``/dashboard/``, ``/``) are
+    returned unchanged — those routes are store-agnostic and don't
+    need any substitution.
+    """
+    match = _UUID_SEGMENT_RE.match(next_url)
+    if match is None:
+        return next_url
+    prefix, _old_uuid, rest = match.groups()
+    return f"{prefix}/{new_store_id}{rest}"
 
 
 # ---------------------------------------------------------------------------
