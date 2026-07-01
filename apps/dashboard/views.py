@@ -24,6 +24,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum
 from django.shortcuts import redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
 
 
 # Sentinel for KPI cards whose supporting model hasn't been implemented
@@ -198,6 +199,11 @@ def switch_store(request, store_id):
     """
     Switch the active store for the current session.
 
+    After switching, the user is sent back to the page they were on
+    via the ``next`` query string (validated to be a same-host URL to
+    prevent open-redirect attacks). Falls back to the dashboard home
+    if ``next`` is missing or unsafe.
+
     Authorization:
 
     * Superusers may switch to any non-deleted store.
@@ -206,11 +212,12 @@ def switch_store(request, store_id):
       here; the cutover plan (§14 of the RBAC plan) keeps the M2M
       in place for read paths but the dashboard enforces the new model.
     """
+    fallback = redirect("dashboard:home")
     user = request.user
     store = Store.objects.filter(id=store_id, is_deleted=False).first()
     if store is None:
         messages.error(request, "Store not found.")
-        return redirect("dashboard:home")
+        return fallback
 
     if not user.is_superuser:
         is_member = StoreMembership.objects.filter(
@@ -223,11 +230,22 @@ def switch_store(request, store_id):
                 request,
                 "You don't have access to this store.",
             )
-            return redirect("dashboard:home")
+            return fallback
 
     request.session["current_store_id"] = str(store_id)
     messages.success(request, f"Switched to store: {store.name}")
-    return redirect("dashboard:home")
+
+    # Honor ``?next=<url>`` so the user lands back on the page they
+    # were viewing. Validate that the URL is safe (same host, no
+    # scheme override) to prevent open-redirect attacks.
+    next_url = request.GET.get("next", "")
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(next_url)
+    return fallback
 
 
 # ---------------------------------------------------------------------------
