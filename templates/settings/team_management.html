@@ -413,11 +413,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const storeId = '{{ store.id }}';
-    TeamManagement.init(storeId);
-});
-</script>
+{# ``team-management.js`` initializes itself on DOMContentLoaded — do not call ``TeamManagement.init()`` here too, or every action button will fire two API requests per click. #}
 <script src="{% static 'js/team-management.js' %}"></script>
 {% endblock %}
