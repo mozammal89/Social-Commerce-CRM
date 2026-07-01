@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from apps.accounts.models import User
+from apps.accounts.models import User, Tenant
 
 
 @admin.register(User)
@@ -119,7 +119,7 @@ class UserAdmin(BaseUserAdmin):
                     "pending_subscription_date",
                 ),
             },
-        )
+        ),
     )
 
     add_fieldsets = (
@@ -142,3 +142,55 @@ class UserAdmin(BaseUserAdmin):
     def get_queryset(self, request):
         """Return queryset including soft-deleted users for admin."""
         return super().get_queryset(request)
+
+
+@admin.register(Tenant)
+class TenantAdmin(admin.ModelAdmin):
+    """Admin interface for Tenant model."""
+
+    list_display = [
+        "name",
+        "slug",
+        "owner",
+        "is_active",
+        "created_at",
+    ]
+    list_filter = [
+        "is_active",
+        "created_at",
+    ]
+    search_fields = [
+        "name",
+        "slug",
+        "owner__email",
+    ]
+    ordering = ["-created_at"]
+    readonly_fields = [
+        "id",
+        "created_at",
+        "updated_at",
+    ]
+
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "name",
+                    "slug",
+                    "owner",
+                    "is_active",
+                ),
+            },
+        ),
+        (
+            "Timestamps",
+            {
+                "fields": (
+                    "id",
+                    "created_at",
+                    "updated_at",
+                ),
+            },
+        ),
+    )

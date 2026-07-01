@@ -140,18 +140,18 @@ class User(UUIDModel, TimeStampedModel, SoftDeleteModel, AbstractUser):
         max_length=100,
         blank=True,
         null=True,
-        help_text=_("Plan slug for pending subscription before store creation")
+        help_text=_("Plan slug for pending subscription before store creation"),
     )
     pending_trial_start = models.BooleanField(
         _("pending trial start"),
         default=False,
-        help_text=_("Whether the pending subscription should start as trial")
+        help_text=_("Whether the pending subscription should start as trial"),
     )
     pending_subscription_date = models.DateTimeField(
         _("pending subscription date"),
         blank=True,
         null=True,
-        help_text=_("When the user subscribed (before store creation)")
+        help_text=_("When the user subscribed (before store creation)"),
     )
 
     objects = UserManager()
@@ -225,4 +225,51 @@ class User(UUIDModel, TimeStampedModel, SoftDeleteModel, AbstractUser):
         self.save(update_fields=["last_login_ip"])
 
 
-__all__ = ["User", "UserManager"]
+# ---------------------------------------------------------------------------
+# Tenant
+# ---------------------------------------------------------------------------
+class Tenant(UUIDModel, TimeStampedModel):
+    """
+    A tenant represents a workspace/organization that owns subscriptions and stores.
+
+    This model implements the tenant-based SaaS architecture where:
+    - Subscription belongs to Tenant (not individual Stores)
+    - Tenant can have multiple Stores
+    - All Stores under a Tenant inherit the Tenant's subscription limits
+    - User owns a Tenant through ownership relationships
+    """
+
+    name = models.CharField(
+        _("tenant name"), max_length=200, help_text=_("Organization or workspace name")
+    )
+    slug = models.SlugField(
+        _("tenant slug"),
+        unique=True,
+        max_length=100,
+        help_text=_("URL-friendly identifier for the tenant"),
+    )
+    owner = models.ForeignKey(
+        "User",
+        on_delete=models.CASCADE,
+        related_name="owned_tenants",
+        help_text=_("Primary owner of this tenant"),
+    )
+    is_active = models.BooleanField(
+        _("is active"), default=True, help_text=_("Whether this tenant is active")
+    )
+
+    class Meta:
+        verbose_name = _("tenant")
+        verbose_name_plural = _("tenants")
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["slug"]),
+            models.Index(fields=["owner", "is_active"]),
+            models.Index(fields=["created_at", "is_active"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.slug})"
+
+
+__all__ = ["User", "UserManager", "Tenant"]

@@ -20,8 +20,7 @@ def _resolve_current_store_for_user(request, user):
     Returns a ``Store`` instance or ``None`` if the user has no stores.
     """
     qs = (
-        Store.objects
-        .filter(
+        Store.objects.filter(
             memberships__user=user,
             memberships__is_active=True,
             is_deleted=False,
@@ -30,13 +29,17 @@ def _resolve_current_store_for_user(request, user):
         .order_by("memberships__joined_at")
     )
 
-    session_store_id = request.session.get("current_store_id") if hasattr(request, "session") else None
+    session_store_id = (
+        request.session.get("current_store_id") if hasattr(request, "session") else None
+    )
     if session_store_id:
         store = qs.filter(id=session_store_id).first()
         if store is not None:
             return store
 
     return qs.first()
+
+
 from django.utils import timezone
 from django.db import transaction
 
@@ -52,6 +55,8 @@ from apps.permissions.models import Role
 from .services import (
     create_trial_subscription,
     create_paid_subscription,
+    create_trial_subscription_for_tenant,
+    create_paid_subscription_for_tenant,
     cancel_subscription,
     upgrade_subscription,
     downgrade_subscription,
@@ -226,13 +231,16 @@ def subscription_checkout(request, plan_slug):
     # Handle POST - Record plan choice and redirect to store setup
     if request.method == "POST":
         from django.utils import timezone
+
         start_trial = request.POST.get("start_trial", "true").lower() == "true"
 
         # Store pending subscription in User model (persists across sessions)
         user.pending_plan_slug = plan.slug
         user.pending_trial_start = start_trial
         user.pending_subscription_date = timezone.now()
-        user.save(update_fields=["pending_plan_slug", "pending_trial_start", "pending_subscription_date"])
+        user.save(
+            update_fields=["pending_plan_slug", "pending_trial_start", "pending_subscription_date"]
+        )
 
         # Also store in session for immediate use
         request.session["pending_plan_slug"] = plan.slug
@@ -284,6 +292,7 @@ def subscription_welcome(request):
     if user.pending_plan_slug:
         try:
             from apps.permissions.models import SubscriptionPlan
+
             pending_plan = SubscriptionPlan.objects.get(slug=user.pending_plan_slug)
             # If not in session, use from User model
             if not subscription_plan:
@@ -295,9 +304,7 @@ def subscription_welcome(request):
 
     # Check if user has stores
     has_stores = Store.objects.filter(
-        memberships__user=user,
-        memberships__is_active=True,
-        is_deleted=False
+        memberships__user=user, memberships__is_active=True, is_deleted=False
     ).exists()
 
     context = {
@@ -318,26 +325,47 @@ def subscription_welcome(request):
 def manage_subscription(request):
     """
     Allow customers to manage their subscription.
+    Updated for tenant-based architecture.
     """
     user = request.user
 
-    # Get user's subscription through their store
-    memberships = active_memberships(None).filter(user=user)
+    # Get user's tenant subscription (new architecture)
+    from apps.accounts.models import Tenant
 
-    if not memberships.exists():
-        return redirect("subscriptions:plans")
+    subscription = None
+    try:
+        tenant = Tenant.objects.filter(owner=user).first()
+        if tenant and hasattr(tenant, "subscription") and tenant.subscription:
+            subscription = tenant.subscription
+    except Exception:
+        pass
 
-    # Resolve the store the user is currently viewing (session > first).
-    store = _resolve_current_store_for_user(request, user)
-    if store is None:
-        return redirect("subscriptions:plans")
-    subscription = get_active_subscription(store)
+    # Fallback to store-based subscription (migration period)
+    if not subscription:
+        memberships = active_memberships(None).filter(user=user)
+        if memberships.exists():
+            # Resolve the store the user is currently viewing (session > first).
+            store = _resolve_current_store_for_user(request, user)
+            if store:
+                subscription = get_active_subscription(store)
 
     if not subscription:
         return redirect("subscriptions:plans")
 
+    # Get a store for limit checking (any store under tenant or current store)
+    store_for_limits = None
+    if subscription.tenant:
+        store_for_limits = subscription.tenant.stores.first()
+    else:
+        memberships = active_memberships(None).filter(user=user)
+        if memberships.exists():
+            store_for_limits = _resolve_current_store_for_user(request, user)
+
+    if not store_for_limits:
+        return redirect("subscriptions:plans")
+
     # Check plan limits
-    limits_info = check_plan_limits(store)
+    limits_info = check_plan_limits(store_for_limits)
 
     # Get available upgrade/downgrade plans
     current_plan = subscription.plan
@@ -432,25 +460,38 @@ def create_subscription(request):
 
     try:
         with transaction.atomic():
-            # Create store first
-            store_name = serializer.validated_data.get(
-                "store_name", f"{user.get_full_name()}'s Store"
+            # Create tenant first (new tenant-based architecture)
+            from apps.accounts.models import Tenant
+
+            tenant_slug = f"{user.email.split('@')[0]}-workspace"
+            tenant, created = Tenant.objects.get_or_create(
+                slug=tenant_slug,
+                defaults={
+                    "name": f"{user.get_full_name()}'s Workspace",
+                    "owner": user,
+                    "is_active": True,
+                },
             )
-            store = Store.objects.create(name=store_name)
 
-            # Make the user the store owner
-            owner_role = Role.objects.get(slug="store-owner", store=None)
-            add_member(user, store, owner_role)
-
-            # Create subscription
+            # Create subscription linked to tenant
             if serializer.validated_data["start_trial"]:
-                subscription = create_trial_subscription(
-                    store, plan, actor=user, trial_days=plan.trial_days
+                subscription = create_trial_subscription_for_tenant(
+                    tenant, plan, actor=user, trial_days=plan.trial_days
                 )
             else:
                 # For paid subscriptions, you would integrate with payment gateway here
                 # For now, we'll create it as active
-                subscription = create_paid_subscription(store, plan, actor=user)
+                subscription = create_paid_subscription_for_tenant(tenant, plan, actor=user)
+
+            # Create store linked to tenant
+            store_name = serializer.validated_data.get(
+                "store_name", f"{user.get_full_name()}'s Store"
+            )
+            store = Store.objects.create(name=store_name, tenant=tenant)
+
+            # Make the user the store owner
+            owner_role = Role.objects.get(slug="store-owner", store=None)
+            add_member(user, store, owner_role)
 
             return Response(
                 {
@@ -486,16 +527,24 @@ def cancel_subscription_view(request):
 
     user = request.user
 
-    # Get user's subscription
-    memberships = active_memberships(None).filter(user=user)
+    # Get user's tenant subscription (new architecture)
+    from apps.accounts.models import Tenant
 
-    if not memberships.exists():
-        return Response({"error": "No active subscription found"}, status=status.HTTP_404_NOT_FOUND)
+    subscription = None
+    try:
+        tenant = Tenant.objects.filter(owner=user).first()
+        if tenant and hasattr(tenant, "subscription") and tenant.subscription:
+            subscription = tenant.subscription
+    except Exception:
+        pass
 
-    store = _resolve_current_store_for_user(request, user)
-    if store is None:
-        return Response({"error": "No active subscription found"}, status=status.HTTP_404_NOT_FOUND)
-    subscription = get_active_subscription(store)
+    # Fallback to store-based subscription (migration period)
+    if not subscription:
+        memberships = active_memberships(None).filter(user=user)
+        if memberships.exists():
+            store = _resolve_current_store_for_user(request, user)
+            if store:
+                subscription = get_active_subscription(store)
 
     if not subscription:
         return Response({"error": "No active subscription found"}, status=status.HTTP_404_NOT_FOUND)
@@ -526,22 +575,31 @@ def cancel_subscription_view(request):
 def update_subscription_plan(request):
     """
     Upgrade or downgrade subscription plan.
+    Updated for tenant-based architecture.
     """
     serializer = SubscriptionUpdateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 
     user = request.user
 
-    # Get user's subscription
-    memberships = active_memberships(None).filter(user=user)
+    # Get user's tenant subscription (new architecture)
+    from apps.accounts.models import Tenant
 
-    if not memberships.exists():
-        return Response({"error": "No active subscription found"}, status=status.HTTP_404_NOT_FOUND)
+    subscription = None
+    try:
+        tenant = Tenant.objects.filter(owner=user).first()
+        if tenant and hasattr(tenant, "subscription") and tenant.subscription:
+            subscription = tenant.subscription
+    except Exception:
+        pass
 
-    store = _resolve_current_store_for_user(request, user)
-    if store is None:
-        return Response({"error": "No active subscription found"}, status=status.HTTP_404_NOT_FOUND)
-    subscription = get_active_subscription(store)
+    # Fallback to store-based subscription (migration period)
+    if not subscription:
+        memberships = active_memberships(None).filter(user=user)
+        if memberships.exists():
+            store = _resolve_current_store_for_user(request, user)
+            if store:
+                subscription = get_active_subscription(store)
 
     if not subscription:
         return Response({"error": "No active subscription found"}, status=status.HTTP_404_NOT_FOUND)

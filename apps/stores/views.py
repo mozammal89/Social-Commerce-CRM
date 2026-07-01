@@ -322,56 +322,60 @@ def _resolve_max_stores_cap(user) -> int:
     """Return the max_stores cap from the highest active subscription the
     user has access to, falling back to DEFAULT_PLAN_MAX_STORES.
 
-    CRITICAL FIX: Look at ALL subscriptions across all stores the user has
-    access to (not just stores where they have membership), and use the
-    highest max_stores value. This ensures that if a user has upgraded to a
-    higher-tier plan on any store, they can create more stores.
+    Updated for tenant-based architecture: checks tenant subscription first,
+    then falls back to store-based subscriptions for migration period.
     """
     from apps.permissions.models import Subscription, SubscriptionPlan, StoreMembership
-    from apps.accounts.models import User
+    from apps.accounts.models import User, Tenant
 
-    # Get all stores the user has any access to (any active membership)
-    user_accessible_stores = Store.objects.filter(
-        memberships__user=user, memberships__is_active=True, is_deleted=False
-    ).distinct()
-
-    # Initialize max_stores with 0
     max_stores = 0
 
-    if not user_accessible_stores.exists():
-        # User has no store access yet, check if they have any subscription plan at all
-        # This handles the case where user just upgraded but hasn't created a store yet
-        # We'll look for the highest-tier plan they've subscribed to anywhere
-        all_user_subs = Subscription.objects.filter(
-            store__in=user_accessible_stores,  # This will be empty, so try different approach
+    # First, try tenant-based subscription (new architecture)
+    try:
+        tenant = Tenant.objects.filter(owner=user).first()
+        if tenant and hasattr(tenant, "subscription") and tenant.subscription:
+            if tenant.subscription.is_active():
+                plan_max = getattr(tenant.subscription.plan, "max_stores", 0)
+                if plan_max > max_stores:
+                    max_stores = plan_max
+    except Exception:
+        pass
+
+    # Fallback to store-based subscriptions (migration period)
+    if max_stores == 0:
+        # Get all stores the user has any access to (any active membership)
+        user_accessible_stores = Store.objects.filter(
+            memberships__user=user, memberships__is_active=True, is_deleted=False
+        ).distinct()
+
+        if not user_accessible_stores.exists():
+            # User has no store access yet, check if they have any subscription plan at all
+            # We'll look for the highest-tier plan they've subscribed to anywhere
+            # Alternative: check if user has any pending plan from the subscription flow
+            if hasattr(user, "pending_plan_slug") and user.pending_plan_slug:
+                try:
+                    pending_plan = SubscriptionPlan.objects.get(slug=user.pending_plan_slug)
+                    if getattr(pending_plan, "max_stores", None):
+                        return int(pending_plan.max_stores)
+                except Exception:
+                    pass
+
+        # Get all subscriptions for all stores the user has access to
+        accessible_store_ids = user_accessible_stores.values_list("id", flat=True)
+        all_accessible_subs = (
+            Subscription.objects.filter(
+                store_id__in=accessible_store_ids, status__in=("active", "trialing")
+            )
+            .select_related("plan")
+            .all()
         )
 
-        # Alternative: check if user has any pending plan from the subscription flow
-        if hasattr(user, "pending_plan_slug") and user.pending_plan_slug:
-            try:
-                pending_plan = SubscriptionPlan.objects.get(slug=user.pending_plan_slug)
-                if getattr(pending_plan, "max_stores", None):
-                    return int(pending_plan.max_stores)
-            except Exception:
-                pass
-
-    # Get all subscriptions for all stores the user has access to
-    accessible_store_ids = user_accessible_stores.values_list("id", flat=True)
-
-    all_accessible_subs = (
-        Subscription.objects.filter(
-            store_id__in=accessible_store_ids, status__in=("active", "trialing")
-        )
-        .select_related("plan")
-        .all()
-    )
-
-    if all_accessible_subs.exists():
-        # Find the subscription with the highest max_stores
-        for sub in all_accessible_subs:
-            plan_max = getattr(sub.plan, "max_stores", 0)
-            if plan_max > max_stores:
-                max_stores = plan_max
+        if all_accessible_subs.exists():
+            # Find the subscription with the highest max_stores
+            for sub in all_accessible_subs:
+                plan_max = getattr(sub.plan, "max_stores", 0)
+                if plan_max > max_stores:
+                    max_stores = plan_max
 
     # CRITICAL: Check for pending plan - it might be higher tier than current subscription
     # This handles users who just upgraded but haven't completed store creation yet
@@ -409,16 +413,31 @@ def create_store_template(request):
             except SubscriptionPlan.DoesNotExist:
                 pass
 
-        # Find subscriptions through user's store memberships
-        user_subscription = (
-            Subscription.objects.filter(
-                store__memberships__user=request.user,
-                store__memberships__is_active=True,
-                status__in=["trialing", "active"],
+        # Find tenant subscription (new architecture)
+        from apps.accounts.models import Tenant
+
+        user_subscription = None
+
+        # Try to get tenant subscription first
+        try:
+            tenant = Tenant.objects.filter(owner=request.user).first()
+            if tenant and hasattr(tenant, "subscription") and tenant.subscription:
+                if tenant.subscription.is_active():
+                    user_subscription = tenant.subscription
+        except Exception:
+            pass
+
+        # Fallback to old store-based lookup for migration period
+        if not user_subscription:
+            user_subscription = (
+                Subscription.objects.filter(
+                    store__memberships__user=request.user,
+                    store__memberships__is_active=True,
+                    status__in=["trialing", "active"],
+                )
+                .select_related("plan")
+                .first()
             )
-            .select_related("plan")
-            .first()
-        )
 
         # Allow store creation if user has active subscription OR pending plan from checkout
         if not user_subscription and not pending_plan:

@@ -4,11 +4,14 @@ Subscription services for managing subscription lifecycle and operations.
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 
 from django.db import transaction
 from django.utils import timezone
 from django.core.cache import cache
+
+if TYPE_CHECKING:
+    from apps.accounts.models import Tenant
 
 from .constants import (
     STATUS_TRIALING,
@@ -255,6 +258,120 @@ def create_paid_subscription(
     return subscription
 
 
+def create_trial_subscription_for_tenant(
+    tenant: "Tenant",
+    plan: SubscriptionPlan,
+    *,
+    actor=None,
+    trial_days: int = None,
+    metadata: Dict[str, Any] = None,
+) -> Subscription:
+    """
+    Create a new trial subscription for a tenant.
+
+    New tenant-based subscription creation for the refactored architecture.
+
+    Args:
+        tenant: The tenant to create subscription for
+        plan: The subscription plan to use
+        actor: The user creating the subscription
+        trial_days: Number of trial days (defaults from plan)
+        metadata: Additional subscription metadata
+
+    Returns:
+        The created Subscription instance
+
+    Raises:
+        SubscriptionAlreadyExistsError: If tenant already has active subscription
+    """
+    from apps.accounts.models import Tenant
+
+    # Check if tenant already has an active subscription
+    try:
+        existing_subscription = Subscription.objects.get(tenant=tenant)
+        if existing_subscription.is_active():
+            raise SubscriptionAlreadyExistsError(tenant.id)
+    except Subscription.DoesNotExist:
+        pass
+
+    trial_duration = trial_days or plan.trial_days or DEFAULT_TRIAL_DAYS
+    now = timezone.now()
+
+    subscription = Subscription.objects.create(
+        tenant=tenant,
+        plan=plan,
+        status=STATUS_TRIALING,
+        starts_at=now,
+        trial_ends_at=now + timedelta(days=trial_duration),
+    )
+
+    record_event(subscription, EVENT_TRIAL_STARTED, actor=actor, metadata=metadata or {})
+
+    logger.info(f"Created trial subscription {subscription.id} for tenant {tenant.id}")
+    return subscription
+
+
+def create_paid_subscription_for_tenant(
+    tenant: "Tenant",
+    plan: SubscriptionPlan,
+    *,
+    payment_gateway_id: str = None,
+    customer_id: str = None,
+    billing_period_start: datetime = None,
+    billing_period_end: datetime = None,
+    actor=None,
+    metadata: Dict[str, Any] = None,
+) -> Subscription:
+    """
+    Create a new paid subscription for a tenant.
+
+    New tenant-based subscription creation for the refactored architecture.
+
+    Args:
+        tenant: The tenant to create subscription for
+        plan: The subscription plan to use
+        payment_gateway_id: Gateway subscription ID
+        customer_id: Gateway customer ID
+        billing_period_start: Start of billing period
+        billing_period_end: End of billing period
+        actor: The user creating the subscription
+        metadata: Additional subscription metadata
+
+    Returns:
+        The created Subscription instance
+
+    Raises:
+        SubscriptionAlreadyExistsError: If tenant already has active subscription
+    """
+    from apps.accounts.models import Tenant
+
+    # Check if tenant already has an active subscription
+    try:
+        existing_subscription = Subscription.objects.get(tenant=tenant)
+        if existing_subscription.is_active():
+            raise SubscriptionAlreadyExistsError(tenant.id)
+    except Subscription.DoesNotExist:
+        pass
+
+    now = timezone.now()
+
+    subscription = Subscription.objects.create(
+        tenant=tenant,
+        plan=plan,
+        status=STATUS_ACTIVE,
+        starts_at=now,
+        current_period_start=billing_period_start or now,
+        current_period_end=billing_period_end or (now + timedelta(days=30)),
+        stripe_customer_id=customer_id,
+        stripe_subscription_id=payment_gateway_id,
+    )
+
+    record_event(subscription, EVENT_CREATED, actor=actor, metadata=metadata or {})
+
+    logger.info(f"Created paid subscription {subscription.id} for tenant {tenant.id}")
+    return subscription
+
+
 def cancel_subscription(
     subscription: Subscription,
     *,
@@ -348,12 +465,8 @@ def upgrade_subscription(
     """
     Upgrade a subscription to a higher-tier plan.
 
-    CRITICAL FIX: When a user upgrades their subscription, upgrade ALL stores
-    they own to the new plan, not just the current store. This ensures
-    consistent plan limits across all stores.
-
-    CRITICAL FIX: Clear pending_plan_slug for existing users after upgrade
-    since they already have stores and don't need "pending" status.
+    Updated for tenant-based architecture: upgrades tenant subscription,
+    which automatically applies to all stores under the tenant.
 
     Args:
         subscription: The subscription to upgrade
@@ -369,150 +482,51 @@ def upgrade_subscription(
 
     old_plan = subscription.plan
 
-    # Upgrade the specific subscription
+    # Upgrade the tenant subscription
     subscription.plan = new_plan
     subscription.save(update_fields=["plan", "updated_at"])
 
-    # CRITICAL: Also upgrade all other subscriptions for stores owned by the same user
+    # Clear cache for this tenant
     try:
-        from apps.permissions.models import StoreMembership, Subscription
-        from apps.stores.models import Store
-        from apps.accounts.models import User
+        from apps.subscriptions.constants import CACHE_SUBSCRIPTION_PREFIX
+        from django.core.cache import cache
 
-        # Get the user who owns the current subscription's store
-        store_owners = (
-            StoreMembership.objects.filter(
-                store=subscription.store, role__slug="store-owner", is_active=True
-            )
-            .select_related("user")
-            .first()
-        )
+        if subscription.tenant:
+            cache_key = f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.tenant.id}"
+            cache.delete(cache_key)
+    except Exception:
+        pass
 
-        if store_owners:
-            user = store_owners.user
-
-            # Find all stores where this user is the owner
-            user_owned_stores = Store.objects.filter(
-                memberships__user=user,
-                memberships__role__slug="store-owner",
-                memberships__is_active=True,
-                is_deleted=False,
-            ).distinct()
-
-            # Upgrade subscriptions for all stores owned by this user
-            for store in user_owned_stores:
-                if store.id != subscription.store_id:  # Don't upgrade the current store again
-                    try:
-                        store_sub = Subscription.objects.get(store=store)
-                        if (
-                            store_sub.plan.max_stores < new_plan.max_stores
-                        ):  # Only upgrade if current plan is lower
-                            store_sub.plan = new_plan
-                            store_sub.save(update_fields=["plan", "updated_at"])
-
-                            # Record event for the upgraded store subscription
-                            record_event(
-                                store_sub,
-                                EVENT_UPGRADED,
-                                actor=actor,
-                                metadata={
-                                    "old_plan": store_sub.plan.slug,
-                                    "new_plan": new_plan.slug,
-                                    "bulk_upgrade": True,
-                                    "original_store": subscription.store_id,
-                                },
-                            )
-
-                            # Clear cache for this store
-                            cache.delete(f"{CACHE_SUBSCRIPTION_PREFIX}{store_sub.store_id}")
-
-                            # Bump store plan version
-                            try:
-                                from apps.permissions.cache import bump_store_plan_version
-
-                                bump_store_plan_version(store_sub.store_id)
-                            except Exception:
-                                pass
-                    except Subscription.DoesNotExist:
-                        # Create subscription for stores that don't have one
-                        try:
-                            new_sub = Subscription.objects.create(
-                                store=store,
-                                plan=new_plan,
-                                starts_at=timezone.now(),
-                                status="trialing",
-                                trial_ends_at=timezone.now() + timedelta(days=new_plan.trial_days)
-                                if new_plan.trial_days
-                                else None,
-                            )
-                            record_event(
-                                new_sub,
-                                EVENT_CREATED,
-                                actor=actor,
-                                metadata={
-                                    "plan_slug": new_plan.slug,
-                                    "bulk_upgrade": True,
-                                },
-                            )
-                        except Exception as e:
-                            logger.exception(
-                                f"Failed to create subscription for store {store.id} during upgrade"
-                            )
-
-            # CRITICAL: Clear pending_plan_slug for existing users after upgrade
-            # They already have stores, so they're not "pending" anything
-            if user and hasattr(user, "pending_plan_slug") and user.pending_plan_slug:
-                user.pending_plan_slug = None
-                user.pending_trial_start = None
-                user.pending_subscription_date = None
-                user.save(
-                    update_fields=[
-                        "pending_plan_slug",
-                        "pending_trial_start",
-                        "pending_subscription_date",
-                    ]
-                )
-
-    except Exception as e:
-        logger.exception(
-            f"Failed to upgrade subscriptions for all stores owned by user during plan upgrade"
-        )
-
-    # CRITICAL: Clear pending_plan_slug for existing users after upgrade
-    # This must happen OUTSIDE the try-except to ensure it runs even if bulk upgrade fails
+    # Clear user-specific cache for all tenant members to ensure they get new limits
     try:
-        from apps.permissions.models import StoreMembership, Subscription
-        from apps.stores.models import Store
-        from apps.accounts.models import User
+        from apps.permissions.models import StoreMembership
+        from apps.permissions.cache import bump_user_version, bump_store_plan_version
 
-        # Get the user who owns the current subscription's store
-        store_owners = (
-            StoreMembership.objects.filter(
-                store=subscription.store, role__slug="store-owner", is_active=True
+        # Get all active members of all stores under this tenant
+        if subscription.tenant:
+            memberships = StoreMembership.objects.filter(
+                store__tenant=subscription.tenant, is_active=True
             )
-            .select_related("user")
-            .first()
-        )
 
-        if store_owners:
-            user = store_owners.user
+            for membership in memberships:
+                bump_user_version(membership.user_id)
+            # Bump plan version for all stores under tenant
+            for store in subscription.tenant.stores.all():
+                bump_store_plan_version(store.id)
+    except Exception:
+        logger.exception("Failed to invalidate user cache on upgrade")
 
-            # Clear pending_plan_slug for existing users after upgrade
-            # They already have stores, so they're not "pending" anything
-            if user and hasattr(user, "pending_plan_slug") and user.pending_plan_slug:
-                user.pending_plan_slug = None
-                user.pending_trial_start = False  # BooleanField, not datetime
-                user.pending_subscription_date = None
-                user.save(
-                    update_fields=[
-                        "pending_plan_slug",
-                        "pending_trial_start",
-                        "pending_subscription_date",
-                    ]
-                )
-    except Exception as e:
-        logger.exception(f"Failed to clear pending_plan_slug after upgrade: {str(e)}")
-        # Continue anyway - the upgrade succeeded
+    # Bump the RBAC store-plan version so cached feature / permission sets
+    # for this tenant are invalidated immediately on the next read.
+    try:
+        from apps.permissions.cache import bump_store_plan_version
+
+        if subscription.tenant:
+            # Bump version for all stores under the tenant
+            for store in subscription.tenant.stores.all():
+                bump_store_plan_version(store.id)
+    except Exception:
+        logger.exception("Failed to bump store plan version on upgrade")
 
     record_event(
         subscription,
@@ -528,29 +542,8 @@ def upgrade_subscription(
     # Clear plan cache
     cache.delete(f"{CACHE_PLAN_PREFIX}{old_plan.slug}")
     cache.delete(f"{CACHE_PLAN_PREFIX}{new_plan.slug}")
-    cache.delete(f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.store_id}")
-
-    # Clear user-specific cache for all store members to ensure they get new limits
-    try:
-        from apps.permissions.models import StoreMembership
-        from apps.permissions.cache import invalidate_user_store_cache
-
-        # Get all active members of the store
-        memberships = StoreMembership.objects.filter(store=subscription.store, is_active=True)
-
-        for membership in memberships:
-            invalidate_user_store_cache(membership.user_id, subscription.store_id)
-    except Exception:
-        logger.exception("Failed to invalidate user cache on upgrade")
-
-    # Bump the RBAC store-plan version so cached feature / permission sets
-    # for this store are invalidated immediately on the next read.
-    try:
-        from apps.permissions.cache import bump_store_plan_version
-
-        bump_store_plan_version(subscription.store_id)
-    except Exception:
-        logger.exception("Failed to bump store plan version on upgrade")
+    if subscription.tenant:
+        cache.delete(f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.tenant.id}")
 
     logger.info(f"Upgraded subscription {subscription.id} from {old_plan.slug} to {new_plan.slug}")
     return subscription
@@ -623,13 +616,15 @@ def downgrade_subscription(
         # Clear user-specific cache for all store members to ensure they get new limits
         try:
             from apps.permissions.models import StoreMembership
-            from apps.permissions.cache import invalidate_user_store_cache
+            from apps.permissions.cache import bump_user_version, bump_store_plan_version
 
             # Get all active members of the store
             memberships = StoreMembership.objects.filter(store=subscription.store, is_active=True)
 
             for membership in memberships:
-                invalidate_user_store_cache(membership.user_id, subscription.store_id)
+                bump_user_version(membership.user_id)
+            # Bump plan version for the store
+            bump_store_plan_version(subscription.store_id)
         except Exception:
             logger.exception("Failed to invalidate user cache on downgrade")
 
@@ -649,14 +644,39 @@ def downgrade_subscription(
 
 def get_active_subscription(store: Store) -> Optional[Subscription]:
     """
-    Get the active subscription for a store with caching.
+    Get the active subscription for a store's tenant with caching.
+
+    Now uses tenant-based subscription architecture. Each tenant has one subscription
+    that applies to all stores under that tenant.
+
+    Falls back to store-based subscription for migration period.
 
     Args:
-        store: The store to get subscription for
+        store: The store to get subscription for (via its tenant)
 
     Returns:
         The active Subscription instance or None
     """
+    # Try tenant-based subscription first (new architecture)
+    if store.tenant:
+        cache_key = f"{CACHE_SUBSCRIPTION_PREFIX}{store.tenant.id}"
+        subscription = cache.get(cache_key)
+
+        if subscription is None:
+            try:
+                subscription = store.tenant.subscription
+                if subscription and not subscription.is_active():
+                    subscription = None
+            except Subscription.DoesNotExist:
+                subscription = None
+
+            if subscription:
+                cache.set(cache_key, subscription, CACHE_KEY_TIMEOUT)
+
+        if subscription:
+            return subscription
+
+    # Fallback to store-based subscription (migration period)
     cache_key = f"{CACHE_SUBSCRIPTION_PREFIX}{store.id}"
     subscription = cache.get(cache_key)
 
@@ -676,7 +696,10 @@ def get_active_subscription(store: Store) -> Optional[Subscription]:
 
 def check_plan_limits(store: Store) -> Dict[str, Any]:
     """
-    Check current usage against plan limits for a store.
+    Check current usage against subscription plan limits.
+
+    Updated to support both tenant-based (new) and store-based (legacy) subscriptions
+    for smooth migration period.
 
     Args:
         store: The store to check limits for
@@ -696,46 +719,70 @@ def check_plan_limits(store: Store) -> Dict[str, Any]:
 
     plan = subscription.plan
 
-    # Get current usage
-    stores_count = (
-        Store.objects.filter(
-            memberships__store=store,
-            memberships__is_active=True,
+    # Count usage based on subscription type
+    if subscription.tenant:
+        # Tenant-based: count across all tenant stores
+        stores_count = Store.objects.filter(
+            tenant=subscription.tenant,
             is_deleted=False,
-        )
-        .distinct()
-        .count()
-    )
+        ).count()
 
-    # Count users excluding store owners (they don't consume seats).
-    #
-    # Both active AND inactive non-owner memberships count toward the cap.
-    # Deactivating a member must not free a seat, otherwise the team UI can
-    # be abused to bypass the limit (deactivate → invite → reactivate).
-    try:
-        from apps.permissions.models import Role
+        # Count users across all tenant stores, excluding store owners
+        try:
+            from apps.permissions.models import Role
 
-        owner_role = Role.objects.filter(slug="store-owner", store__isnull=True).first()
-        if owner_role:
-            owner_memberships = StoreMembership.objects.filter(
-                store=store, role=owner_role, is_active=True
-            )
-            owner_ids = list(owner_memberships.values_list("user_id", flat=True))
-        else:
+            owner_role = Role.objects.filter(slug="store-owner", store__isnull=True).first()
+            if owner_role:
+                # Get all owner memberships across all tenant stores
+                owner_memberships = StoreMembership.objects.filter(
+                    store__tenant=subscription.tenant, role=owner_role, is_active=True
+                )
+                owner_ids = list(owner_memberships.values_list("user_id", flat=True))
+            else:
+                owner_ids = []
+                logger.warning(f"Tenant {subscription.tenant.id}: No 'store-owner' role found")
+        except Exception as e:
+            logger.warning(f"Failed to look up store owners: {str(e)}")
             owner_ids = []
-            logger.warning(f"Store {store.id}: No 'store-owner' role found")
-    except Exception as e:
-        logger.warning(f"Failed to look up store owners: {str(e)}")
-        owner_ids = []
 
-    users_count = (
-        StoreMembership.objects.filter(store=store)
-        .exclude(user_id__in=owner_ids)
-        .count()
-    )
-    logger.info(
-        f"Store {store.id} seat count: {users_count} used (excluding {len(owner_ids)} owners)"
-    )
+        # Count all active memberships across all tenant stores, excluding owners
+        users_count = (
+            StoreMembership.objects.filter(store__tenant=subscription.tenant, is_active=True)
+            .exclude(user_id__in=owner_ids)
+            .count()
+        )
+        logger.info(
+            f"Tenant {subscription.tenant.id} usage: {stores_count} stores, {users_count} users (excluding {len(owner_ids)} owners)"
+        )
+    else:
+        # Store-based: count for this store only
+        stores_count = 1  # Just this store
+
+        # Count users excluding store owners
+        try:
+            from apps.permissions.models import Role
+
+            owner_role = Role.objects.filter(slug="store-owner", store__isnull=True).first()
+            if owner_role:
+                owner_memberships = StoreMembership.objects.filter(
+                    store=store, role=owner_role, is_active=True
+                )
+                owner_ids = list(owner_memberships.values_list("user_id", flat=True))
+            else:
+                owner_ids = []
+                logger.warning(f"Store {store.id}: No 'store-owner' role found")
+        except Exception as e:
+            logger.warning(f"Failed to look up store owners: {str(e)}")
+            owner_ids = []
+
+        users_count = (
+            StoreMembership.objects.filter(store=store, is_active=True)
+            .exclude(user_id__in=owner_ids)
+            .count()
+        )
+        logger.info(
+            f"Store {store.id} usage: {stores_count} stores, {users_count} users (excluding {len(owner_ids)} owners)"
+        )
 
     limits = {
         "max_stores": plan.max_stores,

@@ -100,6 +100,15 @@ class Store(BaseModel, StatusModel):
         blank=True,
         null=True,
     )
+    tenant = models.ForeignKey(
+        "accounts.Tenant",
+        on_delete=models.CASCADE,
+        related_name="stores",
+        verbose_name=_("tenant"),
+        help_text=_("The tenant/workspace this store belongs to"),
+        null=True,  # Allow null temporarily for migration
+        blank=True,
+    )
     owners = models.ManyToManyField(
         User,
         related_name="owned_stores",

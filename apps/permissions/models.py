@@ -502,13 +502,28 @@ class PlanFeature(UUIDModel, TimeStampedModel):
 # ---------------------------------------------------------------------------
 class Subscription(UUIDModel, TimeStampedModel):
     """
-    Per-store billing state. One active subscription per store.
+    Per-tenant billing state. One active subscription per tenant.
+
+    Changed from store-based to tenant-based subscription model.
+    All stores under a tenant inherit the tenant's subscription limits.
     """
 
+    # Temporary: keep store field for migration, will be removed later
     store = models.OneToOneField(
         "stores.Store",
         on_delete=models.CASCADE,
         related_name="subscription",
+        null=True,  # Temporarily nullable for migration
+        blank=True,
+    )
+
+    # New tenant field - will become primary after migration
+    tenant = models.OneToOneField(
+        "accounts.Tenant",
+        on_delete=models.CASCADE,
+        related_name="subscription",
+        null=True,  # Allow null temporarily for migration
+        blank=True,
     )
     plan = models.ForeignKey(
         SubscriptionPlan,
@@ -537,7 +552,14 @@ class Subscription(UUIDModel, TimeStampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.store_id} → {self.plan.slug} ({self.status})"
+        """Display either tenant or store for migration period."""
+        if self.tenant:
+            target = f"Tenant:{self.tenant_id}"
+        elif self.store:
+            target = f"Store:{self.store_id}"
+        else:
+            target = "No target"
+        return f"{target} → {self.plan.slug} ({self.status})"
 
     def is_active(self) -> bool:
         """Active or in-trial, not past period end."""
@@ -639,7 +661,9 @@ class AuditLog(UUIDModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.action} {self.target_type}#{self.target_id} @ {self.created_at:%Y-%m-%d %H:%M}"
+        return (
+            f"{self.action} {self.target_type}#{self.target_id} @ {self.created_at:%Y-%m-%d %H:%M}"
+        )
 
     def save(self, *args, **kwargs):
         # AuditLog is append-only. We detect a re-save via Django's
