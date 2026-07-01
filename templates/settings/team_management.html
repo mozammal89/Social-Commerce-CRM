@@ -16,7 +16,7 @@
         <h2 class="fw-bold">Team Management</h2>
         <p class="text-muted mb-0">{{ store.name }} Team</p>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2" id="teamActionButtons">
         <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#teamStatsModal">
             <i class="bi bi-bar-chart me-1"></i>
             Team Stats
@@ -24,16 +24,16 @@
         {% can_any "members.manage" as can_manage %}
         {% if can_manage %}
         {% if remaining_seats == 0 %}
-        <button type="button" 
-                class="btn btn-warning" 
+        <button type="button"
+                class="btn btn-warning"
                 onclick="window.location.href='/subscriptions/manage/'">
             <i class="bi bi-arrow-up-circle me-1"></i>
             Upgrade Plan
             <span class="badge bg-light text-dark ms-2">0 seats remaining</span>
         </button>
         {% else %}
-        <button type="button" class="btn btn-primary" 
-                data-bs-toggle="modal" 
+        <button type="button" class="btn btn-primary"
+                data-bs-toggle="modal"
                 data-bs-target="#inviteMemberModal">
             <i class="bi bi-person-plus me-1"></i>
             Invite Member
@@ -184,43 +184,43 @@
     </div>
 </div>
 
-<div class="card border-0 shadow-sm">
+<div class="card border-0 shadow-sm" id="teamStatsCard">
     <div class="card-body p-4">
         <h6 class="fw-bold mb-3">Team Statistics</h6>
         <div class="row g-3">
             <div class="col-md-2">
-                <div class="stat-item text-center">
-                    <div class="stat-value">{{ total_members }}</div>
+                <div class="stat-item text-center" data-stat-wrap="total_members">
+                    <div class="stat-value" data-stat="total_members">{{ total_members }}</div>
                     <div class="stat-label">Total Members</div>
                 </div>
             </div>
             <div class="col-md-2">
-                <div class="stat-item text-center">
-                    <div class="stat-value">{{ active_members }}</div>
+                <div class="stat-item text-center" data-stat-wrap="active_members">
+                    <div class="stat-value" data-stat="active_members">{{ active_members }}</div>
                     <div class="stat-label">Active Members</div>
                 </div>
             </div>
             <div class="col-md-2">
-                <div class="stat-item text-center">
-                    <div class="stat-value">{{ available_roles }}</div>
+                <div class="stat-item text-center" data-stat-wrap="available_roles">
+                    <div class="stat-value" data-stat="available_roles">{{ available_roles }}</div>
                     <div class="stat-label">Available Roles</div>
                 </div>
             </div>
             <div class="col-md-2">
-                <div class="stat-item text-center">
-                    <div class="stat-value">{{ max_seats|default:"∞" }}</div>
+                <div class="stat-item text-center" data-stat-wrap="max_seats">
+                    <div class="stat-value" data-stat="max_seats">{{ max_seats|default:"∞" }}</div>
                     <div class="stat-label">Plan Limit</div>
                 </div>
             </div>
             <div class="col-md-2">
-                <div class="stat-item text-center">
-                    <div class="stat-value">{{ used_seats }}</div>
+                <div class="stat-item text-center" data-stat-wrap="used_seats">
+                    <div class="stat-value" data-stat="used_seats">{{ used_seats }}</div>
                     <div class="stat-label">Used Seats</div>
                 </div>
             </div>
             <div class="col-md-2">
-                <div class="stat-item text-center {% if remaining_seats == 0 %}text-danger{% endif %}">
-                    <div class="stat-value">{{ remaining_seats|default:"∞" }}</div>
+                <div class="stat-item text-center {% if remaining_seats == 0 %}text-danger{% endif %}" data-stat-wrap="remaining_seats">
+                    <div class="stat-value" data-stat="remaining_seats">{{ remaining_seats|default:"∞" }}</div>
                     <div class="stat-label">Remaining Seats</div>
                 </div>
             </div>
@@ -359,39 +359,39 @@
             <div class="modal-body">
                 <div class="row g-3">
                     <div class="col-6">
-                        <div class="stat-card">
+                        <div class="stat-card" data-stat-wrap="total_members">
                             <div class="stat-label">Total Members</div>
-                            <div class="stat-value">{{ total_members }}</div>
+                            <div class="stat-value" data-stat="total_members">{{ total_members }}</div>
                         </div>
                     </div>
                     <div class="col-6">
-                        <div class="stat-card">
+                        <div class="stat-card" data-stat-wrap="active_members">
                             <div class="stat-label">Active Members</div>
-                            <div class="stat-value">{{ active_members }}</div>
+                            <div class="stat-value" data-stat="active_members">{{ active_members }}</div>
                         </div>
                     </div>
                     <div class="col-6">
-                        <div class="stat-card">
+                        <div class="stat-card" data-stat-wrap="available_roles">
                             <div class="stat-label">Available Roles</div>
-                            <div class="stat-value">{{ available_roles }}</div>
+                            <div class="stat-value" data-stat="available_roles">{{ available_roles }}</div>
                         </div>
                     </div>
                     <div class="col-6">
-                        <div class="stat-card">
+                        <div class="stat-card" data-stat-wrap="max_seats">
                             <div class="stat-label">Plan Limit</div>
-                            <div class="stat-value">{{ max_seats|default:"∞" }}</div>
+                            <div class="stat-value" data-stat="max_seats">{{ max_seats|default:"∞" }}</div>
                         </div>
                     </div>
                     <div class="col-6">
-                        <div class="stat-card">
+                        <div class="stat-card" data-stat-wrap="used_seats">
                             <div class="stat-label">Used Seats</div>
-                            <div class="stat-value">{{ used_seats }}</div>
+                            <div class="stat-value" data-stat="used_seats">{{ used_seats }}</div>
                         </div>
                     </div>
                     <div class="col-6">
-                        <div class="stat-card {% if remaining_seats == 0 %}stat-card--danger{% endif %}">
+                        <div class="stat-card {% if remaining_seats == 0 %}stat-card--danger{% endif %}" data-stat-wrap="remaining_seats">
                             <div class="stat-label">Remaining Seats</div>
-                            <div class="stat-value">{{ remaining_seats|default:"∞" }}</div>
+                            <div class="stat-value" data-stat="remaining_seats">{{ remaining_seats|default:"∞" }}</div>
                         </div>
                     </div>
                 </div>

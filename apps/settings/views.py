@@ -90,6 +90,56 @@ def calculate_seat_usage(store):
     }
 
 
+def _compute_team_stats(store):
+    """
+    Return the seat/cap statistics consumed by the team-management template
+    and the JS that refreshes it after AJAX mutations.
+
+    Shape:
+        {
+            "total_members":    int,   # all memberships in this store
+            "active_members":   int,   # is_active=True
+            "used_seats":       int,   # non-owner occupied seats (active+inactive)
+            "max_seats":        int|None,
+            "remaining_seats":  int|None,
+            "available_roles":  int,
+        }
+    """
+    from apps.subscriptions.services import get_active_subscription, check_plan_limits
+
+    seat_info = calculate_seat_usage(store)
+    total_members = StoreMembership.objects.filter(store=store).count()
+    active_members = seat_info["total_members"]
+    used_seats = seat_info["used_seats"]
+
+    # Available roles for this store (active only)
+    available_roles = Role.objects.filter(
+        Q(store__isnull=True) | Q(store=store), is_active=True
+    ).count()
+
+    max_seats = None
+    remaining_seats = None
+    try:
+        subscription = get_active_subscription(store)
+        if subscription and subscription.plan.max_users:
+            max_seats = subscription.plan.max_users
+            limits_info = check_plan_limits(store)
+            fresh_used_seats = limits_info.get("usage", {}).get("users", 0)
+            used_seats = max(used_seats, fresh_used_seats)
+            remaining_seats = max(0, max_seats - used_seats)
+    except Exception:
+        pass
+
+    return {
+        "total_members": total_members,
+        "active_members": active_members,
+        "used_seats": used_seats,
+        "max_seats": max_seats,
+        "remaining_seats": remaining_seats,
+        "available_roles": available_roles,
+    }
+
+
 @login_required
 @current_store
 def filter_team_members(request, store_id):
@@ -167,7 +217,18 @@ def filter_team_members(request, store_id):
             }
         )
 
-    return JsonResponse({"success": True, "members": members_data, "total": len(members_data)})
+    # Compute seat statistics so the client can refresh the stats card
+    # and toggle the invite/upgrade button without a full page reload.
+    stats = _compute_team_stats(request.store)
+
+    return JsonResponse(
+        {
+            "success": True,
+            "members": members_data,
+            "total": len(members_data),
+            "stats": stats,
+        }
+    )
 
 
 @login_required

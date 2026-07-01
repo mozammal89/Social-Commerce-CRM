@@ -707,40 +707,35 @@ def check_plan_limits(store: Store) -> Dict[str, Any]:
         .count()
     )
 
-    # Count users excluding store owners (they don't consume seats)
+    # Count users excluding store owners (they don't consume seats).
+    #
+    # Both active AND inactive non-owner memberships count toward the cap.
+    # Deactivating a member must not free a seat, otherwise the team UI can
+    # be abused to bypass the limit (deactivate → invite → reactivate).
     try:
         from apps.permissions.models import Role
 
-        # Get store owners by their role
         owner_role = Role.objects.filter(slug="store-owner", store__isnull=True).first()
         if owner_role:
             owner_memberships = StoreMembership.objects.filter(
                 store=store, role=owner_role, is_active=True
             )
             owner_ids = list(owner_memberships.values_list("user_id", flat=True))
-            logger.info(
-                f"Store {store.id}: Found {len(owner_ids)} owners with role 'store-owner': {owner_ids}"
-            )
         else:
             owner_ids = []
             logger.warning(f"Store {store.id}: No 'store-owner' role found")
-
-        users_count = (
-            StoreMembership.objects.filter(store=store, is_active=True)
-            .exclude(user_id__in=owner_ids)
-            .count()
-        )
-
-        total_active = StoreMembership.objects.filter(store=store, is_active=True).count()
-        logger.info(
-            f"Store {store.id} seat count: {users_count} used (excluding owners), "
-            f"{total_active} total active members, {len(owner_ids)} owners excluded"
-        )
     except Exception as e:
-        logger.warning(f"Failed to count users excluding owners: {str(e)}")
-        # Fallback to counting all active memberships
-        users_count = StoreMembership.objects.filter(store=store, is_active=True).count()
-        logger.info(f"Store {store.id} seat count (fallback): {users_count}")
+        logger.warning(f"Failed to look up store owners: {str(e)}")
+        owner_ids = []
+
+    users_count = (
+        StoreMembership.objects.filter(store=store)
+        .exclude(user_id__in=owner_ids)
+        .count()
+    )
+    logger.info(
+        f"Store {store.id} seat count: {users_count} used (excluding {len(owner_ids)} owners)"
+    )
 
     limits = {
         "max_stores": plan.max_stores,
