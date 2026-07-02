@@ -316,6 +316,113 @@ def change_plan(
     )
 
 
+def propagate_plan_to_all_user_stores(
+    subscription: Subscription,
+    *,
+    actor=None,
+) -> None:
+    """Apply a plan change to every store the actor owns.
+
+    Mirrors ``consolidate_user_subscriptions`` for the live upgrade /
+    downgrade path. Multi-store tenants that grew up during the
+    legacy-per-store era often hold one ``Subscription`` per store, each
+    with its own plan. Upgrading only the *current* store's sub leaves
+    the other stores on the old plan — the user sees Store A at the
+    new cap while Store B is still stuck at the old one. Running the
+    management command fixed that for data already in this state; this
+    helper prevents new occurrences by sweeping after every plan change.
+
+    Steps:
+
+    1. Resolve the tenant. If the upgraded sub is still store-only,
+       materialise a tenant and bind the sub's store to it; the caller
+       has already updated ``subscription.plan`` in the same
+       transaction so this just plumbs the tenant plumbing.
+    2. Attach every other store the actor owns (active memberships) to
+       the same tenant so plan limits become tenant-scoped.
+    3. Cancel any other legacy per-store ``Subscription`` rows that
+       belong to those stores — they're stale duplicates of the
+       upgraded one.
+    4. Evict every cache slot that might still hold the old plan:
+       per-tenant, per-store-keyed (legacy), and the plan-keyed slots.
+
+    No-op when the actor has only one store (no consolidation needed)
+    or when the upgraded sub is already tenant-attached and the user
+    has no legacy duplicates.
+    """
+    from django.db import transaction as _tx
+
+    from apps.stores.models import Store
+
+    target_user = actor if actor is not None else (
+        subscription.store.owners.first() if subscription.store_id else None
+    )
+    if target_user is None:
+        return
+
+    user_store_ids = list(
+        Store.objects.filter(
+            memberships__user=target_user,
+            memberships__is_active=True,
+            is_deleted=False,
+        ).distinct().values_list("id", flat=True)
+    )
+    if not user_store_ids:
+        return
+
+    # Resolve / create the tenant. If the upgraded sub is still store-only,
+    # use ``get_or_create_default_tenant`` so the row has somewhere to anchor.
+    if subscription.tenant_id is not None:
+        tenant_id = subscription.tenant_id
+    else:
+        tenant = get_or_create_default_tenant(target_user)
+        tenant_id = tenant.id
+        # If the sub is still store-attached, bind its store to the tenant
+        # first so ``promote_subscription_to_tenant`` has somewhere to
+        # anchor (it no-ops when ``store.tenant_id`` is None).
+        if subscription.store_id is not None:
+            Store.objects.filter(
+                id=subscription.store_id, tenant__isnull=True,
+            ).update(tenant_id=tenant_id)
+            # Refresh so promote sees the new tenant FK.
+            subscription.refresh_from_db()
+            promote_subscription_to_tenant(subscription, subscription.store)
+        else:
+            subscription.tenant_id = tenant_id
+            subscription.save(update_fields=["tenant", "updated_at"])
+
+    # Cancel any other active per-store subs the user owns. These are
+    # duplicates left behind by the legacy per-store subscription era.
+    # ``tenant__isnull=True`` keeps the just-upgraded (now tenant-attached)
+    # sub out of the cancel set, and ``exclude(id=subscription.id)`` is a
+    # belt-and-braces guard for the same sub id.
+    with _tx.atomic():
+        Store.objects.filter(id__in=user_store_ids).update(tenant_id=tenant_id)
+
+        duplicate_ids = list(
+            Subscription.objects
+            .filter(
+                store_id__in=user_store_ids,
+                tenant__isnull=True,
+                status__in=[STATUS_ACTIVE, STATUS_TRIALING],
+            )
+            .exclude(id=subscription.id)
+            .values_list("id", flat=True)
+        )
+        if duplicate_ids:
+            Subscription.objects.filter(id__in=duplicate_ids).update(
+                status=STATUS_CANCELED,
+            )
+
+    # Evict every cache slot that could still hold the pre-change sub.
+    keys = [
+        f"{CACHE_SUBSCRIPTION_PREFIX}{tenant_id}",
+        f"{CACHE_PLAN_PREFIX}{subscription.plan.slug}",
+    ]
+    keys.extend(f"{CACHE_SUBSCRIPTION_PREFIX}{sid}" for sid in user_store_ids)
+    cache.delete_many(keys)
+
+
 def clear_pending_plan_marker(user, request=None) -> None:
     """Reset the ``pending_plan_slug`` marker on ``user`` (and session).
 
@@ -783,6 +890,12 @@ def upgrade_subscription(
         },
     )
 
+    # Multi-store tenants in the legacy per-store era may hold other
+    # Subscription rows that aren't this one. Promote this sub to its
+    # tenant, bind the actor's other stores, and cancel duplicates so
+    # the new plan takes effect on the next read for every store.
+    propagate_plan_to_all_user_stores(subscription, actor=actor)
+
     logger.info(f"Upgraded subscription {subscription.id} from {old_plan.slug} to {new_plan.slug}")
     return subscription
 
@@ -884,6 +997,11 @@ def downgrade_subscription(
             bump_user_version(user_id)
         for store_id in target_store_ids:
             bump_store_plan_version(store_id)
+
+        # Mirror the upgrade path: apply the new plan to every other
+        # store the actor owns so a single downgrade doesn't leave one
+        # store on the old plan.
+        propagate_plan_to_all_user_stores(subscription, actor=actor)
 
         logger.info(
             f"Downgraded subscription {subscription.id} from {old_plan.slug} to {new_plan.slug}"
