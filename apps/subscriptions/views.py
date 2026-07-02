@@ -65,6 +65,7 @@ from .services import (
     enforce_plan_limit,
     transition_status,
     check_trial_expiry,
+    promote_subscription_to_tenant,
 )
 from .constants import (
     STATUS_ACTIVE,
@@ -603,6 +604,20 @@ def update_subscription_plan(request):
 
     if not subscription:
         return Response({"error": "No active subscription found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # If the resolved sub is still attached to a single legacy store
+    # (no tenant FK), promote it to a tenant sub before we mutate ``plan``.
+    # Without this the new plan only takes effect for a *new* store under
+    # the eventual tenant — the existing store keeps reading the old plan
+    # via the legacy fallback in ``get_active_subscription``.
+    if subscription.tenant_id is None:
+        target_store = (
+            subscription.store
+            if subscription.store_id
+            else _resolve_current_store_for_user(request, user)
+        )
+        if target_store is not None:
+            promote_subscription_to_tenant(subscription, target_store)
 
     try:
         new_plan = SubscriptionPlan.objects.get(

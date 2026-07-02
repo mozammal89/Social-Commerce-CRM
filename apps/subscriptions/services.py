@@ -161,6 +161,44 @@ def transition_status(
     return True
 
 
+def promote_subscription_to_tenant(
+    subscription: Subscription,
+    store: Store,
+) -> Subscription:
+    """Promote a legacy store-level Subscription to a tenant-level one in-place.
+
+    During the cutover from per-store to per-tenant subscriptions, some
+    users still hold a ``Subscription`` row whose ``store`` FK is set and
+    ``tenant`` is NULL. When that user upgrades, we update the row's
+    ``plan`` but ``get_active_subscription(store)`` reads it via the
+    tenant path and returns nothing — so the new limits look like they
+    didn't take effect for the *existing* store.
+
+    This helper bridges that gap: if the row is store-only and the store
+    has a tenant, attach the row to the tenant and clear the store FK.
+    The next ``get_active_subscription`` for any store under that tenant
+    returns the upgraded row, and ``check_plan_limits`` takes the tenant
+    branch (counting across all tenant stores).
+
+    Idempotent and a no-op when ``subscription.tenant`` is already set or
+    when the store has no tenant yet.
+    """
+    if subscription.tenant_id is not None:
+        return subscription
+    if store is None or store.tenant_id is None:
+        return subscription
+
+    subscription.tenant = store.tenant
+    subscription.store = None
+    subscription.save(update_fields=["tenant", "store", "updated_at"])
+
+    # The row used to live at the store-keyed cache slot; evict it so the
+    # next ``get_active_subscription(store)`` falls through to the tenant
+    # branch instead of returning the now-detached old instance.
+    cache.delete(f"{CACHE_SUBSCRIPTION_PREFIX}{store.id}")
+    return subscription
+
+
 def create_trial_subscription(
     store: Store,
     plan: SubscriptionPlan,
@@ -483,51 +521,54 @@ def upgrade_subscription(
 
     old_plan = subscription.plan
 
+    # If the subscription is still attached to a single legacy store
+    # (no tenant FK), promote it before mutating ``plan``. Otherwise the
+    # in-memory ``subscription.plan`` update won't propagate to other
+    # stores under the eventual tenant — the user would see the new plan
+    # only after they create a new store. We rely on the caller having
+    # passed us the sub already promoted in the view layer; this is a
+    # belt-and-braces guard. Promotion failure aborts the upgrade — we
+    # don't want to apply a new plan to a still-detached row.
+    if subscription.tenant_id is None and subscription.store_id is not None:
+        promote_subscription_to_tenant(subscription, subscription.store)
+
     # Upgrade the tenant subscription
     subscription.plan = new_plan
     subscription.save(update_fields=["plan", "updated_at"])
 
-    # Clear cache for this tenant
-    try:
-        from apps.subscriptions.constants import CACHE_SUBSCRIPTION_PREFIX
-        from django.core.cache import cache
+    # Collect every cache key this subscription may have lived under
+    # (tenant-keyed and/or the legacy store-keyed) and evict them in
+    # one batched call so an in-flight reader can't return a stale
+    # model instance cached under the old key.
+    keys_to_evict = [
+        f"{CACHE_PLAN_PREFIX}{old_plan.slug}",
+        f"{CACHE_PLAN_PREFIX}{new_plan.slug}",
+    ]
+    if subscription.tenant_id:
+        keys_to_evict.append(f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.tenant_id}")
+    if subscription.store_id:
+        keys_to_evict.append(f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.store_id}")
+    cache.delete_many(keys_to_evict)
 
-        if subscription.tenant:
-            cache_key = f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.tenant.id}"
-            cache.delete(cache_key)
-    except Exception:
-        pass
-
-    # Clear user-specific cache for all tenant members to ensure they get new limits
-    try:
+    # Bump RBAC cache versions for every store under the tenant so
+    # permission / feature caches rebuild against the new plan on the
+    # next read.
+    if subscription.tenant_id:
         from apps.permissions.models import StoreMembership
         from apps.permissions.cache import bump_user_version, bump_store_plan_version
 
-        # Get all active members of all stores under this tenant
-        if subscription.tenant:
-            memberships = StoreMembership.objects.filter(
-                store__tenant=subscription.tenant, is_active=True
-            )
-
-            for membership in memberships:
-                bump_user_version(membership.user_id)
-            # Bump plan version for all stores under tenant
-            for store in subscription.tenant.stores.all():
-                bump_store_plan_version(store.id)
-    except Exception:
-        logger.exception("Failed to invalidate user cache on upgrade")
-
-    # Bump the RBAC store-plan version so cached feature / permission sets
-    # for this tenant are invalidated immediately on the next read.
-    try:
-        from apps.permissions.cache import bump_store_plan_version
-
-        if subscription.tenant:
-            # Bump version for all stores under the tenant
-            for store in subscription.tenant.stores.all():
-                bump_store_plan_version(store.id)
-    except Exception:
-        logger.exception("Failed to bump store plan version on upgrade")
+        target_store_ids = list(
+            subscription.tenant.stores.values_list("id", flat=True)
+        )
+        target_user_ids = list(
+            StoreMembership.objects.filter(
+                store_id__in=target_store_ids, is_active=True,
+            ).values_list("user_id", flat=True)
+        )
+        for user_id in target_user_ids:
+            bump_user_version(user_id)
+        for store_id in target_store_ids:
+            bump_store_plan_version(store_id)
 
     record_event(
         subscription,
@@ -539,12 +580,6 @@ def upgrade_subscription(
             "proration_behavior": proration_behavior,
         },
     )
-
-    # Clear plan cache
-    cache.delete(f"{CACHE_PLAN_PREFIX}{old_plan.slug}")
-    cache.delete(f"{CACHE_PLAN_PREFIX}{new_plan.slug}")
-    if subscription.tenant:
-        cache.delete(f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.tenant.id}")
 
     logger.info(f"Upgraded subscription {subscription.id} from {old_plan.slug} to {new_plan.slug}")
     return subscription
@@ -610,31 +645,43 @@ def downgrade_subscription(
             },
         )
 
-        cache.delete(f"{CACHE_PLAN_PREFIX}{old_plan.slug}")
-        cache.delete(f"{CACHE_PLAN_PREFIX}{new_plan.slug}")
-        cache.delete(f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.store_id}")
+        # Evict plan + subscription cache slots in a single batched call.
+        # Includes the legacy store-keyed slot when the sub is still
+        # store-only, and the tenant-keyed slot when it's been promoted.
+        keys_to_evict = [
+            f"{CACHE_PLAN_PREFIX}{old_plan.slug}",
+            f"{CACHE_PLAN_PREFIX}{new_plan.slug}",
+        ]
+        if subscription.tenant_id:
+            keys_to_evict.append(
+                f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.tenant_id}"
+            )
+        if subscription.store_id:
+            keys_to_evict.append(
+                f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.store_id}"
+            )
+        cache.delete_many(keys_to_evict)
 
-        # Clear user-specific cache for all store members to ensure they get new limits
-        try:
-            from apps.permissions.models import StoreMembership
-            from apps.permissions.cache import bump_user_version, bump_store_plan_version
+        # Bump RBAC cache versions for every store and active member.
+        from apps.permissions.models import StoreMembership
+        from apps.permissions.cache import bump_user_version, bump_store_plan_version
 
-            # Get all active members of the store
-            memberships = StoreMembership.objects.filter(store=subscription.store, is_active=True)
+        if subscription.tenant_id:
+            target_store_ids = list(
+                subscription.tenant.stores.values_list("id", flat=True)
+            )
+        else:
+            target_store_ids = [subscription.store_id]
 
-            for membership in memberships:
-                bump_user_version(membership.user_id)
-            # Bump plan version for the store
-            bump_store_plan_version(subscription.store_id)
-        except Exception:
-            logger.exception("Failed to invalidate user cache on downgrade")
-
-        try:
-            from apps.permissions.cache import bump_store_plan_version
-
-            bump_store_plan_version(subscription.store_id)
-        except Exception:
-            logger.exception("Failed to bump store plan version on downgrade")
+        target_user_ids = list(
+            StoreMembership.objects.filter(
+                store_id__in=target_store_ids, is_active=True,
+            ).values_list("user_id", flat=True)
+        )
+        for user_id in target_user_ids:
+            bump_user_version(user_id)
+        for store_id in target_store_ids:
+            bump_store_plan_version(store_id)
 
         logger.info(
             f"Downgraded subscription {subscription.id} from {old_plan.slug} to {new_plan.slug}"
