@@ -60,6 +60,7 @@ from .services import (
     cancel_subscription,
     upgrade_subscription,
     downgrade_subscription,
+    change_plan,
     get_active_subscription,
     check_plan_limits,
     enforce_plan_limit,
@@ -187,6 +188,16 @@ def subscription_plans(request):
     if memberships.exists():
         # User already has access to stores
         return redirect("dashboard:home")
+
+    # User paid for a plan but hasn't created their first store yet.
+    # Send them to welcome so they can finish onboarding instead of
+    # seeing the plans page again and being unsure what to do next.
+    pending_plan_slug = (
+        getattr(user, "pending_plan_slug", None)
+        or request.session.get("pending_plan_slug")
+    )
+    if pending_plan_slug:
+        return redirect("subscriptions:welcome")
 
     # Separate monthly and yearly plans
     monthly_plans = SubscriptionPlan.objects.filter(
@@ -628,19 +639,13 @@ def update_subscription_plan(request):
 
     try:
         with transaction.atomic():
+            effective_immediately = serializer.validated_data["effective_immediately"]
+            # Capture direction *before* ``change_plan`` mutates
+            # ``subscription.plan`` so the success-banner logic doesn't
+            # need to know the previous price.
             if new_plan.price > subscription.plan.price:
-                # Upgrade
-                subscription = upgrade_subscription(subscription, new_plan, actor=user)
                 action = "upgraded"
             elif new_plan.price < subscription.plan.price:
-                # Downgrade
-                effective_immediately = serializer.validated_data["effective_immediately"]
-                subscription = downgrade_subscription(
-                    subscription,
-                    new_plan,
-                    actor=user,
-                    effective_at_period_end=not effective_immediately,
-                )
                 action = "downgraded"
             else:
                 return Response(
@@ -648,15 +653,19 @@ def update_subscription_plan(request):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Mark the session so the dashboard renders a "plan changed"
-            # success banner on the user's next request. Cleared on read.
+            subscription = change_plan(
+                subscription,
+                new_plan,
+                actor=user,
+                effective_immediately=effective_immediately,
+            )
+
             request.session["plan_changed_just_now"] = {
                 "action": action,
                 "plan_name": new_plan.name,
                 "plan_slug": new_plan.slug,
                 "effective_immediately": (
-                    action == "upgraded"
-                    or serializer.validated_data.get("effective_immediately", False)
+                    action == "upgraded" or effective_immediately
                 ),
             }
 
@@ -668,6 +677,11 @@ def update_subscription_plan(request):
                 }
             )
 
+    except ValueError:
+        return Response(
+            {"error": "Cannot switch to same price plan"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

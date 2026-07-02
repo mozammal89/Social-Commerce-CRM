@@ -69,52 +69,47 @@ class StoreCreateSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
-        """Create and return a new store with subscription if pending."""
+        """Create a new store under the user's existing tenant + subscription.
+
+        Bug history: this method used to create a brand-new store-level
+        ``Subscription`` whenever ``pending_plan_slug`` was set, ignoring
+        any subscription the user already had for another store. That
+        left multi-store tenants with one sub per store, each carrying
+        its own (stale) plan — Store A would report the Free cap while
+        Store B reported the Growth cap. The fix is to honour the
+        tenant/one-sub-per-tenant contract from the very first store:
+        attach the new store to the user's tenant and, if
+        ``pending_plan_slug`` is set, *upgrade the existing
+        subscription* rather than create a duplicate store-level sub.
+        """
+        from django.db import transaction
+
         from apps.permissions.services import add_member
         from apps.permissions.models import Role
-        from apps.subscriptions.services import create_trial_subscription, create_paid_subscription
+        from apps.subscriptions.services import (
+            apply_pending_plan,
+            get_or_create_default_tenant,
+        )
 
         request = self.context["request"]
         user = request.user
 
-        # Create store
-        store = Store.objects.create(**validated_data)
+        with transaction.atomic():
+            tenant = get_or_create_default_tenant(user)
 
-        # Add user as store owner
-        owner_role = Role.objects.get(slug="store-owner", store=None)
-        add_member(user, store, owner_role)
+            # Bind the new store to the tenant. Without this, two stores
+            # in the same workspace end up with independent caps.
+            validated_data["tenant"] = tenant
+            store = Store.objects.create(**validated_data)
 
-        # Check if user has a pending subscription (from User model or session)
-        pending_plan_slug = getattr(user, 'pending_plan_slug', None) or request.session.get("pending_plan_slug")
-        pending_trial = getattr(user, 'pending_trial_start', True) if user.pending_plan_slug else request.session.get("pending_trial", True)
+            owner_role = Role.objects.get(slug="store-owner", store=None)
+            add_member(user, store, owner_role)
 
-        if pending_plan_slug:
-            from apps.permissions.models import SubscriptionPlan
-
-            try:
-                plan = SubscriptionPlan.objects.get(slug=pending_plan_slug, is_active=True)
-
-                # Create subscription for the store
-                if pending_trial and plan.trial_days > 0:
-                    create_trial_subscription(
-                        store, plan, actor=user, trial_days=plan.trial_days
-                    )
-                else:
-                    create_paid_subscription(store, plan, actor=user)
-
-                # Clear pending subscription data from User model
-                user.pending_plan_slug = None
-                user.pending_trial_start = False
-                user.pending_subscription_date = None
-                user.save(update_fields=["pending_plan_slug", "pending_trial_start", "pending_subscription_date"])
-
-                # Clear from session
-                request.session.pop("pending_plan_slug", None)
-                request.session.pop("pending_plan_name", None)
-                request.session.pop("pending_trial", None)
-
-            except SubscriptionPlan.DoesNotExist:
-                pass  # Plan not found, skip subscription creation
+            # ``apply_pending_plan`` upgrades the existing sub (or
+            # creates the first one) and clears the pending marker.
+            # No separate duplicate sub gets created for new stores
+            # under an existing tenant.
+            apply_pending_plan(user, store=store, request=request)
 
         return store
 

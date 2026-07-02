@@ -92,18 +92,15 @@ def dashboard_home(request):
     has_pending_subscription = False
 
     try:
-        from apps.permissions.models import Subscription
+        # Look up the user's active subscription through the tenant-aware
+        # resolver. ``store__memberships__user=user`` alone misses
+        # tenant-attached rows whose ``store`` FK was cleared by
+        # ``promote_subscription_to_tenant`` — that left the dashboard
+        # thinking the user had no subscription and looping them back
+        # to /subscriptions/plans/ even when a sub existed.
+        from apps.subscriptions.services import resolve_user_subscription
 
-        user_subscription = (
-            Subscription.objects
-            .filter(
-                store__memberships__user=user,
-                store__memberships__is_active=True,
-                status__in=["trialing", "active"],
-            )
-            .select_related("plan")
-            .first()
-        )
+        user_subscription = resolve_user_subscription(user)
     except Exception:
         user_subscription = None
 

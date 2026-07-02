@@ -652,6 +652,513 @@
 }
 
 /* ============================================================================
+   Manage Subscription Page (Dashboard)
+   ============================================================================ */
+
+/* Current Plan Card */
+.current-plan-card {
+    border-left: 4px solid #4f46e5;
+}
+
+.current-plan-card .card-header {
+    background: linear-gradient(135deg, #eef2ff 0%, #ffffff 100%);
+    border-bottom: 1px solid #e9ecef;
+}
+
+/* Plan Info Section */
+.plan-info-section {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+.plan-icon-box {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 20px;
+}
+
+.plan-display-info h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 0.25rem;
+}
+
+.plan-display-info .plan-desc {
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+
+.plan-pricing-display {
+    text-align: right;
+}
+
+.plan-pricing-display .price {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #4f46e5;
+    line-height: 1;
+}
+
+.plan-pricing-display .period {
+    color: #6b7280;
+    font-size: 0.875rem;
+    text-transform: capitalize;
+}
+
+/* Status Grid */
+.subscription-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.subscription-status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.subscription-status-item .label {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.subscription-status-item .value {
+    font-weight: 600;
+    color: #1f2937;
+}
+
+/* Status Badge */
+.status-badge-sub {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.status-badge-sub--active {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.status-badge-sub--trialing {
+    background: #e0f2fe;
+    color: #075985;
+}
+
+.status-badge-sub--past_due {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-badge-sub--cancelled,
+.status-badge-sub--expired {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* Usage Metrics */
+.usage-limits-section {
+    margin-bottom: 1.5rem;
+}
+
+.usage-metric-item {
+    margin-bottom: 1.25rem;
+}
+
+.usage-metric-item:last-child {
+    margin-bottom: 0;
+}
+
+.usage-metric-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.usage-metric-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+}
+
+.usage-metric-label i {
+    color: #4f46e5;
+}
+
+.usage-metric-count {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.usage-metric-count.warning {
+    color: #d97706;
+}
+
+.usage-metric-count.danger {
+    color: #dc2626;
+}
+
+/* Progress Bar */
+.usage-progress-wrapper {
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 9999px;
+    overflow: hidden;
+}
+
+.usage-progress-bar {
+    height: 100%;
+    background: #4f46e5;
+    border-radius: 9999px;
+    transition: width 0.4s ease-out;
+}
+
+.usage-progress-bar.warning {
+    background: #f59e0b;
+}
+
+.usage-progress-bar.danger {
+    background: #ef4444;
+}
+
+/* Exceeded Alert */
+.usage-exceeded-alert {
+    margin-top: 1.25rem;
+    padding: 1rem;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.usage-exceeded-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    background: #fee2e2;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #dc2626;
+}
+
+.usage-exceeded-content h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #991b1b;
+    margin-bottom: 0.5rem;
+}
+
+.usage-exceeded-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.usage-exceeded-list li {
+    font-size: 0.875rem;
+    color: #b91c1c;
+    padding: 0.25rem 0;
+}
+
+/* Activity Timeline */
+.activity-timeline {
+    position: relative;
+}
+
+.activity-timeline::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 20px;
+    bottom: 0;
+    width: 2px;
+    background: #e5e7eb;
+}
+
+.activity-event {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    position: relative;
+}
+
+.activity-event:last-child {
+    margin-bottom: 0;
+}
+
+.activity-dot {
+    width: 10px;
+    height: 10px;
+    background: #4f46e5;
+    border: 2px solid #e0e7ff;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 4px;
+    position: relative;
+    z-index: 1;
+}
+
+.activity-details {
+    flex: 1;
+}
+
+.activity-type {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #1f2937;
+}
+
+.activity-time {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-top: 2px;
+}
+
+/* Sidebar Cards */
+.manage-sidebar-card {
+    margin-bottom: 1rem;
+}
+
+.manage-sidebar-card .card-header h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/* Quick Stats */
+.quick-stats-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.quick-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.quick-stat-row:last-child {
+    border-bottom: none;
+}
+
+.quick-stat-label {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.quick-stat-value {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+/* Plan Selection Cards */
+.plan-select-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.plan-select-card {
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: #ffffff;
+    text-align: left;
+}
+
+.plan-select-card:hover {
+    border-color: #a5b4fc;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.plan-select-card.upgrade:hover {
+    border-color: #86efac;
+}
+
+.plan-select-card.downgrade:hover {
+    border-color: #fcd34d;
+}
+
+.plan-select-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.plan-select-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.plan-select-price {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.plan-action-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.plan-action-badge.upgrade {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.plan-action-badge.downgrade {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.plan-select-features {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 0.5rem;
+}
+
+.plan-select-feature {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.plan-select-feature i {
+    color: #059669;
+}
+
+/* Cancel Subscription Card */
+.cancel-sub-card {
+    border: 2px dashed #fecaca;
+    background: #fef2f2;
+}
+
+.cancel-sub-card .card-header {
+    background: transparent;
+    border-bottom: 1px solid #fecaca;
+}
+
+.cancel-sub-card .card-header h3 {
+    color: #991b1b;
+}
+
+.cancel-sub-card p {
+    color: #b91c1c;
+    font-size: 0.875rem;
+}
+
+.btn-cancel-sub {
+    width: 100%;
+    padding: 0.625rem 1rem;
+    background: transparent;
+    border: 2px solid #ef4444;
+    color: #dc2626;
+    font-weight: 600;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.btn-cancel-sub:hover {
+    background: #ef4444;
+    color: white;
+    border-color: #ef4444;
+}
+
+/* Support Links */
+.support-link-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.support-link-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem;
+    background: #eef2ff;
+    color: #4338ca;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.support-link-item:hover {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+/* No Subscription State */
+.no-subscription-state {
+    text-align: center;
+    padding: 4rem 2rem;
+}
+
+.no-subscription-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.no-subscription-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 0.5rem;
+}
+
+.no-subscription-desc {
+    color: #6b7280;
+    margin-bottom: 1.5rem;
+}
+
+/* ============================================================================
    Responsive
    ============================================================================ */
 
@@ -661,8 +1168,8 @@
     }
 
     .welcome-card {
-        padding: var(--space-5);
-        margin: var(--space-4);
+        padding: 1.25rem;
+        margin: 1rem;
     }
 
     .welcome-title {
@@ -671,10 +1178,28 @@
 
     .checkout-plan-summary {
         order: -1;
-        margin-bottom: var(--space-6);
+        margin-bottom: 1.5rem;
     }
 
     .faq-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Manage Subscription Responsive */
+    .plan-info-section {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+
+    .plan-display-info {
+        margin-top: 0.75rem;
+    }
+
+    .plan-pricing-display {
+        text-align: center;
+    }
+
+    .subscription-status-grid {
         grid-template-columns: 1fr;
     }
 }
@@ -687,4 +1212,5 @@
     .checkout-summary {
         margin-bottom: 0;
     }
+}
 }

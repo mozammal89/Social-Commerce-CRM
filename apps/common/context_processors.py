@@ -159,17 +159,14 @@ def _get_user_subscription_context(user):
 
     # Check if user has existing subscriptions (regardless of pending plan)
     try:
-        from apps.permissions.models import Subscription
+        # Use the tenant-aware resolver so we find subscriptions whose
+        # ``store`` FK was cleared by ``promote_subscription_to_tenant``
+        # during the cutover. Otherwise the sidebar's "Store Management"
+        # section (gated on ``has_user_subscription``) would disappear
+        # the moment a user upgrades or creates a second store.
+        from apps.subscriptions.services import resolve_user_subscription
 
-        user_subscription = (
-            Subscription.objects.filter(
-                store__memberships__user=user,
-                store__memberships__is_active=True,
-                status__in=["trialing", "active"],
-            )
-            .select_related("plan")
-            .first()
-        )
+        user_subscription = resolve_user_subscription(user)
 
         if user_subscription:
             context["user_subscription"] = user_subscription

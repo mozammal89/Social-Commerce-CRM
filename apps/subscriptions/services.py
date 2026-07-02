@@ -199,6 +199,208 @@ def promote_subscription_to_tenant(
     return subscription
 
 
+def get_or_create_default_tenant(user) -> "Tenant":
+    """Return the user's primary ``Tenant``, creating one if missing.
+
+    Every user on the platform should own a single workspace tenant.
+    Pre-tenant signup flows (legacy store-only users) don't have one
+    yet; this helper materialises a sensible default so subsequent
+    store-creation and subscription code can rely on the invariant.
+
+    Uses ``get_or_create`` on the slug so two concurrent calls (e.g.
+    the signup API and the dashboard's tenant-resolution middleware)
+    don't race into IntegrityError.
+    """
+    from apps.accounts.models import Tenant
+
+    slug = (
+        f"{user.email.split('@')[0]}-workspace"
+        if user.email
+        else f"ws-{user.id}"
+    )
+    tenant, _ = Tenant.objects.get_or_create(
+        slug=slug,
+        defaults={
+            "name": f"{user.get_full_name()}'s Workspace",
+            "owner": user,
+            "is_active": True,
+        },
+    )
+    return tenant
+
+
+def resolve_user_subscription(user):
+    """Return the user's authoritative active subscription, or ``None``.
+
+    Resolution order:
+
+      1. The user's tenant-level ``Subscription`` (if any).
+      2. The most generous legacy per-store ``Subscription`` attached
+         to one of the user's stores. The legacy sub is *promoted* to
+         the user's tenant so subsequent reads and writes see one
+         consistent plan across every store.
+
+    Returns ``None`` when the user has no active subscription at all
+    (true first-time signup).
+    """
+    tenant = get_or_create_default_tenant(user)
+
+    tenant_sub = (
+        Subscription.objects
+        .filter(tenant=tenant, status__in=[STATUS_ACTIVE, STATUS_TRIALING])
+        .first()
+    )
+    if tenant_sub is not None:
+        return tenant_sub
+
+    # Join through ``store__tenant=tenant`` so we don't materialise the
+    # store queryset in Python before issuing the sub query.
+    # Fall back to stores owned by the user through active memberships
+    # — covers legacy data where ``Store.tenant`` was never backfilled.
+    legacy_sub = (
+        Subscription.objects
+        .filter(
+            status__in=[STATUS_ACTIVE, STATUS_TRIALING],
+            tenant__isnull=True,
+        )
+        .filter(
+            Q(store__tenant=tenant)
+            | Q(store__memberships__user=user, store__memberships__is_active=True)
+        )
+        .distinct()
+        .select_related("store", "plan")
+        .order_by("-plan__price", "-starts_at")
+        .first()
+    )
+    if legacy_sub is None:
+        return None
+
+    # Promote in place so subsequent reads resolve through the tenant
+    # branch. If the store has no tenant yet, attach the freshly-resolved
+    # one so ``promote_subscription_to_tenant`` has somewhere to anchor.
+    if legacy_sub.store_id is not None and legacy_sub.store.tenant_id is None:
+        legacy_sub.store.tenant = tenant
+        legacy_sub.store.save(update_fields=["tenant", "updated_at"])
+    promote_subscription_to_tenant(legacy_sub, legacy_sub.store)
+    return legacy_sub
+
+
+def change_plan(
+    subscription: Subscription,
+    new_plan: SubscriptionPlan,
+    *,
+    actor=None,
+    effective_immediately: bool = False,
+) -> Subscription:
+    """Apply a plan change to ``subscription``, dispatching on price.
+
+    The two callers (``update_subscription_plan`` API and the
+    store-create flow's pending-plan branch) used to inline the same
+    ``if price > else downgrade`` ladder. Centralising the dispatch
+    here keeps both call sites to a single line and ensures the cache
+    invalidation logic in ``upgrade_subscription`` /
+    ``downgrade_subscription`` runs in both paths.
+    """
+    if new_plan.price > subscription.plan.price:
+        return upgrade_subscription(subscription, new_plan, actor=actor)
+    if new_plan.price < subscription.plan.price:
+        return downgrade_subscription(
+            subscription,
+            new_plan,
+            actor=actor,
+            effective_at_period_end=not effective_immediately,
+        )
+    raise ValueError(
+        f"Cannot change to plan {new_plan.slug}: same price as current "
+        f"plan {subscription.plan.slug}."
+    )
+
+
+def clear_pending_plan_marker(user, request=None) -> None:
+    """Reset the ``pending_plan_slug`` marker on ``user`` (and session).
+
+    Called after a pending plan has been applied to a real
+    subscription so the next store creation doesn't try to re-apply
+    it. Safe to call when no pending marker is set.
+    """
+    if getattr(user, "pending_plan_slug", None):
+        user.pending_plan_slug = None
+        user.pending_trial_start = False
+        user.pending_subscription_date = None
+        user.save(
+            update_fields=[
+                "pending_plan_slug",
+                "pending_trial_start",
+                "pending_subscription_date",
+            ],
+        )
+    if request is not None and hasattr(request, "session"):
+        request.session.pop("pending_plan_slug", None)
+        request.session.pop("pending_plan_name", None)
+        request.session.pop("pending_trial", None)
+
+
+def apply_pending_plan(
+    user,
+    *,
+    store: Store,
+    request=None,
+) -> Optional[Subscription]:
+    """Apply the user's pending plan to their real subscription.
+
+    Reads ``user.pending_plan_slug`` (or the session fallback) and
+    routes the change through the standard ``change_plan`` service so
+    the same cache invalidation runs whether the user is signing up
+    their first store or upgrading mid-flight. The pending marker is
+    cleared on success.
+
+    Returns the updated ``Subscription`` (or the freshly-created one
+    for first-time signup) or ``None`` when no pending plan was set
+    or the named plan no longer exists.
+    """
+    pending_plan_slug = (
+        getattr(user, "pending_plan_slug", None)
+        or (request.session.get("pending_plan_slug") if request else None)
+    )
+    if not pending_plan_slug:
+        return None
+
+    try:
+        plan = SubscriptionPlan.objects.get(slug=pending_plan_slug, is_active=True)
+    except SubscriptionPlan.DoesNotExist:
+        clear_pending_plan_marker(user, request)
+        return None
+
+    existing = resolve_user_subscription(user)
+
+    if existing is not None:
+        # First-time-signup is impossible here (a sub already exists),
+        # so the only sensible action is plan change.
+        if plan.id != existing.plan_id:
+            change_plan(
+                existing, plan, actor=user, effective_immediately=True,
+            )
+    else:
+        # First store, no prior sub — create a tenant-attached trial /
+        # paid sub. Use the legacy per-store creators and then
+        # promote, so we exercise the same code path that already
+        # handles trial-day setup and Stripe field bookkeeping.
+        pending_trial = bool(getattr(user, "pending_trial_start", False))
+        if not pending_trial and request is not None:
+            pending_trial = bool(request.session.get("pending_trial", True))
+        if pending_trial and plan.trial_days and plan.trial_days > 0:
+            new_sub = create_trial_subscription(
+                store, plan, actor=user, trial_days=plan.trial_days,
+            )
+        else:
+            new_sub = create_paid_subscription(store, plan, actor=user)
+        promote_subscription_to_tenant(new_sub, store)
+        existing = new_sub
+
+    clear_pending_plan_marker(user, request)
+    return existing
+
+
 def create_trial_subscription(
     store: Store,
     plan: SubscriptionPlan,
