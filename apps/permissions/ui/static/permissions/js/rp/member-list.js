@@ -4,6 +4,19 @@
 
 import { api } from './app.js';
 
+// Helper: prefer the global showNotification helper when it's on the
+// page (loaded by templates/layouts/base.html), fall back to console.
+const notify = (message, level = 'info') => {
+  if (typeof window.showNotification === 'function') {
+    window.showNotification(message, level);
+  } else if (typeof window.notify === 'function') {
+    window.notify(message, level);
+  } else {
+    // eslint-disable-next-line no-console
+    console[level === 'error' ? 'error' : 'log'](message);
+  }
+};
+
 const setRowInactive = (row) => {
   if (!row) return;
   row.classList.add('text-muted');
@@ -46,7 +59,7 @@ const initChangeRole = () => {
         );
       } catch (err) {
         select.value = previous;
-        window.alert(err.message || 'Failed to change role');
+        notify(err.message || 'Failed to change role', 'error');
       } finally {
         select.disabled = false;
       }
@@ -59,32 +72,41 @@ const initDeactivate = () => {
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
       const name = btn.dataset.memberName || 'this member';
-      const ok = window.confirm(
-        `Deactivate ${name}?\n\nThey will lose access to this store immediately, but their history is preserved.`
-      );
-      if (!ok) return;
-
-      const membershipId = btn.dataset.membershipId;
-      btn.disabled = true;
-      try {
-        await api.post(`/dashboard/roles/members/${membershipId}/deactivate/`);
-        const row = btn.closest('tr');
-        setRowInactive(row);
-        // Swap the button to a Reactivate button.
-        btn.classList.remove('btn-outline-danger');
-        btn.classList.add('btn-outline-success');
-        btn.dataset.action = 'reactivate-member';
-        const icon = btn.querySelector('i.bi');
-        if (icon) {
-          icon.classList.remove('bi-person-x');
-          icon.classList.add('bi-person-check');
+      const proceed = async () => {
+        const membershipId = btn.dataset.membershipId;
+        btn.disabled = true;
+        try {
+          await api.post(`/dashboard/roles/members/${membershipId}/deactivate/`);
+          const row = btn.closest('tr');
+          setRowInactive(row);
+          // Swap the button to a Reactivate button.
+          btn.classList.remove('btn-outline-danger');
+          btn.classList.add('btn-outline-success');
+          btn.dataset.action = 'reactivate-member';
+          const icon = btn.querySelector('i.bi');
+          if (icon) {
+            icon.classList.remove('bi-person-x');
+            icon.classList.add('bi-person-check');
+          }
+          const text = btn.textContent.trim();
+          btn.lastChild && (btn.lastChild.nodeValue = ' Reactivate');
+          btn.disabled = false;
+        } catch (err) {
+          btn.disabled = false;
+          notify(err.message || 'Failed to deactivate member', 'error');
         }
-        const text = btn.textContent.trim();
-        btn.lastChild && (btn.lastChild.nodeValue = ' Reactivate');
-        btn.disabled = false;
-      } catch (err) {
-        btn.disabled = false;
-        window.alert(err.message || 'Failed to deactivate member');
+      };
+
+      if (typeof window.confirmAction === 'function') {
+        const ok = await window.confirmAction({
+          title: `Deactivate ${name}?`,
+          message: 'They will lose access to this store immediately, but their history is preserved.',
+          confirmText: 'Deactivate',
+          confirmClass: 'btn-warning',
+        });
+        if (ok) await proceed();
+      } else if (window.confirm(`Deactivate ${name}?\n\nThey will lose access to this store immediately, but their history is preserved.`)) {
+        await proceed();
       }
     });
   });
@@ -95,30 +117,39 @@ const initReactivate = () => {
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
       const name = btn.dataset.memberName || 'this member';
-      const ok = window.confirm(
-        `Reactivate ${name}? They will regain access to this store immediately.`
-      );
-      if (!ok) return;
-
-      const membershipId = btn.dataset.membershipId;
-      btn.disabled = true;
-      try {
-        await api.post(`/dashboard/roles/members/${membershipId}/reactivate/`);
-        const row = btn.closest('tr');
-        setRowActive(row);
-        // Swap the button to a Deactivate button.
-        btn.classList.remove('btn-outline-success');
-        btn.classList.add('btn-outline-danger');
-        btn.dataset.action = 'deactivate-member';
-        const icon = btn.querySelector('i.bi');
-        if (icon) {
-          icon.classList.remove('bi-person-check');
-          icon.classList.add('bi-person-x');
+      const proceed = async () => {
+        const membershipId = btn.dataset.membershipId;
+        btn.disabled = true;
+        try {
+          await api.post(`/dashboard/roles/members/${membershipId}/reactivate/`);
+          const row = btn.closest('tr');
+          setRowActive(row);
+          // Swap the button to a Deactivate button.
+          btn.classList.remove('btn-outline-success');
+          btn.classList.add('btn-outline-danger');
+          btn.dataset.action = 'deactivate-member';
+          const icon = btn.querySelector('i.bi');
+          if (icon) {
+            icon.classList.remove('bi-person-check');
+            icon.classList.add('bi-person-x');
+          }
+          btn.disabled = false;
+        } catch (err) {
+          btn.disabled = false;
+          notify(err.message || 'Failed to reactivate member', 'error');
         }
-        btn.disabled = false;
-      } catch (err) {
-        btn.disabled = false;
-        window.alert(err.message || 'Failed to reactivate member');
+      };
+
+      if (typeof window.confirmAction === 'function') {
+        const ok = await window.confirmAction({
+          title: `Reactivate ${name}?`,
+          message: 'They will regain access to this store immediately.',
+          confirmText: 'Reactivate',
+          confirmClass: 'btn-success',
+        });
+        if (ok) await proceed();
+      } else if (window.confirm(`Reactivate ${name}? They will regain access to this store immediately.`)) {
+        await proceed();
       }
     });
   });

@@ -266,7 +266,8 @@ function deleteStore(storeId, storeName) {
         message: `Are you sure you want to delete "${storeName}"? This action cannot be undone.`,
         confirmText: 'Delete',
         confirmClass: 'btn-danger',
-        onConfirm: function () { _performDeleteStore(storeId, storeName); },
+    }).then(function (ok) {
+        if (ok) _performDeleteStore(storeId, storeName);
     });
 }
 

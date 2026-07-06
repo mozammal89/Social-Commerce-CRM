@@ -283,39 +283,45 @@ document.addEventListener('DOMContentLoaded', function() {
     const storeSwitchButtons = document.querySelectorAll('[data-store-switch]');
     if (storeSwitchButtons.length > 0) {
         storeSwitchButtons.forEach(function(button) {
-            button.addEventListener('click', function(e) {
+            button.addEventListener('click', async function(e) {
                 e.preventDefault();
                 const storeId = this.dataset.storeSwitch;
                 const storeName = this.dataset.storeName;
-                
-                if (storeId && storeName && confirm(`Switch to store "${storeName}"? This will change your active store context.`)) {
-                    // Show loading state
-                    this.disabled = true;
-                    this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
-                    
-                    // Perform store switch
-                    fetch(`/dashboard/switch-store/${storeId}/`, {
+                if (!storeId || !storeName) return;
+
+                const ok = await window.confirmAction({
+                    title: 'Switch store?',
+                    message: `Switch to store "${storeName}"? This will change your active store context.`,
+                    confirmText: 'Switch',
+                    confirmClass: 'btn-primary',
+                });
+                if (!ok) return;
+
+                // Show loading state
+                this.disabled = true;
+                const originalLabel = storeName;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+
+                try {
+                    const response = await fetch(`/dashboard/switch-store/${storeId}/`, {
                         method: 'POST',
                         headers: {
                             'X-CSRFToken': getCsrfToken()
                         }
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            window.location.reload();
-                        } else {
-                            alert(data.message || 'Failed to switch store');
-                            this.disabled = false;
-                            this.innerHTML = storeName;
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Store switch error:', error);
-                        alert('An error occurred while switching stores');
-                        this.disabled = false;
-                        this.innerHTML = storeName;
                     });
+                    const data = await response.json();
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        showNotification(data.message || 'Failed to switch store', 'error');
+                        this.disabled = false;
+                        this.innerHTML = originalLabel;
+                    }
+                } catch (error) {
+                    console.error('Store switch error:', error);
+                    showNotification('An error occurred while switching stores', 'error');
+                    this.disabled = false;
+                    this.innerHTML = originalLabel;
                 }
             });
         });

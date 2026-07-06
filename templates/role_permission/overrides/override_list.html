@@ -170,8 +170,10 @@
                                           class="d-inline">
                                         {% csrf_token %}
                                         <button type="submit" class="btn btn-outline-danger"
-                                                data-action="confirm"
-                                                data-confirm-message="Remove this override? The user will fall back to their role permissions.">
+                                                data-confirm="Remove this override? The user will fall back to their role permissions."
+                                                data-confirm-title="Remove override?"
+                                                data-confirm-text="Remove"
+                                                data-confirm-class="btn-danger">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </form>

@@ -1,16 +1,47 @@
-<!-- {# Reusable confirmation modal. Include this in any template that needs a
-   styled confirmation dialog instead of the native browser confirm().
+<!-- {# ---------------------------------------------------------------------------
+   Centralized confirmation & prompt modal.
 
-   Usage from JS:
-       window.confirmAction({
-           title: "Delete store?",
-           message: 'Are you sure you want to delete "My Store"?',
-           confirmText: "Delete",
-           confirmClass: "btn-danger",
-           onConfirm: function () { ... }
+   This partial is included once in templates/layouts/base.html, so every
+   page in the app can call ``window.confirmAction({...})`` (and
+   ``window.confirmAction.prompt({...})``) without having to ship its own
+   modal markup.
+
+   Usage:
+
+       const ok = await window.confirmAction({
+           title:        'Delete store?',
+           message:      'Are you sure you want to delete "My Store"?',
+           confirmText:  'Delete',
+           confirmClass: 'btn-danger',
+           cancelText:   'Cancel',                // optional
+           warning:      '...',                  // optional yellow alert
        });
-#} -->
-<div class="modal fade" id="appConfirmModal" tabindex="-1" aria-labelledby="appConfirmModalLabel" aria-hidden="true">
+       if (ok) { /* user clicked Confirm */ }
+
+       const reason = await window.confirmAction.prompt({
+           title:        'Cancel subscription?',
+           message:      'This action cannot be undone.',
+           label:        'Why are you cancelling?',   // optional label
+           placeholder:  'Your feedback helps us improve.',
+           confirmText:  'Cancel subscription',
+           confirmClass: 'btn-danger',
+           cancelText:   'Keep subscription',
+           multiline:    true,                  // false → <input>, true → <textarea>
+           required:     false,                 // if true, empty input is rejected
+       });
+       if (reason !== null) { /* user confirmed; reason is the trimmed text */ }
+
+   Return values:
+     - ``confirmAction``       → ``Promise<boolean>`` (true = confirmed)
+     - ``confirmAction.prompt``→ ``Promise<string|null>``
+                                 (null = user dismissed without confirming,
+                                  matches ``window.prompt`` semantics)
+
+   The helper uses Bootstrap 5's ``bootstrap.Modal`` (loaded in base.html).
+   It re-uses a single DOM node for every dialog so the document only ever
+   has one confirm modal in it, regardless of how many times it's opened.
+   --------------------------------------------------------------------------- #} -->
+<div class="modal fade" id="appConfirmModal" tabindex="-1" aria-labelledby="appConfirmModalLabel" aria-hidden="true" data-app-confirm-modal>
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -18,11 +49,14 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p id="appConfirmModalMessage" class="mb-0">Are you sure?</p>
+                {# Warning alert slot — hidden until ``options.warning`` is set. #}
+                <div class="alert alert-warning small d-none" id="appConfirmModalWarning" role="alert"></div>
+                {# Body container — replaced on each call so previous content (input/textarea/text) never leaks. #}
+                <div id="appConfirmModalBody"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-confirm-action="cancel">Cancel</button>
-                <button type="button" class="btn btn-danger" id="appConfirmModalConfirm" data-confirm-action="confirm">Confirm</button>
+                <button type="button" class="btn btn-secondary" id="appConfirmModalCancel" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="appConfirmModalConfirm">Confirm</button>
             </div>
         </div>
     </div>
@@ -32,48 +66,213 @@
 (function () {
     "use strict";
 
-    // Expose a single helper on window so any page can call it.
-    window.confirmAction = function (options) {
+    /**
+     * Read the CSRF token from the ``csrftoken`` cookie that Django sets
+     * on every page that emits a ``{% csrf_token %}`` (the layouts/base
+     * layout does this unconditionally via a hidden form, so the cookie
+     * is always present on every page that extends the layout).
+     *
+     * Falls back to the value of the hidden ``csrfmiddlewaretoken``
+     * input that ``{% csrf_token %}`` emits — useful in the rare case
+     * the cookie was cleared (private mode, expired session, etc.) but
+     * the form input is still in the DOM.
+     *
+     * Returns an empty string if neither is available; callers should
+     * treat that as "this request will fail CSRF" rather than sending
+     * a malformed header.
+     */
+    function getCsrfToken() {
+        var match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]*)/);
+        if (match && match[1]) {
+            return decodeURIComponent(match[1]);
+        }
+        var input = document.querySelector("input[name=csrfmiddlewaretoken]");
+        if (input && input.value) {
+            return input.value;
+        }
+        return "";
+    }
+    // Expose globally so any page that needs it can use the same robust
+    // lookup (cookie first, hidden input as fallback). Pages may
+    // override this with their own helper if they have additional
+    // sources (e.g. a meta tag) — the assignment is non-destructive.
+    if (typeof window.getCsrfToken !== "function") {
+        window.getCsrfToken = getCsrfToken;
+    }
+
+    /**
+     * Render the body of the modal from the given options and show it.
+     *
+     * Returns a Promise that resolves to either:
+     *   - ``true``/``false`` for confirmAction()
+     *   - ``string|null`` for confirmAction.prompt()
+     *
+     * The caller is responsible for interpreting the resolved value.
+     */
+    function showDialog(options) {
         options = options || {};
+
         var modalEl = document.getElementById("appConfirmModal");
         if (!modalEl) {
-            // Fallback: if the modal partial isn't on the page, use native confirm.
-            return Promise.resolve(window.confirm(options.message || "Are you sure?"));
+            // Defensive fallback: if the partial isn't on the page, fall
+            // back to the native browser dialog so the action still runs.
+            if (options.isPrompt) {
+                return Promise.resolve(window.prompt(options.message || options.title || ""));
+            }
+            return Promise.resolve(window.confirm(options.message || options.title || "Are you sure?"));
         }
 
         var titleEl = document.getElementById("appConfirmModalLabel");
-        var messageEl = document.getElementById("appConfirmModalMessage");
-        var confirmBtn = document.getElementById("appConfirmModalConfirm");
+        var warningEl = document.getElementById("appConfirmModalWarning");
+        var bodyEl = document.getElementById("appConfirmModalBody");
+        var cancelBtn = document.getElementById("appConfirmModalCancel");
+        var oldConfirmBtn = document.getElementById("appConfirmModalConfirm");
         var bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
 
-        if (options.title) titleEl.textContent = options.title;
-        if (options.message) messageEl.textContent = options.message;
-        if (options.confirmText) confirmBtn.textContent = options.confirmText;
+        // ----- Title -----
+        if (options.title) {
+            titleEl.textContent = options.title;
+        }
 
-        // Reset confirm button class to the requested one.
-        confirmBtn.className = "btn " + (options.confirmClass || "btn-danger");
+        // ----- Warning slot -----
+        if (options.warning) {
+            warningEl.textContent = options.warning;
+            warningEl.classList.remove("d-none");
+        } else {
+            warningEl.textContent = "";
+            warningEl.classList.add("d-none");
+        }
 
+        // ----- Body (replace with a fresh node so previous inputs leak nothing) -----
+        var newBody = document.createElement("div");
+        newBody.id = "appConfirmModalBody";
+
+        if (options.isPrompt) {
+            var labelText = options.label || "";
+            if (labelText) {
+                var labelEl = document.createElement("label");
+                labelEl.setAttribute("for", "appConfirmModalInput");
+                labelEl.className = "form-label small text-muted mb-1";
+                labelEl.textContent = labelText;
+                newBody.appendChild(labelEl);
+            }
+
+            var inputEl;
+            if (options.multiline) {
+                inputEl = document.createElement("textarea");
+                inputEl.rows = options.rows || 3;
+            } else {
+                inputEl = document.createElement("input");
+                inputEl.type = options.inputType || "text";
+            }
+            inputEl.id = "appConfirmModalInput";
+            inputEl.className = "form-control";
+            if (options.placeholder) inputEl.placeholder = options.placeholder;
+            if (options.required) inputEl.setAttribute("required", "required");
+            newBody.appendChild(inputEl);
+
+            // Inline error placeholder for required-field validation.
+            var errorEl = document.createElement("div");
+            errorEl.id = "appConfirmModalError";
+            errorEl.className = "text-danger small mt-1 d-none";
+            newBody.appendChild(errorEl);
+        } else if (options.message) {
+            var msgEl = document.createElement("p");
+            msgEl.className = "mb-0";
+            msgEl.textContent = options.message;
+            newBody.appendChild(msgEl);
+        }
+
+        bodyEl.parentNode.replaceChild(newBody, bodyEl);
+
+        // ----- Buttons -----
+        cancelBtn.textContent = options.cancelText || "Cancel";
+        oldConfirmBtn.textContent = options.confirmText || "Confirm";
+        oldConfirmBtn.className = "btn " + (options.confirmClass || "btn-primary");
+
+        // Clone the confirm button to drop any stale click handler.
+        var confirmBtn = oldConfirmBtn.cloneNode(true);
+        oldConfirmBtn.parentNode.replaceChild(confirmBtn, oldConfirmBtn);
+
+        // ----- Promise wiring -----
         return new Promise(function (resolve) {
-            function cleanup() {
+            var settled = false;
+
+            function settle(value) {
+                if (settled) return;
+                settled = true;
+                modalEl.removeEventListener("hidden.bs.modal", onHidden);
                 confirmBtn.removeEventListener("click", onConfirm);
-                modalEl.removeEventListener("hidden.bs.modal", onDismiss);
-            }
-            function onConfirm() {
-                cleanup();
-                bsModal.hide();
-                if (typeof options.onConfirm === "function") {
-                    try { options.onConfirm(); } catch (e) { console.error(e); }
+                if (inputEl) {
+                    inputEl.removeEventListener("keydown", onEnter);
                 }
-                resolve(true);
+                resolve(value);
             }
-            function onDismiss() {
-                cleanup();
-                resolve(false);
+
+            function onConfirm() {
+                if (options.isPrompt && options.required) {
+                    var value = inputEl.value || "";
+                    if (!value.trim()) {
+                        // Show inline error, keep modal open, refocus.
+                        var errEl = document.getElementById("appConfirmModalError");
+                        if (errEl) {
+                            errEl.textContent = "This field is required.";
+                            errEl.classList.remove("d-none");
+                        }
+                        if (inputEl) inputEl.focus();
+                        return;
+                    }
+                }
+                if (options.isPrompt) {
+                    var v = inputEl ? (inputEl.value || "") : "";
+                    settle(v);
+                } else {
+                    settle(true);
+                }
+                bsModal.hide();
             }
+
+            function onHidden() {
+                // Modal closed without a confirmed click → treat as dismissal.
+                settle(options.isPrompt ? null : false);
+            }
+
             confirmBtn.addEventListener("click", onConfirm);
-            modalEl.addEventListener("hidden.bs.modal", onDismiss, { once: true });
+            modalEl.addEventListener("hidden.bs.modal", onHidden);
+
+            if (inputEl) {
+                function onEnter(e) {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        onConfirm();
+                    }
+                }
+                inputEl.addEventListener("keydown", onEnter);
+            }
+
             bsModal.show();
+
+            // Focus the input (or confirm button) once the modal animation finishes.
+            setTimeout(function () {
+                if (inputEl) {
+                    inputEl.focus();
+                } else {
+                    confirmBtn.focus();
+                }
+            }, 250);
         });
+    }
+
+    // Expose on window so any page can call it.
+    window.confirmAction = function (options) {
+        options = options || {};
+        options.isPrompt = false;
+        return showDialog(options);
+    };
+    window.confirmAction.prompt = function (options) {
+        options = options || {};
+        options.isPrompt = true;
+        return showDialog(options);
     };
 })();
 </script>

@@ -190,7 +190,8 @@ function removeLogo() {
         message: 'Are you sure you want to remove the store logo? This cannot be undone.',
         confirmText: 'Remove',
         confirmClass: 'btn-danger',
-        onConfirm: _performRemoveLogo,
+    }).then(function (ok) {
+        if (ok) _performRemoveLogo();
     });
 }
 

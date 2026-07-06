@@ -39,7 +39,18 @@ const init = () => {
       row.classList.toggle('border-primary', !wasChecked);
       // eslint-disable-next-line no-console
       console.error('Failed to toggle permission', err);
-      window.alert(err.message || 'Failed to update permission');
+      // Surface the failure via the global toast helper if it's
+      // available (loaded by templates/layouts/base.html on every
+      // page that extends a real layout); fall back to console.
+      const message = err.message || 'Failed to update permission';
+      if (typeof window.showNotification === 'function') {
+        window.showNotification(message, 'error');
+      } else if (typeof window.notify === 'function') {
+        window.notify(message, 'error');
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn(message);
+      }
     } finally {
       cb.disabled = false;
     }

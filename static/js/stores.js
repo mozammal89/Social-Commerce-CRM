@@ -300,29 +300,42 @@ const StoreManager = {
      * Delete a store with confirmation
      */
     async deleteStore(storeId, storeName) {
+        const proceed = async () => {
+            try {
+                const result = await StoreAPI.deleteStore(storeId);
+
+                if (result.ok) {
+                    notify(`"${storeName}" has been deleted`, 'success');
+                    // Trigger custom event for store deleted
+                    document.dispatchEvent(new CustomEvent('store:deleted', { detail: { storeId } }));
+                    // Reload page after short delay
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    notify('Failed to delete store', 'error');
+                }
+
+                return result;
+            } catch (error) {
+                console.error('Error deleting store:', error);
+                notify('An error occurred while deleting the store', 'error');
+                return { ok: false };
+            }
+        };
+
+        if (typeof window.confirmAction === 'function') {
+            const ok = await window.confirmAction({
+                title: 'Delete store?',
+                message: `Are you sure you want to delete "${storeName}"? This action cannot be undone.`,
+                confirmText: 'Delete',
+                confirmClass: 'btn-danger',
+            });
+            if (!ok) return;
+            return proceed();
+        }
         if (!confirm(`Are you sure you want to delete "${storeName}"? This action cannot be undone.`)) {
             return;
         }
-
-        try {
-            const result = await StoreAPI.deleteStore(storeId);
-
-            if (result.ok) {
-                notify(`"${storeName}" has been deleted`, 'success');
-                // Trigger custom event for store deleted
-                document.dispatchEvent(new CustomEvent('store:deleted', { detail: { storeId } }));
-                // Reload page after short delay
-                setTimeout(() => location.reload(), 1000);
-            } else {
-                notify('Failed to delete store', 'error');
-            }
-
-            return result;
-        } catch (error) {
-            console.error('Error deleting store:', error);
-            notify('An error occurred while deleting the store', 'error');
-            return { ok: false };
-        }
+        return proceed();
     },
 
     /**
@@ -376,28 +389,41 @@ const StoreManager = {
      * Remove a member from the store
      */
     async removeMember(storeId, userId, role) {
+        const proceed = async () => {
+            try {
+                const result = await StoreAPI.removeMember(storeId, userId, role);
+
+                if (result.ok) {
+                    notify(result.data.message || 'Member removed successfully', 'success');
+                    // Trigger custom event
+                    document.dispatchEvent(new CustomEvent('store:memberRemoved', { detail: { storeId, userId, role } }));
+                } else {
+                    notify(result.data.error || 'Failed to remove member', 'error');
+                }
+
+                return result;
+            } catch (error) {
+                console.error('Error removing member:', error);
+                notify('An error occurred while removing the member', 'error');
+                return { ok: false };
+            }
+        };
+
+        if (typeof window.confirmAction === 'function') {
+            const ok = await window.confirmAction({
+                title: 'Remove member?',
+                message: 'Are you sure you want to remove this member?',
+                confirmText: 'Remove',
+                confirmClass: 'btn-danger',
+            });
+            if (!ok) return;
+            return proceed();
+        }
         if (!confirm('Are you sure you want to remove this member?')) {
             return;
         }
-
-        try {
-            const result = await StoreAPI.removeMember(storeId, userId, role);
-
-            if (result.ok) {
-                notify(result.data.message || 'Member removed successfully', 'success');
-                // Trigger custom event
-                document.dispatchEvent(new CustomEvent('store:memberRemoved', { detail: { storeId, userId, role } }));
-            } else {
-                notify(result.data.error || 'Failed to remove member', 'error');
-            }
-
-            return result;
-        } catch (error) {
-            console.error('Error removing member:', error);
-            notify('An error occurred while removing the member', 'error');
-            return { ok: false };
-        }
-    },
+        return proceed();
+    }
 };
 
 /**

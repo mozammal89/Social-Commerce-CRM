@@ -202,6 +202,14 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
+        # Form-encoded and multipart parsers are required so browser-driven
+        # ``URLSearchParams`` and ``FormData`` POSTs (used by the manage
+        # subscription page, the team-management UI, and the stores switch
+        # endpoint) reach the view. Without these DRF rejects form-encoded
+        # bodies with 415 Unsupported Media Type, even when the serializer
+        # fields look identical to the JSON shape the JS is sending.
+        "rest_framework.parsers.FormParser",
+        "rest_framework.parsers.MultiPartParser",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "apps.permissions.exception_handler.rbac_exception_handler",

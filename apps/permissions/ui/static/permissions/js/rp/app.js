@@ -94,40 +94,64 @@ const initConfirmations = () => {
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
       const name = btn.dataset.roleName || 'this role';
-      const ok = window.confirm(
-        `Delete "${name}"?\n\nActive members will lose access until they are reassigned. This action cannot be undone.`
-      );
-      if (ok) btn.form.submit();
+      const proceed = () => btn.form.submit();
+      if (typeof window.confirmAction === 'function') {
+        const ok = await window.confirmAction({
+          title: `Delete "${name}"?`,
+          message: 'Active members will lose access until they are reassigned. This action cannot be undone.',
+          confirmText: 'Delete',
+          confirmClass: 'btn-danger',
+        });
+        if (ok) proceed();
+      } else if (window.confirm(`Delete "${name}"?\n\nActive members will lose access until they are reassigned. This action cannot be undone.`)) {
+        proceed();
+      }
     });
   });
 };
 
 const initCloneButtons = () => {
   document.querySelectorAll('[data-action="clone-role"]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.preventDefault();
       const name = btn.dataset.roleName || 'this role';
-      const newName = window.prompt(`Name for the cloned role:`, `${name} (copy)`);
-      if (!newName) return;
 
-      const roleId = btn.dataset.roleId;
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = `/dashboard/roles/${roleId}/clone/`;
+      const submitClone = (newName) => {
+        if (!newName) return;
+        const roleId = btn.dataset.roleId;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/dashboard/roles/${roleId}/clone/`;
 
-      const csrf = document.createElement('input');
-      csrf.type = 'hidden';
-      csrf.name = 'csrfmiddlewaretoken';
-      csrf.value = getCsrfToken();
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = 'csrfmiddlewaretoken';
+        csrf.value = getCsrfToken();
 
-      const nameInput = document.createElement('input');
-      nameInput.type = 'hidden';
-      nameInput.name = 'new_name';
-      nameInput.value = newName;
+        const nameInput = document.createElement('input');
+        nameInput.type = 'hidden';
+        nameInput.name = 'new_name';
+        nameInput.value = newName;
 
-      form.append(csrf, nameInput);
-      document.body.appendChild(form);
-      form.submit();
+        form.append(csrf, nameInput);
+        document.body.appendChild(form);
+        form.submit();
+      };
+
+      if (typeof window.confirmAction === 'function' && typeof window.confirmAction.prompt === 'function') {
+        const newName = await window.confirmAction.prompt({
+          title: 'Clone role',
+          label: 'Name for the cloned role',
+          placeholder: `${name} (copy)`,
+          confirmText: 'Clone',
+          confirmClass: 'btn-primary',
+          required: true,
+        });
+        submitClone(newName);
+      } else {
+        const newName = window.prompt(`Name for the cloned role:`, `${name} (copy)`);
+        submitClone(newName);
+      }
     });
   });
 };

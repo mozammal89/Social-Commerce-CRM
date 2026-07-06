@@ -324,33 +324,33 @@
 (function() {
     'use strict';
 
-    {% if can_cancel %}
-    window.confirmCancel = function() {
-        if (confirm('Are you sure you want to cancel your subscription? This action cannot be undone.')) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/subscriptions/api/cancel/';
-
-            const csrfToken = document.querySelector('meta[name="csrf-token"]');
-            if (csrfToken) {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'csrfmiddlewaretoken';
-                input.value = csrfToken.getAttribute('content');
-                form.appendChild(input);
-            }
-
-            const reasonInput = document.createElement('input');
-            reasonInput.type = 'hidden';
-            reasonInput.name = 'reason';
-            reasonInput.value = prompt('Please tell us why you\'re cancelling (optional):', '');
-            form.appendChild(reasonInput);
-
-            document.body.appendChild(form);
-            form.submit();
+    /**
+     * Read the CSRF token. The centralized helper exposed by
+     * ``templates/components/confirm_modal.html`` is the single source
+     * of truth: it reads the ``csrftoken`` cookie first, then falls
+     * back to the hidden ``csrfmiddlewaretoken`` input that
+     * ``{% csrf_token %}`` emits in ``layouts/base.html``. Both are
+     * guaranteed to be present on every page that extends the layout,
+     * so the X-CSRFToken header is never sent as an empty string
+     * (which is what Django rejects as "incorrect length").
+     */
+    function getCsrfToken() {
+        if (typeof window.getCsrfToken === 'function') {
+            return window.getCsrfToken();
         }
-    };
-    {% endif %}
+        const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]*)/);
+        return match ? decodeURIComponent(match[1]) : '';
+    }
+
+    function notify(message, level) {
+        if (typeof window.notify === 'function') {
+            window.notify(message, level);
+        } else if (typeof window.showNotification === 'function') {
+            window.showNotification(message, level);
+        } else {
+            console[level === 'error' ? 'error' : 'log'](message);
+        }
+    }
 
     async function changePlan(planSlug, action) {
         const body = new URLSearchParams({
@@ -363,7 +363,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-CSRFToken': getCsrfToken(),
                 },
                 credentials: 'same-origin',
                 body,
@@ -372,7 +372,7 @@
             const data = await response.json().catch(() => ({}));
 
             if (!response.ok) {
-                notify((data && data.error) || 'Plan change failed.', 'error');
+                notify((data && data.error) || data.detail || 'Plan change failed.', 'error');
                 return;
             }
 
@@ -384,7 +384,7 @@
         }
     }
 
-    function handlePlanClick(event) {
+    async function handlePlanClick(event) {
         const target = event.target.closest('[data-upgrade-action]');
         if (!target) return;
 
@@ -392,20 +392,73 @@
         const action = target.getAttribute('data-upgrade-action');
         if (!slug) return;
 
-        const label = action === 'downgrade' ? 'downgrade' : 'upgrade';
         const planName = target.querySelector('.plan-select-name')?.textContent || slug;
+        const isDowngrade = action === 'downgrade';
+        const actionLabel = isDowngrade ? 'downgrade' : 'upgrade';
 
-        if (!confirm(`Confirm ${label} to ${planName}?`)) return;
+        const confirmed = await window.confirmAction({
+            title: isDowngrade ? 'Downgrade plan?' : 'Upgrade plan?',
+            message: `You're about to ${actionLabel} your subscription to ${planName}. Effective immediately. You can change again at any time.`,
+            confirmText: isDowngrade ? 'Downgrade' : 'Upgrade',
+            confirmClass: isDowngrade ? 'btn-warning' : 'btn-primary',
+        });
+        if (!confirmed) return;
         changePlan(slug, action);
     }
 
-    function notify(message, level) {
-        if (typeof window.notify === 'function') {
-            window.notify(message, level);
-        } else {
-            console[level === 'error' ? 'error' : 'log'](message);
+    {% if can_cancel %}
+    /**
+     * Replaces the original ``confirmCancel()`` that used
+     * ``window.confirm()`` + ``window.prompt()`` (which blocked the page
+     * and styled itself in browser-default chrome). We now use the
+     * centralized ``window.confirmAction.prompt()`` so the cancel copy
+     * matches the rest of the app, capture the optional reason, and POST
+     * via fetch (with the cookie-based CSRF token).
+     */
+    window.confirmCancel = async function() {
+        const reason = await window.confirmAction.prompt({
+            title: 'Cancel subscription?',
+            message: 'This action cannot be undone. Your access continues until the end of your current billing period{% if subscription.status == 'trialing' %} (your trial will end immediately){% endif %}.',
+            label: 'Why are you cancelling? (optional)',
+            placeholder: 'Your feedback helps us improve the product.',
+            confirmText: 'Cancel subscription',
+            confirmClass: 'btn-danger',
+            cancelText: 'Keep subscription',
+            multiline: true,
+            required: false,
+        });
+        if (reason === null) return;  // user dismissed the modal
+        performCancel(reason);
+    };
+
+    async function performCancel(reason) {
+        const body = new URLSearchParams({
+            cancel_at_period_end: 'true',
+            reason: reason || '',
+        });
+        try {
+            const response = await fetch('/subscriptions/api/cancel/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': getCsrfToken(),
+                },
+                credentials: 'same-origin',
+                body,
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                notify((data && data.error) || data.detail || 'Cancel failed.', 'error');
+                return;
+            }
+            notify(data.message || 'Subscription cancelled.', 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } catch (err) {
+            console.error('Cancel error:', err);
+            notify('Network error while cancelling.', 'error');
         }
     }
+    {% endif %}
 
     function animateProgressBars() {
         const progressBars = document.querySelectorAll('.usage-progress-bar');

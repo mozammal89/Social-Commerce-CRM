@@ -153,7 +153,7 @@ const MemberList = (function() {
     }
 
     function confirmDeactivateMember(membershipId, memberName) {
-        if (confirm(`Are you sure you want to deactivate ${memberName}? They will lose access to this store.`)) {
+        const proceed = function() {
             const btn = document.querySelector(`[data-membership-id="${membershipId}"][data-action="deactivate-member"]`);
             if (btn) {
                 btn.disabled = true;
@@ -174,11 +174,24 @@ const MemberList = (function() {
                         btn.innerHTML = '<i class="bi bi-person-x"></i> Deactivate';
                     }
                 });
+        };
+
+        if (typeof window.confirmAction === 'function') {
+            window.confirmAction({
+                title: `Deactivate ${memberName}?`,
+                message: `Are you sure you want to deactivate ${memberName}? They will lose access to this store.`,
+                confirmText: 'Deactivate',
+                confirmClass: 'btn-warning',
+            }).then(function(ok) {
+                if (ok) proceed();
+            });
+        } else if (window.confirm(`Are you sure you want to deactivate ${memberName}? They will lose access to this store.`)) {
+            proceed();
         }
     }
 
     function confirmReactivateMember(membershipId, memberName) {
-        if (confirm(`Are you sure you want to reactivate ${memberName}? They will regain access to this store.`)) {
+        const proceed = function() {
             const btn = document.querySelector(`[data-membership-id="${membershipId}"][data-action="reactivate-member"]`);
             if (btn) {
                 btn.disabled = true;
@@ -210,6 +223,19 @@ const MemberList = (function() {
                         btn.innerHTML = '<i class="bi bi-person-check"></i> Reactivate';
                     }
                 });
+        };
+
+        if (typeof window.confirmAction === 'function') {
+            window.confirmAction({
+                title: `Reactivate ${memberName}?`,
+                message: `Are you sure you want to reactivate ${memberName}? They will regain access to this store.`,
+                confirmText: 'Reactivate',
+                confirmClass: 'btn-success',
+            }).then(function(ok) {
+                if (ok) proceed();
+            });
+        } else if (window.confirm(`Are you sure you want to reactivate ${memberName}? They will regain access to this store.`)) {
+            proceed();
         }
     }
 

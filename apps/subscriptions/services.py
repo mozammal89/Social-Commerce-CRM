@@ -307,7 +307,49 @@ def change_plan(
     "current plan". ``apply_pending_plan`` already cleared it for its
     own signup-driven path; this is the belt-and-braces mirror for
     explicit in-place upgrades/downgrades.
+
+    Re-activation guard: when the source subscription is in a terminal
+    ``expired`` state (e.g. the 14-day trial lapsed and the user is now
+    picking a paid plan), ``upgrade_subscription`` and
+    ``downgrade_subscription`` would otherwise flip ``plan`` but leave
+    ``status='expired'`` — ``VALID_STATUS_TRANSITIONS`` blocks any
+    transition out of expired, so ``is_active()`` would keep returning
+    False and the user would be stuck on the redirect loop between
+    ``/subscriptions/manage/`` and ``/subscriptions/plans/``. Reset
+    status to ``active`` and clear ``trial_ends_at`` up-front, then
+    record an ``EVENT_REACTIVATED`` event so the audit trail shows
+    the row was revived by an explicit plan change rather than
+    silently smuggled into ``active``.
     """
+    if subscription.status == STATUS_EXPIRED:
+        subscription.status = STATUS_ACTIVE
+        subscription.trial_ends_at = None
+        subscription.save(update_fields=["status", "trial_ends_at", "updated_at"])
+        record_event(
+            subscription,
+            EVENT_REACTIVATED,
+            actor=actor,
+            metadata={
+                "reason": "plan_change_after_expiry",
+                "new_plan": new_plan.slug,
+            },
+        )
+        # Evict tenant/store sub caches so the next read picks up the
+        # freshly-active row (the upgrade/downgrade helpers below also
+        # evict, but doing it here keeps observers consistent for any
+        # intermediate caller that only re-checks ``is_active()``).
+        keys_to_evict: list[str] = []
+        if subscription.tenant_id:
+            keys_to_evict.append(
+                f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.tenant_id}"
+            )
+        if subscription.store_id:
+            keys_to_evict.append(
+                f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.store_id}"
+            )
+        if keys_to_evict:
+            cache.delete_many(keys_to_evict)
+
     if new_plan.price > subscription.plan.price:
         result = upgrade_subscription(subscription, new_plan, actor=actor)
     elif new_plan.price < subscription.plan.price:

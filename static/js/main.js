@@ -80,16 +80,49 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 5000);
     });
 
-    // Confirm delete actions
-    const deleteButtons = document.querySelectorAll('[data-confirm]');
-    deleteButtons.forEach(function(button) {
-        button.addEventListener('click', function(e) {
-            const message = this.getAttribute('data-confirm') || 'Are you sure you want to continue?';
-            if (!confirm(message)) {
-                e.preventDefault();
-                return false;
-            }
-        });
+    // Confirm delete actions — route every [data-confirm] button through
+    // the centralized Bootstrap modal so the user gets a styled dialog
+    // instead of the native browser confirm(). The handler is
+    // delegated on document.body so HTMX-swapped content picks it up
+    // without needing a manual re-bind.
+    document.body.addEventListener('click', function(e) {
+        const target = e.target.closest('[data-confirm]');
+        if (!target) return;
+        // Allow a confirm-gated element to bypass itself with an
+        // opt-out attribute (used by callers that wire their own
+        // confirmation flow on top of the same button).
+        if (target.dataset.confirmHandled === '1') {
+            target.dataset.confirmHandled = '';
+            return;
+        }
+
+        const message = target.getAttribute('data-confirm') || 'Are you sure you want to continue?';
+        const confirmText = target.getAttribute('data-confirm-text') || 'Confirm';
+        const confirmClass = target.getAttribute('data-confirm-class') || 'btn-primary';
+
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        const proceed = function() {
+            // Set the bypass flag, then re-dispatch the click via a
+            // fresh MouseEvent so we don't loop back into this handler.
+            target.dataset.confirmHandled = '1';
+            target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            target.dataset.confirmHandled = '';
+        };
+
+        if (typeof window.confirmAction === 'function') {
+            window.confirmAction({
+                title: target.getAttribute('data-confirm-title') || 'Confirm',
+                message: message,
+                confirmText: confirmText,
+                confirmClass: confirmClass,
+            }).then(function(ok) {
+                if (ok) proceed();
+            });
+        } else if (window.confirm(message)) {
+            proceed();
+        }
     });
 
     // Initialize Alpine.js components
@@ -249,10 +282,28 @@ function createMessagesContainer() {
 }
 
 function confirmDelete(message, callback) {
-    if (confirm(message || 'Are you sure you want to delete this item?')) {
+    // Thin wrapper around the centralized Bootstrap modal. Returns
+    // true if the user confirmed, false otherwise. The original
+    // signature is preserved so existing callers (mostly older
+    // pages) keep working without changes.
+    const run = function() {
         if (typeof callback === 'function') {
             callback();
         }
+    };
+    if (typeof window.confirmAction === 'function') {
+        window.confirmAction({
+            title: 'Confirm',
+            message: message || 'Are you sure you want to delete this item?',
+            confirmText: 'Delete',
+            confirmClass: 'btn-danger',
+        }).then(function(ok) {
+            if (ok) run();
+        });
+        return true;  // async path — caller can't react synchronously anymore
+    }
+    if (confirm(message || 'Are you sure you want to delete this item?')) {
+        run();
         return true;
     }
     return false;
