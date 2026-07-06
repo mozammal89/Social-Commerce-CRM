@@ -246,6 +246,21 @@
         return new Promise(function (resolve) {
             var settled = false;
 
+            // ``onEnter`` must be declared in the same scope as
+            // ``settle`` (the Promise executor) because ``settle``
+            // removes the listener it adds — and it can't reach a
+            // binding that's scoped inside an ``if (inputEl) { ... }``
+            // block below. Declaring it here (and only attaching it
+            // when ``inputEl`` exists) keeps the binding visible to
+            // both functions without registering a listener for the
+            // alert / confirm variants that don't have an input.
+            function onEnter(e) {
+                if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    onConfirm();
+                }
+            }
+
             function settle(value) {
                 if (settled) return;
                 settled = true;
@@ -289,12 +304,6 @@
             modalEl.addEventListener("hidden.bs.modal", onHidden);
 
             if (inputEl) {
-                function onEnter(e) {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        onConfirm();
-                    }
-                }
                 inputEl.addEventListener("keydown", onEnter);
             }
 
