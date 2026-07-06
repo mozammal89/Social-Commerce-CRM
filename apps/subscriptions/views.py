@@ -175,29 +175,69 @@ def subscription_plans(request):
     """
     Display available subscription plans for the customer to choose from.
     This is the main entry point for customers after signup/login.
+
+    ``?upgrade=1`` query parameter bypasses the "you already have a
+    subscription" redirect so the user can land on this page to pick a
+    higher/lower tier from the manage page's "Upgrade Your Plan" CTA.
+    Without that bypass the manage page CTA would loop back to itself:
+    manage -> plans -> (already subscribed) -> manage -> plans -> ...
     """
     user = request.user
 
     # Get user's current subscription if exists
     current_subscription = None
     current_store = None
+    upgrade_mode = request.GET.get("upgrade") in ("1", "true", "yes")
 
-    # Check if user has any store memberships
-    memberships = active_memberships(None).filter(user=user)
+    # Resolve the live subscription (used by both the early redirect and
+    # the page render so we don't query twice).
+    from apps.subscriptions.services import resolve_user_subscription
 
-    if memberships.exists():
-        # User already has access to stores
-        return redirect("dashboard:home")
+    live_subscription = resolve_user_subscription(user)
+    has_live_subscription = (
+        live_subscription is not None
+        and getattr(live_subscription, "is_active", lambda: False)()
+    )
+    if live_subscription is not None:
+        current_subscription = live_subscription
+
+    # Check if the user already has any active store memberships. The
+    # previous version used ``active_memberships(None)`` directly, but
+    # that helper builds ``StoreMembership.objects.filter(store=None, ...)``
+    # which in practice matches zero rows (every membership has a non-null
+    # ``store_id``) — so the redirect-to-dashboard guard never fired and
+    # users on an existing subscription saw the plans page unexpectedly.
+    # Query the membership table explicitly with an active filter to
+    # detect "user already has stores" reliably.
+    from apps.permissions.models import StoreMembership
+
+    has_active_memberships = StoreMembership.objects.filter(
+        user=user,
+        is_active=True,
+    ).exists()
+
+    # Only redirect existing users away from this page when they're NOT
+    # explicitly asking to view plans for an upgrade. The ``?upgrade=1``
+    # bypass is what the manage page's "Upgrade Your Plan" CTA relies on
+    # — without it the button loops back to manage -> plans -> manage.
+    if has_active_memberships and not upgrade_mode:
+        # User already has access to stores → send them to the manage
+        # page where they can upgrade/downgrade their live subscription
+        # instead of presenting first-time-signup plans.
+        return redirect("subscriptions:manage")
 
     # User paid for a plan but hasn't created their first store yet.
     # Send them to welcome so they can finish onboarding instead of
     # seeing the plans page again and being unsure what to do next.
-    pending_plan_slug = (
-        getattr(user, "pending_plan_slug", None)
-        or request.session.get("pending_plan_slug")
-    )
-    if pending_plan_slug:
-        return redirect("subscriptions:welcome")
+    # Don't redirect when in upgrade mode — that flow is for users who
+    # already have stores, so the "pending plan" funnel doesn't apply.
+    if not upgrade_mode:
+        pending_plan_slug = (
+            getattr(user, "pending_plan_slug", None)
+            or request.session.get("pending_plan_slug")
+        )
+        if pending_plan_slug:
+            return redirect("subscriptions:welcome")
 
     # Separate monthly and yearly plans
     monthly_plans = SubscriptionPlan.objects.filter(
@@ -218,6 +258,9 @@ def subscription_plans(request):
             "monthly": BILLING_MONTHLY,
             "yearly": BILLING_YEARLY,
         },
+        "upgrade_mode": upgrade_mode,
+        "live_subscription": live_subscription,
+        "has_live_subscription": has_live_subscription,
     }
 
     return render(request, "subscriptions/plans.html", context)
@@ -227,7 +270,22 @@ def subscription_plans(request):
 def subscription_checkout(request, plan_slug):
     """
     Handle subscription checkout process.
-    Records the plan choice and redirects to store setup.
+
+    For first-time signup (no real subscription yet) this records the
+    plan choice on the user as a ``pending_plan_slug`` marker and
+    redirects to the welcome page so the user can finish onboarding by
+    creating their first store.
+
+    For existing users (with a real ``Tenant.subscription`` already) the
+    ``pending_plan_slug`` path used to be a no-op: it set the marker but
+    never actually upgraded the live subscription, so once the user
+    clicked "Go to Dashboard" they saw the OLD plan's limits. The fix
+    is to apply the change immediately through the standard
+    ``change_plan`` service when a live subscription exists, which
+    invalidates caches and bumps RBAC versions atomically with the
+    subscription row update. The user is then sent to the welcome page
+    (so the same "Add Another Store / Go to Dashboard" affordances are
+    shown), and any subsequent reads reflect the new plan.
     """
     user = request.user
 
@@ -236,22 +294,95 @@ def subscription_checkout(request, plan_slug):
     except SubscriptionPlan.DoesNotExist:
         return redirect("subscriptions:plans")
 
-    # Check if user already has subscription (through store membership)
-    if active_memberships(None).filter(user=user).exists():
-        return redirect("dashboard:home")
+    # Resolve the user's live subscription once. ``resolve_user_subscription``
+    # walks the tenant -> store fallback chain and returns the authoritative
+    # active row (or ``None`` for true first-time signup).
+    from .services import resolve_user_subscription, change_plan
+    from django.utils import timezone
+    from django.contrib import messages as dj_messages
 
-    # Handle POST - Record plan choice and redirect to store setup
+    live_subscription = resolve_user_subscription(user)
+    has_live_subscription = (
+        live_subscription is not None
+        and getattr(live_subscription, "is_active", lambda: False)()
+    )
+
+    # Handle POST - either upgrade an existing sub in place, or record
+    # the pending marker for first-time signup.
     if request.method == "POST":
-        from django.utils import timezone
-
         start_trial = request.POST.get("start_trial", "true").lower() == "true"
 
-        # Store pending subscription in User model (persists across sessions)
+        if has_live_subscription and live_subscription is not None:
+            # Apply the plan change immediately through the standard
+            # service. ``change_plan`` handles upgrade/downgrade
+            # dispatch, cache invalidation, and ``pending_plan_slug``
+            # clearing (see Fix 4 in ``apps/subscriptions/services.py``).
+            try:
+                change_plan(
+                    live_subscription,
+                    plan,
+                    actor=user,
+                    effective_immediately=True,
+                )
+            except ValueError:
+                # Same price tier — degenerate case, just send the
+                # user to manage so they can pick a different plan.
+                dj_messages.warning(
+                    request,
+                    "The selected plan is the same as your current plan.",
+                )
+                return redirect("subscriptions:manage")
+
+            dj_messages.success(
+                request,
+                f"Subscription upgraded to {plan.name}.",
+            )
+
+            # Drop the pending marker too in case it was set from a
+            # prior (now-irrelevant) checkout attempt.
+            from .services import clear_pending_plan_marker
+
+            clear_pending_plan_marker(user, request)
+
+            # ``change_plan`` itself clears the marker, but the request
+            # session may still hold legacy ``subscription_plan`` /
+            # ``pending_plan_*`` keys that the welcome view consumes;
+            # wipe those so we don't double-render a "you picked this
+            # plan" banner on the next page load.
+            for key in (
+                "subscription_plan",
+                "trial_days",
+                "pending_plan_slug",
+                "pending_plan_name",
+                "pending_trial",
+            ):
+                request.session.pop(key, None)
+
+            # Send the user through the welcome page so the same
+            # "Add Another Store / Go to Dashboard" affordances show
+            # up — with the new plan name already applied to the live
+            # subscription, the welcome banner correctly reflects it.
+            request.session["plan_changed_just_now"] = {
+                "action": "upgraded",
+                "plan_name": plan.name,
+                "plan_slug": plan.slug,
+                "effective_immediately": True,
+            }
+            return redirect("subscriptions:welcome")
+
+        # First-time-signup path: persist the pending marker and let the
+        # welcome page collect enough info to create the first store.
+        # ``apply_pending_plan`` will pick this marker up on store
+        # creation and route through the same change_plan path.
         user.pending_plan_slug = plan.slug
         user.pending_trial_start = start_trial
         user.pending_subscription_date = timezone.now()
         user.save(
-            update_fields=["pending_plan_slug", "pending_trial_start", "pending_subscription_date"]
+            update_fields=[
+                "pending_plan_slug",
+                "pending_trial_start",
+                "pending_subscription_date",
+            ]
         )
 
         # Also store in session for immediate use
@@ -265,6 +396,10 @@ def subscription_checkout(request, plan_slug):
         return redirect("subscriptions:welcome")
 
     # Handle GET - Display checkout page
+    # If the user already has a live subscription the checkout form
+    # doesn't make sense (they should go through ``/manage/`` instead),
+    # but we still render the page so a direct link doesn't 404 — the
+    # template context can warn the user.
     billing_period = request.GET.get("billing", BILLING_MONTHLY)
     start_trial = request.GET.get("trial", "true").lower() == "true"
 
@@ -276,6 +411,8 @@ def subscription_checkout(request, plan_slug):
         "total_amount": plan.price
         if billing_period == plan.billing_period
         else (plan.price * 12 if plan.billing_period == BILLING_MONTHLY else plan.price / 12),
+        "has_live_subscription": has_live_subscription,
+        "live_subscription": live_subscription,
     }
 
     return render(request, "subscriptions/checkout.html", context)
@@ -659,6 +796,16 @@ def update_subscription_plan(request):
                 actor=user,
                 effective_immediately=effective_immediately,
             )
+
+            # The user's pending_plan_slug is a one-shot signup marker. It
+            # would otherwise stay set indefinitely after this plan change,
+            # silently polluting the aggregated-limits / stats endpoints
+            # (those reads treat pending_plan_slug as the upper bound when
+            # it is larger than the live plan). clearing it here keeps the
+            # marker and the live subscription in sync.
+            from .services import clear_pending_plan_marker
+
+            clear_pending_plan_marker(user, request)
 
             request.session["plan_changed_just_now"] = {
                 "action": action,

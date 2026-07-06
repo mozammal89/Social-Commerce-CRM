@@ -336,7 +336,17 @@ def _build_rbac_context(user, store, is_superuser: bool) -> dict[str, Any]:
 
     plan = None
     plan_features: list[str] = []
-    sub = getattr(store, "subscription", None)
+    # Resolve the active subscription through the same tenant-aware
+    # resolver used elsewhere, instead of just reading the legacy
+    # ``store.subscription`` reverse. The legacy reverse is None for
+    # subscriptions that have been promoted to a tenant — i.e. exactly
+    # the state users reach after their first in-place upgrade — which
+    # left the dashboard header blank ("Plan: …") and the seat-cap
+    # badge missing even when the user had a perfectly valid active
+    # subscription.
+    from apps.subscriptions.services import get_active_subscription
+
+    sub = get_active_subscription(store)
     if sub is not None and sub.is_active():
         plan = sub.plan
         plan_features = list(

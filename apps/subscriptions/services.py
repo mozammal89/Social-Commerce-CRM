@@ -300,20 +300,33 @@ def change_plan(
     here keeps both call sites to a single line and ensures the cache
     invalidation logic in ``upgrade_subscription`` /
     ``downgrade_subscription`` runs in both paths.
+
+    After a successful change, ``actor.pending_plan_slug`` is cleared
+    so that subsequent reads (aggregated-limits, create-store, team
+    stats) can't surface the stale one-shot signup marker as the
+    "current plan". ``apply_pending_plan`` already cleared it for its
+    own signup-driven path; this is the belt-and-braces mirror for
+    explicit in-place upgrades/downgrades.
     """
     if new_plan.price > subscription.plan.price:
-        return upgrade_subscription(subscription, new_plan, actor=actor)
-    if new_plan.price < subscription.plan.price:
-        return downgrade_subscription(
+        result = upgrade_subscription(subscription, new_plan, actor=actor)
+    elif new_plan.price < subscription.plan.price:
+        result = downgrade_subscription(
             subscription,
             new_plan,
             actor=actor,
             effective_at_period_end=not effective_immediately,
         )
-    raise ValueError(
-        f"Cannot change to plan {new_plan.slug}: same price as current "
-        f"plan {subscription.plan.slug}."
-    )
+    else:
+        raise ValueError(
+            f"Cannot change to plan {new_plan.slug}: same price as current "
+            f"plan {subscription.plan.slug}."
+        )
+
+    if actor is not None:
+        clear_pending_plan_marker(actor)
+
+    return result
 
 
 def propagate_plan_to_all_user_stores(

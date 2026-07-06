@@ -324,6 +324,13 @@ def _resolve_max_stores_cap(user) -> int:
 
     Updated for tenant-based architecture: checks tenant subscription first,
     then falls back to store-based subscriptions for migration period.
+
+    The ``User.pending_plan_slug`` marker is a one-shot signup signal — it is
+    only honored when the user has *no* active subscription yet. Once a real
+    Tenant/Stores subscription row exists, the pending marker is ignored,
+    even if it is left over from a stale checkout flow. Honoring the marker
+    in that case caused the cap to drift away from the live subscription
+    (e.g. an old ``pending_plan_slug="growth"`` overriding a Starter sub).
     """
     from apps.permissions.models import Subscription, SubscriptionPlan, StoreMembership
     from apps.accounts.models import User, Tenant
@@ -348,18 +355,6 @@ def _resolve_max_stores_cap(user) -> int:
             memberships__user=user, memberships__is_active=True, is_deleted=False
         ).distinct()
 
-        if not user_accessible_stores.exists():
-            # User has no store access yet, check if they have any subscription plan at all
-            # We'll look for the highest-tier plan they've subscribed to anywhere
-            # Alternative: check if user has any pending plan from the subscription flow
-            if hasattr(user, "pending_plan_slug") and user.pending_plan_slug:
-                try:
-                    pending_plan = SubscriptionPlan.objects.get(slug=user.pending_plan_slug)
-                    if getattr(pending_plan, "max_stores", None):
-                        return int(pending_plan.max_stores)
-                except Exception:
-                    pass
-
         # Get all subscriptions for all stores the user has access to
         accessible_store_ids = user_accessible_stores.values_list("id", flat=True)
         all_accessible_subs = (
@@ -377,15 +372,15 @@ def _resolve_max_stores_cap(user) -> int:
                 if plan_max > max_stores:
                     max_stores = plan_max
 
-    # CRITICAL: Check for pending plan - it might be higher tier than current subscription
-    # This handles users who just upgraded but haven't completed store creation yet
-    if hasattr(user, "pending_plan_slug") and user.pending_plan_slug:
+    # CRITICAL: Only honor ``pending_plan_slug`` when the user has *no*
+    # active subscription yet. Once a real sub exists, the marker is stale
+    # by definition and must not influence the cap.
+    if max_stores == 0 and getattr(user, "pending_plan_slug", None):
         try:
             pending_plan = SubscriptionPlan.objects.get(slug=user.pending_plan_slug)
-            pending_max = getattr(pending_plan, "max_stores", 0)
-            if pending_max > max_stores:
-                max_stores = pending_max
-        except Exception:
+            if getattr(pending_plan, "max_stores", None):
+                return int(pending_plan.max_stores)
+        except SubscriptionPlan.DoesNotExist:
             pass
 
     if max_stores > 0:

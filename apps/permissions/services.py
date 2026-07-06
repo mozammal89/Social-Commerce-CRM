@@ -124,8 +124,18 @@ def assert_within_plan_limit(store, limit_attr: str, current_value: int) -> None
 
 
 def plan_limit(store, limit_attr: str) -> int | None:
-    """Return the numeric cap, or None if no active subscription."""
-    sub = getattr(store, "subscription", None)
+    """Return the numeric cap, or None if no active subscription.
+
+    Resolves through the tenant-aware subscription lookup so a store
+    whose subscription has been promoted to its tenant still gets the
+    correct cap. The legacy ``store.subscription`` reverse is ``None``
+    for tenant-attached subscriptions — reading it directly would have
+    the dashboard's "Seat cap" badge disappear the moment a user
+    upgrades.
+    """
+    from apps.subscriptions.services import get_active_subscription
+
+    sub = get_active_subscription(store)
     if sub is None or not sub.is_active():
         return None
     return getattr(sub.plan, limit_attr, None)
@@ -154,4 +164,17 @@ def remove_member(user, store, role: Role) -> bool:
 
 
 def active_memberships(store) -> "models.QuerySet[StoreMembership]":
-    return StoreMembership.objects.filter(store=store, is_active=True)
+    """Return active memberships for ``store``, or all active memberships when ``store`` is None.
+
+    Passing ``store=None`` historically produced a queryset filtered by
+    ``store_id IS NULL``, which never matched any real membership (every
+    row has a non-null ``store_id``) and silently dropped the user from
+    every "already-subscribed?" guard that relied on it. The caller can
+    pass ``store=None`` to mean "all stores" by chaining a ``.filter(user=...)``
+    afterwards; preserving that contract here keeps the public surface
+    intact while fixing the silent zero-row behaviour.
+    """
+    qs = StoreMembership.objects.filter(is_active=True)
+    if store is not None:
+        qs = qs.filter(store=store)
+    return qs

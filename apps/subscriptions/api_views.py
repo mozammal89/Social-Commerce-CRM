@@ -36,22 +36,38 @@ def get_aggregated_limits(request):
     # Calculate remaining stores
     remaining_stores = max(0, max_stores - current_store_count)
 
-    # Find the highest tier plan name
+    # Resolve the live subscription once and reuse it for both name/slug
+    # *and* the has-real-sub guard below. This keeps the plan name returned
+    # in this response internally consistent with the limits (both come
+    # from the same source of truth) and prevents stale ``pending_plan_slug``
+    # markers from leaking through as the displayed plan name.
+    from apps.subscriptions.services import resolve_user_subscription
+    from apps.permissions.models import SubscriptionPlan
+
+    live_subscription = resolve_user_subscription(user)
+    has_real_subscription = (
+        live_subscription is not None
+        and getattr(live_subscription, "is_active", lambda: False)()
+    )
+
     plan_name = "Unknown"
     plan_slug = "unknown"
 
-    # Try to get plan info from user's pending plan or highest subscription
-    if hasattr(user, "pending_plan_slug") and user.pending_plan_slug:
+    # Only honor ``pending_plan_slug`` when the user has *no* active
+    # subscription yet — once a real sub exists, the marker is stale by
+    # definition and would otherwise make plan_name disagree with the
+    # live limits above.
+    if not has_real_subscription and getattr(user, "pending_plan_slug", None):
         plan_slug = user.pending_plan_slug
         try:
-            from apps.permissions.models import SubscriptionPlan
-
             pending_plan = SubscriptionPlan.objects.get(slug=plan_slug)
             plan_name = pending_plan.name
-        except Exception:
+        except SubscriptionPlan.DoesNotExist:
             plan_name = plan_slug.title()
-    else:
-        # Find the highest tier subscription
+    elif has_real_subscription and live_subscription is not None:
+        # Resolve the plan from the highest-tier live subscription. Prefer
+        # the live sub's plan object directly so plan_name/slug always
+        # match the live subscription rather than a pending marker.
         from apps.permissions.models import Subscription
 
         accessible_store_ids = user_accessible_stores.values_list("id", flat=True)
@@ -76,6 +92,11 @@ def get_aggregated_limits(request):
             if highest_plan:
                 plan_name = highest_plan.name
                 plan_slug = highest_plan.slug
+        else:
+            # No store-attached subs visible (could be tenant-only). Fall
+            # back to the live sub's plan directly.
+            plan_name = live_subscription.plan.name
+            plan_slug = live_subscription.plan.slug
 
     return Response(
         {
