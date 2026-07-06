@@ -516,10 +516,29 @@ def manage_subscription(request):
     # Check plan limits
     limits_info = check_plan_limits(store_for_limits)
 
-    # Get available upgrade/downgrade plans
+    # Get available upgrade/downgrade plans.
+    #
+    # We restrict the candidates to plans that share the current plan's
+    # billing period AND currency, then split by price. Comparing across
+    # billing periods (e.g. monthly vs yearly) or currencies (BDT vs USD)
+    # produces meaningless upgrade/downgrade choices:
+    #   * A yearly BDT 48000 plan would dominate the "upgrade" list over
+    #     a monthly BDT 99 plan even though they aren't really comparable.
+    #   * A free USD $0 test/debug row would show as a "downgrade" for a
+    #     Professional BDT 99 plan — currency-wrong and almost certainly
+    #     an internal/leftover plan.
+    #
+    # Restricting to (billing_period, currency) matches the user's
+    # intent ("upgrade my *current* plan") and prevents leftover test
+    # rows with anomalous price/currency values from polluting the UI.
     current_plan = subscription.plan
     available_plans = (
-        SubscriptionPlan.objects.filter(is_active=True, is_public=True)
+        SubscriptionPlan.objects.filter(
+            is_active=True,
+            is_public=True,
+            billing_period=current_plan.billing_period,
+            currency=current_plan.currency,
+        )
         .exclude(id=current_plan.id)
         .order_by("price")
     )
