@@ -112,33 +112,37 @@ def dashboard_home(request):
         else:
             needs_subscription = True
 
-    # If user needs subscription and has no pending subscription, redirect to plans page
-    if needs_subscription and not has_pending_subscription and not is_superuser:
-        from django.contrib import messages
-
-        messages.info(request, "Welcome! Choose a subscription plan to get started.")
-        return redirect("subscriptions:plans")
-
     # User has memberships but their subscription is canceled/expired/past_due
-    # (Fix #3): redirect them to the manage page so they can re-subscribe
-    # or see why their features are blocked.
+    # (Fix #3, refined): instead of bouncing them straight back to the
+    # manage page, render the dashboard with a clear "subscription needs
+    # attention" banner. The previous hard redirect produced a confusing
+    # loop combined with the missing Store Management sidebar entry.
+    # Computed before the plans-page redirect so a user who has stores
+    # but no live subscription lands on the dashboard with a banner
+    # (clear re-subscribe CTA) rather than being punted to the
+    # first-time-signup plans page.
     subscription_needs_attention = (
-        user_subscription is None
-        and not needs_subscription
-        and not has_pending_subscription
-        and not is_superuser
+        not is_superuser
         and StoreMembership.objects.filter(
             user=user, is_active=True,
         ).exists()
     )
-    if subscription_needs_attention:
+
+    # If user truly needs a subscription (never had one) and has no
+    # pending signup, redirect to the plans page. Users with stores
+    # but no live sub are handled by the banner above instead of this
+    # redirect — they should see the dashboard so they can keep using
+    # what's already set up while deciding whether to renew.
+    if (
+        needs_subscription
+        and not has_pending_subscription
+        and not is_superuser
+        and not subscription_needs_attention
+    ):
         from django.contrib import messages
 
-        messages.warning(
-            request,
-            "Your subscription is no longer active. Renew or pick a new plan to continue.",
-        )
-        return redirect("subscriptions:manage")
+        messages.info(request, "Welcome! Choose a subscription plan to get started.")
+        return redirect("subscriptions:plans")
 
     user_stores = _user_stores(user, is_superuser)
     current_store = _resolve_current_store(request, user_stores)
@@ -174,6 +178,12 @@ def dashboard_home(request):
         "show_welcome": True,  # Show welcome banner
         # Boolean flags for template checks
         "has_user_subscription": user_subscription is not None,
+        # True when the user has stores but no live subscription — the
+        # dashboard renders a banner so they can re-subscribe without
+        # being force-redirected to the manage page (which used to
+        # produce a confusing loop combined with the missing Store
+        # Management sidebar entry).
+        "subscription_needs_attention": subscription_needs_attention,
         # Plan-change banner payload (or None)
         "plan_changed": plan_changed,
     }

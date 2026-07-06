@@ -32,6 +32,34 @@
 </div>
 
 {% else %}
+<!-- {# Cancellation banner — only rendered when the user has scheduled a
+   cancel-at-period-end. The same flag drives the Reactivate card in
+   the sidebar (below), so the banner and the sidebar CTA can never
+   disagree about whether cancellation is pending. #} -->
+{% if cancellation_scheduled %}
+<div class="alert alert-warning d-flex align-items-start mb-4" role="alert">
+    <i class="bi bi-exclamation-triangle-fill me-3 fs-4"></i>
+    <div class="flex-grow-1">
+        <h5 class="alert-heading mb-1">Cancellation scheduled</h5>
+        <p class="mb-2">
+            Your subscription is set to end on
+            <strong>{{ cancellation_ends_at|date:"M j, Y" }}</strong>.
+            You'll keep full access until then — no further charges will be made.
+        </p>
+        {% if not is_immediate_cancel %}
+        <button type="button" class="btn btn-success btn-sm"
+                onclick="reactivateSubscription()">
+            <i class="bi bi-arrow-counterclockwise me-1"></i> Reactivate subscription
+        </button>
+        {% else %}
+        <p class="mb-0 small text-muted">
+            To resume service, choose a plan from the
+            <a href="{% url 'subscriptions:plans' %}?upgrade=1">plans page</a>.
+        </p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 <div class="row">
     <!-- Main Content -->
     <div class="col-lg-8">
@@ -277,8 +305,34 @@
         </div>
         {% endif %}
 
-        <!-- Cancel Subscription -->
-        {% if can_cancel %}
+        <!-- Cancel / Reactivate Subscription -->
+        <!-- {# When the user has scheduled a cancel-at-period-end, the Cancel
+           card is replaced with a Reactivate card (same slot, same shape,
+           same `confirmCancel()`-style styling — just a different action).
+           We gate on ``is_cancel_scheduled`` (the *narrower* predicate)
+           rather than the broader banner flag, because a fully-canceled
+           sub (``status='canceled'``) can't be reversed with the simple
+           ``ends_at = None`` flow — that needs a re-subscribe path. The
+           ``can_cancel`` else-branch covers the default active/trial
+           state. #} -->
+        {% if is_cancel_scheduled %}
+        <div class="cancel-sub-card manage-sidebar-card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-arrow-counterclockwise me-2"></i>Reactivate Subscription</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-3">
+                    Your cancellation is scheduled for
+                    <strong>{{ cancellation_ends_at|date:"M j, Y" }}</strong>.
+                    Reactivate to keep your {{ plan.name }} plan and continue
+                    billing normally at the end of this period.
+                </p>
+                <button type="button" onclick="reactivateSubscription()" class="btn-cancel-sub">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reactivate subscription
+                </button>
+            </div>
+        </div>
+        {% elif can_cancel %}
         <div class="cancel-sub-card manage-sidebar-card mb-3">
             <div class="card-header">
                 <h5 class="mb-0"><i class="bi bi-x-circle me-2"></i>Cancel Subscription</h5>
@@ -485,7 +539,13 @@
         changePlan(slug, action);
     }
 
-    {% if can_cancel %}
+    // {# The cancel handlers (``confirmCancel`` / ``performCancel``) only
+    //    apply when the user can actually press Cancel. The
+    //    ``reactivateSubscription`` handler is wired only when
+    //    cancellation is genuinely scheduled (not for immediate-cancel
+    //    subs — those need a full re-subscribe flow, not just an
+    //    ``ends_at = None``). #}
+    {% if can_cancel or is_cancel_scheduled %}
     /**
      * Replaces the original ``confirmCancel()`` that used
      * ``window.confirm()`` + ``window.prompt()`` (which blocked the page
@@ -537,6 +597,59 @@
             notify('Network error while cancelling.', 'error');
         }
     }
+
+    /**
+     * Reverses a previously-scheduled cancel-at-period-end. Triggered by
+     * the "Reactivate subscription" button on the cancellation banner
+     * (above the current-plan card) and on the Reactivate sidebar
+     * card. Mirrors ``performCancel`` exactly except:
+     *
+     *   - confirms with a simple ``confirmAction`` (no reason input —
+     *     there's nothing the user needs to type),
+     *   - POSTs to the reactivate endpoint, which is idempotent on the
+     *     server side (a no-op if cancellation isn't scheduled),
+     *   - uses a green confirm button to signal a positive action.
+     */
+    window.reactivateSubscription = async function() {
+        const confirmed = await window.confirmAction({
+            title: 'Reactivate subscription?',
+            message: "Your subscription will continue and you'll be billed at the end of the current period as usual.",
+            confirmText: 'Reactivate',
+            confirmClass: 'btn-success',
+            cancelText: 'Keep cancelled',
+        });
+        if (!confirmed) return;
+        try {
+            const response = await fetch(
+                '{% url "subscriptions:api-reactivate" %}',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    credentials: 'same-origin',
+                    body: '',
+                }
+            );
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                notify(
+                    (data && data.error) || data.detail || 'Reactivate failed.',
+                    'error'
+                );
+                return;
+            }
+            notify(
+                data.message || 'Subscription reactivated.',
+                'success'
+            );
+            setTimeout(() => window.location.reload(), 1000);
+        } catch (err) {
+            console.error('Reactivate error:', err);
+            notify('Network error while reactivating.', 'error');
+        }
+    };
     {% endif %}
 
     function animateProgressBars() {

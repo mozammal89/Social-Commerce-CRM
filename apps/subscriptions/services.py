@@ -207,11 +207,29 @@ def get_or_create_default_tenant(user) -> "Tenant":
     yet; this helper materialises a sensible default so subsequent
     store-creation and subscription code can rely on the invariant.
 
-    Uses ``get_or_create`` on the slug so two concurrent calls (e.g.
-    the signup API and the dashboard's tenant-resolution middleware)
-    don't race into IntegrityError.
+    Resolution order:
+
+      1. An existing tenant the user already owns (looked up by
+         ``owner=user``). This catches the common case where the user
+         was created via a different flow — tests, the dashboard's
+         tenant-creation middleware, or a custom signup that picked a
+         different slug — without forcing us to match its slug.
+      2. A tenant with the email-derived ``<local>-workspace`` slug.
+         Used by the standard signup flow; ``get_or_create`` makes it
+         idempotent so two concurrent calls (e.g. the signup API and
+         the dashboard's tenant-resolution middleware) don't race into
+         IntegrityError.
     """
     from apps.accounts.models import Tenant
+
+    # First pass: any tenant this user already owns. Picking this up
+    # before the slug lookup means an existing tenant with a custom
+    # slug (e.g. created by tests or by the dashboard's tenant-creation
+    # middleware) is reused instead of producing a second, orphan
+    # workspace for the same user.
+    owned = Tenant.objects.filter(owner=user, is_active=True).first()
+    if owned is not None:
+        return owned
 
     slug = (
         f"{user.email.split('@')[0]}-workspace"
@@ -242,12 +260,29 @@ def resolve_user_subscription(user):
 
     Returns ``None`` when the user has no active subscription at all
     (true first-time signup).
+
+    A subscription with ``status='active'`` AND a future ``ends_at``
+    (i.e. ``is_cancel_scheduled()`` is True) **is** considered active
+    here — the user keeps full access until the period ends, so the
+    sidebar's "Store Management" section, the dashboard's normal
+    landing, and the rest of the app should all keep working. Only a
+    truly terminal state (``status='canceled' / 'expired' / 'past_due'``
+    without a scheduled cancel) is treated as "no subscription".
     """
     tenant = get_or_create_default_tenant(user)
 
+    # First pass: any tenant-level sub that's active, trialing, or has
+    # a future ``ends_at``. Using ``Q(status__in=...) | Q(ends_at__gt=...)``
+    # rather than only ``status__in=[active, trialing]`` so a scheduled
+    # cancel keeps the user on the normal UI.
     tenant_sub = (
         Subscription.objects
-        .filter(tenant=tenant, status__in=[STATUS_ACTIVE, STATUS_TRIALING])
+        .filter(tenant=tenant)
+        .filter(
+            Q(status__in=[STATUS_ACTIVE, STATUS_TRIALING])
+            | Q(ends_at__gt=timezone.now())
+        )
+        .order_by("-plan__price", "-starts_at")
         .first()
     )
     if tenant_sub is not None:
@@ -259,9 +294,10 @@ def resolve_user_subscription(user):
     # — covers legacy data where ``Store.tenant`` was never backfilled.
     legacy_sub = (
         Subscription.objects
+        .filter(tenant__isnull=True)
         .filter(
-            status__in=[STATUS_ACTIVE, STATUS_TRIALING],
-            tenant__isnull=True,
+            Q(status__in=[STATUS_ACTIVE, STATUS_TRIALING])
+            | Q(ends_at__gt=timezone.now())
         )
         .filter(
             Q(store__tenant=tenant)
@@ -809,6 +845,77 @@ def cancel_subscription(
     else:
         transition_status(subscription, STATUS_CANCELED, actor=actor, reason=reason)
 
+    return subscription
+
+
+def reactivate_subscription(
+    subscription: Subscription,
+    *,
+    actor=None,
+) -> Subscription:
+    """
+    Reverse a previously-scheduled cancel-at-period-end.
+
+    Clears ``subscription.ends_at`` so the row is no longer in the
+    "cancellation scheduled" state. ``status`` is left as ``"active"``
+    and the billing clock (``current_period_start`` / ``current_period_end``)
+    is **not** modified — the user is billed normally at the existing
+    period end as if they had never pressed Cancel.
+
+    Idempotent: a no-op (returns the subscription unchanged, no event
+    written) when cancellation is not currently scheduled. This makes
+    a double-click on the Reactivate button safe, and means the HTTP
+    endpoint can be retried on network blips without polluting the
+    audit log with spurious events.
+
+    Args:
+        subscription: The subscription to reactivate.
+        actor:        The user triggering the reactivation. Recorded in
+                      the audit log so we can trace who reversed a cancel.
+
+    Returns:
+        The updated ``Subscription`` instance (same object, mutated
+        in place when reactivation is actually performed).
+    """
+    if not subscription.is_cancel_scheduled():
+        logger.info(
+            "reactivate_subscription: no-op for subscription %s "
+            "(status=%s, ends_at=%s)",
+            subscription.id,
+            subscription.status,
+            subscription.ends_at,
+        )
+        return subscription
+
+    subscription.ends_at = None
+    subscription.save(update_fields=["ends_at", "updated_at"])
+
+    record_event(
+        subscription,
+        EVENT_REACTIVATED,
+        actor=actor,
+        metadata={"reason": "cancel_reversal"},
+    )
+
+    # Evict the cached subscription slot(s) so the next read picks up
+    # the cleared ``ends_at``. Mirrors the cache-eviction pattern used
+    # in ``change_plan`` (services.py:341-351) and ``renew_subscription``
+    # (services.py:815-858).
+    keys_to_evict: list[str] = []
+    if subscription.tenant_id:
+        keys_to_evict.append(
+            f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.tenant_id}"
+        )
+    if subscription.store_id:
+        keys_to_evict.append(
+            f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.store_id}"
+        )
+    if keys_to_evict:
+        cache.delete_many(keys_to_evict)
+
+    logger.info(
+        f"Reactivated subscription {subscription.id} (cancel reversed)"
+    )
     return subscription
 
 

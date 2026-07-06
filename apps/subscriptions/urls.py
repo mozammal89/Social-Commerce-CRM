@@ -16,6 +16,11 @@ urlpatterns = [
     path("api/plans/<slug:slug>/", views.PlanDetailView.as_view(), name="api-plan-detail"),
     path("api/create/", views.create_subscription, name="api-create"),
     path("api/cancel/", views.cancel_subscription_view, name="api-cancel"),
+    path(
+        "api/reactivate/",
+        views.reactivate_subscription_view,
+        name="api-reactivate",
+    ),
     path("api/update-plan/", views.update_subscription_plan, name="api-update-plan"),
     path("api/current/", views.get_current_subscription, name="api-current"),
     path("api/limits/", views.check_subscription_limits, name="api-limits"),

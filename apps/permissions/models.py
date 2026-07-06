@@ -579,6 +579,54 @@ class Subscription(UUIDModel, TimeStampedModel):
             return self.trial_ends_at is None or self.trial_ends_at > now
         return False
 
+    def is_cancel_scheduled(self) -> bool:
+        """True if the user has scheduled a cancel-at-period-end that
+        has not yet elapsed.
+
+        Detected purely from the row state — no separate flag column:
+        ``cancel_subscription(cancel_at_period_end=True)`` sets
+        ``ends_at == current_period_end`` while leaving ``status == 'active'``.
+
+        Returns False when:
+          - ``status`` is not ``active`` (trialing / canceled / past_due
+            subs use other state paths; trial cancel goes through
+            ``transition_status`` and never sets ``ends_at``),
+          - ``ends_at`` is None (no cancel ever requested), or
+          - ``ends_at`` is in the past (the period already elapsed;
+            ``is_active()`` will independently return False).
+
+        The single source of truth for the manage-page banner and the
+        Reactivate-button visibility — both the view context and the
+        ``reactivate_subscription`` service read this method so the row
+        state and the UI can't drift out of sync.
+        """
+        return (
+            self.status == "active"
+            and self.ends_at is not None
+            and self.ends_at > timezone.now()
+        )
+
+    def is_canceled_or_canceling(self) -> bool:
+        """True if the subscription is in *any* canceled state.
+
+        Broader than ``is_cancel_scheduled`` — covers both:
+          - the scheduled-cancel path (``status='active'`` +
+            ``ends_at`` set, still has access until period end), and
+          - the immediate-cancel path (``status='canceled'`` —
+            ``cancel_subscription(cancel_at_period_end=True)`` on a
+            non-active sub, or ``cancel_at_period_end=False``).
+
+        The manage-page banner uses this so *every* cancel action
+        produces visible feedback, regardless of which code branch
+        ran. The narrower ``is_cancel_scheduled`` is still the gate
+        for the Reactivate button, since reversing a fully-canceled
+        sub needs a different flow (``transition_status(canceled →
+        active)``) than the one ``reactivate_subscription`` implements.
+        """
+        if self.status == "canceled":
+            return True
+        return self.is_cancel_scheduled()
+
 
 # ---------------------------------------------------------------------------
 # SubscriptionEvent

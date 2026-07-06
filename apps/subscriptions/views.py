@@ -58,6 +58,7 @@ from .services import (
     create_trial_subscription_for_tenant,
     create_paid_subscription_for_tenant,
     cancel_subscription,
+    reactivate_subscription,
     upgrade_subscription,
     downgrade_subscription,
     change_plan,
@@ -561,6 +562,22 @@ def manage_subscription(request):
         "can_upgrade": subscription.status == STATUS_ACTIVE,
         "is_trial": subscription.status == STATUS_TRIALING,
         "trial_days_remaining": None,
+        # Cancellation-scheduled state (drives the banner + Reactivate
+        # card on the manage page). ``is_canceled_or_canceling`` is the
+        # broad predicate that covers *every* cancel path — scheduled
+        # cancel (``status='active' + ends_at``) and immediate cancel
+        # (``status='canceled'``). The narrower ``is_cancel_scheduled``
+        # stays the gate for the Reactivate button, since reversing a
+        # fully-canceled sub needs a different service flow.
+        "cancellation_scheduled": subscription.is_canceled_or_canceling(),
+        "cancellation_ends_at": (
+            subscription.ends_at if subscription.is_canceled_or_canceling() else None
+        ),
+        "is_cancel_scheduled": subscription.is_cancel_scheduled(),
+        "is_immediate_cancel": (
+            subscription.status == "canceled"
+            and not subscription.is_cancel_scheduled()
+        ),
     }
 
     if subscription.trial_ends_at:
@@ -736,6 +753,73 @@ def cancel_subscription_view(request):
 
     except TransitionNotAllowedError as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def reactivate_subscription_view(request):
+    """
+    Reverse a previously-scheduled cancel-at-period-end.
+
+    Mirrors the resolution logic in ``cancel_subscription_view``
+    (lines 700-718): tenant-based first, store-based fallback for the
+    legacy migration period. Idempotent — a reactivate call on a
+    subscription that isn't currently scheduled to cancel is a 200
+    no-op (see ``reactivate_subscription``), so the UI can safely
+    retry on network blips without surfacing a confusing error.
+    """
+    user = request.user
+
+    # Same resolution pattern as cancel_subscription_view.
+    from apps.accounts.models import Tenant
+
+    subscription = None
+    try:
+        tenant = Tenant.objects.filter(owner=user).first()
+        if tenant and hasattr(tenant, "subscription") and tenant.subscription:
+            subscription = tenant.subscription
+    except Exception:
+        pass
+
+    if not subscription:
+        memberships = active_memberships(None).filter(user=user)
+        if memberships.exists():
+            store = _resolve_current_store_for_user(request, user)
+            if store:
+                subscription = get_active_subscription(store)
+
+    if not subscription:
+        return Response(
+            {"error": "No active subscription found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        with transaction.atomic():
+            reactivate_subscription(subscription, actor=user)
+            return Response(
+                {
+                    "message": "Subscription reactivated successfully",
+                    "status": subscription.status,
+                    "ends_at": (
+                        subscription.ends_at.isoformat()
+                        if subscription.ends_at
+                        else None
+                    ),
+                }
+            )
+    except Exception as e:
+        # Re-raise RBAC exceptions so DRF's EXCEPTION_HANDLER can map
+        # them to a structured response (matches the pattern in
+        # ``update_subscription_plan`` for DowngradeOverCapacity).
+        from apps.permissions.exceptions import RBACError
+
+        if isinstance(e, RBACError):
+            raise
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 @api_view(["POST"])
