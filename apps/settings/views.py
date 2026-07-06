@@ -10,13 +10,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Q, Count
 from django.core.validators import validate_email
 from django.core.cache import cache
+from django.core.exceptions import PermissionDenied
 from django.contrib.auth import get_user_model
 
 
 from apps.stores.models import Store
 from apps.permissions.models import StoreMembership, Role, AuditLog
 from apps.permissions.decorators import current_store
-from apps.permissions.ui.views import StoreScopedPermissionMixin
+from apps.permissions.services import assert_active_subscription
 from apps.permissions.ui.services import (
     deactivate_member as deactivate_member_service,
     reactivate_member as reactivate_member_service,
@@ -368,6 +369,16 @@ def change_member_role(request, store_id, membership_id):
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "Method not allowed"}, status=405)
 
+    # Subscription gate: a canceled user must not be able to alter
+    # RBAC for any of the store's members.
+    try:
+        assert_active_subscription(request.user, request.store)
+    except PermissionDenied:
+        return JsonResponse(
+            {"success": False, "error": "subscription_required"},
+            status=403,
+        )
+
     # Check permissions
     can_manage = request.user.is_superuser or user_has_permission(
         request.user, request.store, PERM_MEMBERS_MANAGE
@@ -414,6 +425,24 @@ def invite_member(request, store_id):
     """Invite a new team member to the store."""
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "Method not allowed"}, status=405)
+
+    # Subscription gate: a canceled user must not be able to invite
+    # new members — the seat-cap check (``enforce_reserved_seat_cap``)
+    # fails open for canceled subs because ``check_plan_limits`` returns
+    # empty usage for them, so without this gate a user could pre-
+    # invite hundreds of members, then re-subscribe to Starter
+    # (max_users=3) and bypass the cap.
+    try:
+        assert_active_subscription(request.user, request.store)
+    except PermissionDenied:
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "subscription_required",
+                "upgrade_required": True,
+            },
+            status=403,
+        )
 
     # Check permissions
     can_invite = request.user.is_superuser or user_has_permission(
@@ -659,6 +688,15 @@ def deactivate_member(request, store_id, membership_id):
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "Method not allowed"}, status=405)
 
+    # Subscription gate — see ``invite_member`` for rationale.
+    try:
+        assert_active_subscription(request.user, request.store)
+    except PermissionDenied:
+        return JsonResponse(
+            {"success": False, "error": "subscription_required", "upgrade_required": True},
+            status=403,
+        )
+
     # Check permissions
     can_manage = request.user.is_superuser or user_has_permission(
         request.user, request.store, PERM_MEMBERS_MANAGE
@@ -714,6 +752,15 @@ def activate_member(request, store_id, membership_id):
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "Method not allowed"}, status=405)
 
+    # Subscription gate — see ``invite_member`` for rationale.
+    try:
+        assert_active_subscription(request.user, request.store)
+    except PermissionDenied:
+        return JsonResponse(
+            {"success": False, "error": "subscription_required", "upgrade_required": True},
+            status=403,
+        )
+
     # Check permissions
     can_manage = request.user.is_superuser or user_has_permission(
         request.user, request.store, PERM_MEMBERS_MANAGE
@@ -766,6 +813,15 @@ def remove_member(request, store_id, membership_id):
     """Remove a team member completely (AJAX endpoint)."""
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "Method not allowed"}, status=405)
+
+    # Subscription gate — see ``invite_member`` for rationale.
+    try:
+        assert_active_subscription(request.user, request.store)
+    except PermissionDenied:
+        return JsonResponse(
+            {"success": False, "error": "subscription_required", "upgrade_required": True},
+            status=403,
+        )
 
     # Check permissions
     can_manage = request.user.is_superuser or user_has_permission(

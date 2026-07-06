@@ -62,6 +62,7 @@ from .constants import (
 from .forms import MembershipForm, RoleCloneForm, RoleForm, UserOverrideForm
 from .mixins import (
     StoreScopedPermissionMixin,
+    SubscriptionRequiredMixin,
     SuperuserOnlyMixin,
     get_user_stores_for_admin,
 )
@@ -219,7 +220,7 @@ class RoleDetailView(StoreScopedPermissionMixin, DetailView):
         return ctx
 
 
-class RoleCreateView(StoreScopedPermissionMixin, CreateView):
+class RoleCreateView(SubscriptionRequiredMixin, CreateView):
     """Create a new role (custom or system)."""
 
     template_name = "role_permission/roles/role_form.html"
@@ -271,7 +272,7 @@ class RoleCreateView(StoreScopedPermissionMixin, CreateView):
         return redirect("role_permission:role_detail", role_id=str(role.id))
 
 
-class RoleUpdateView(StoreScopedPermissionMixin, UpdateView):
+class RoleUpdateView(SubscriptionRequiredMixin, UpdateView):
     """Edit an existing role."""
 
     template_name = "role_permission/roles/role_form.html"
@@ -323,7 +324,7 @@ class RoleUpdateView(StoreScopedPermissionMixin, UpdateView):
         return redirect("role_permission:role_detail", role_id=str(role.id))
 
 
-class RoleDeleteView(StoreScopedPermissionMixin, View):
+class RoleDeleteView(SubscriptionRequiredMixin, View):
     """POST-only delete endpoint."""
 
     required_permission = PERM_ROLES_MANAGE
@@ -459,7 +460,7 @@ class MemberListView(StoreScopedPermissionMixin, ListView):
         return ctx
 
 
-class MemberAddView(StoreScopedPermissionMixin, View):
+class MemberAddView(SubscriptionRequiredMixin, View):
     """Add a new member to the current store."""
 
     required_permission = PERM_MEMBERS_MANAGE
@@ -731,7 +732,7 @@ class OverrideListView(StoreScopedPermissionMixin, ListView):
         return ctx
 
 
-class OverrideCreateView(StoreScopedPermissionMixin, CreateView):
+class OverrideCreateView(SubscriptionRequiredMixin, CreateView):
     """Create a new per-user override."""
 
     template_name = "role_permission/overrides/override_form.html"
@@ -772,7 +773,7 @@ class OverrideCreateView(StoreScopedPermissionMixin, CreateView):
         return redirect("role_permission:override_list")
 
 
-class OverrideUpdateView(StoreScopedPermissionMixin, UpdateView):
+class OverrideUpdateView(SubscriptionRequiredMixin, UpdateView):
     """Edit an existing override."""
 
     template_name = "role_permission/overrides/override_form.html"
@@ -808,7 +809,7 @@ class OverrideUpdateView(StoreScopedPermissionMixin, UpdateView):
         return redirect("role_permission:override_list")
 
 
-class OverrideDeleteView(StoreScopedPermissionMixin, View):
+class OverrideDeleteView(SubscriptionRequiredMixin, View):
     """Remove a per-user override (POST-only)."""
 
     required_permission = PERM_PERMISSIONS_OVERRIDE

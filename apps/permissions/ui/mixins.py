@@ -15,7 +15,10 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 
 from apps.permissions.models import StoreMembership
-from apps.permissions.services import user_has_permission
+from apps.permissions.services import (
+    store_has_active_subscription,
+    user_has_permission,
+)
 from apps.stores.models import Store
 
 
@@ -96,6 +99,107 @@ class StoreScopedPermissionMixin(DashboardAccessMixin):
         )
 
 
+class SubscriptionRequiredMixin(StoreScopedPermissionMixin):
+    """
+    Requires an **active** subscription on the current store's tenant.
+
+    Distinct from ``StoreScopedPermissionMixin``: RBAC controls *who* can
+    act within a subscription (e.g. only store-admins can invite); this
+    mixin controls *whether* a subscription is even active. A canceled
+    sub (status='canceled' / 'expired' / 'past_due', or no row at all)
+    must block all write paths — inviting members, creating roles, and
+    creating user overrides all inflate tenant state that the
+    subsequent re-subscribe would inherit, producing a free-form bypass
+    of seat caps and plan limits. Read paths are unaffected: the user
+    can still browse stores, members, and roles.
+
+    Superusers bypass (they're configuring the platform, not a single
+    tenant). When the user lacks an active subscription, the mixin
+    sends them to the renewal page (set ``no_subscription_redirect_url``
+    on the subclass) with a friendly flash, instead of a bare 403.
+    Default redirect target is ``subscriptions:plans?upgrade=1``.
+
+    Usage::
+
+        class RoleCreateView(SubscriptionRequiredMixin, CreateView):
+            required_permission = PERM_ROLES_MANAGE
+            ...
+
+    For non-class-based views (e.g. function views in
+    ``apps.settings.views``), use the standalone helper
+    ``assert_active_subscription`` in ``apps.permissions.services``.
+    """
+
+    no_subscription_redirect_url: str | None = "subscriptions:plans?upgrade=1"
+
+    def test_func(self) -> bool:
+        if not super().test_func():
+            return False
+        if self.request.user.is_superuser:
+            return True
+        store = self.get_current_store()
+        if store is None:
+            return False
+        return store_has_active_subscription(store)
+
+    def get_no_subscription_redirect(self) -> str | None:
+        """Where to send the user when their subscription is inactive.
+
+        Returns the value of ``no_subscription_redirect_url`` by
+        default — a URL name or path, optionally with a query string.
+        Subclasses can override to send the user elsewhere. Returning
+        ``None`` keeps the standard ``PermissionDenied`` page.
+        """
+        from django.urls import reverse, reverse_lazy
+
+        url = self.no_subscription_redirect_url
+        if url is None:
+            return None
+        # Resolve URL-name → URL path, preserving any `?…` suffix.
+        # ``reverse_lazy`` doesn't accept query strings.
+        if "?" in url and not url.startswith("/") and "://" not in url:
+            name, _, qs = url.partition("?")
+            return f"{reverse(name)}?{qs}"
+        if url.startswith("/") or "://" in url:
+            return url
+        return reverse_lazy(url)
+
+    def handle_no_permission(self):
+        # The Django auth mixins default ``handle_no_permission`` raises
+        # ``PermissionDenied`` for authenticated users and redirects to
+        # LOGIN_URL for unauthenticated users. We need finer control:
+        #
+        # * Unauthenticated → defer to the parent (login redirect).
+        # * Authenticated + no subscription → redirect to the renewal
+        #   page with a warning flash, *before* the parent raises a
+        #   bare 403 page.
+        # * Authenticated + RBAC denial (but subscription is fine) →
+        #   defer to the parent (PermissionDenied / 403).
+        # * Authenticated + no subscription but no redirect target
+        #   configured → defer to the parent (PermissionDenied / 403).
+        if (
+            self.request.user.is_authenticated
+            and self.get_no_subscription_redirect() is not None
+        ):
+            # Run the parent's test_func to figure out *why* we got here.
+            # We re-run (rather than caching the prior failure) because
+            # ``super().handle_no_permission`` doesn't tell us which check
+            # failed — it just raises.
+            from django.contrib import messages
+            from django.shortcuts import redirect
+
+            # Re-evaluate test_func to confirm subscription is the cause.
+            # If test_func passes now (race), let parent decide.
+            if not self.test_func():
+                messages.warning(
+                    self.request,
+                    "Your subscription is no longer active. "
+                    "Renew or pick a new plan to continue.",
+                )
+                return redirect(self.get_no_subscription_redirect())
+        return super().handle_no_permission()
+
+
 class SuperuserOnlyMixin(DashboardAccessMixin):
     """Restricts access to Django superusers only."""
 
@@ -115,7 +219,7 @@ def get_user_stores_for_admin(user):
     Stores a user can administer roles for.
 
     - Superusers: all non-deleted stores.
-    - Store admins: only stores they hold an active membership in.
+    - Store admins: only stores they hold an active membership for.
     """
     if user.is_superuser:
         return Store.objects.filter(is_deleted=False).order_by("name")

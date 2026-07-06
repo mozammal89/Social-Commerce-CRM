@@ -112,8 +112,29 @@ def create_role(
 
     - If ``store`` is None, a system role is created (superuser only).
     - Otherwise a custom store-scoped role is created.
+
+    Defense-in-depth: even if a future caller skips the view-level
+    ``SubscriptionRequiredMixin``, store-scoped role creation requires
+    an active subscription. A canceled user must not be able to stage
+    a role hierarchy on a tenant that doesn't correspond to any plan
+    they're paying for.
     """
     _require_role_manage(actor, store)
+
+    # Active-subscription guard for store-scoped roles. Skipped for
+    # system roles (``store is None``) since those are platform-wide
+    # and only superusers can create them. Checked *before* the
+    # is_system superuser guard above so that a canceled store owner
+    # always gets the clearer "subscription" error rather than the
+    # RBAC one.
+    if store is not None and not getattr(actor, "is_superuser", False):
+        from apps.permissions.services import store_has_active_subscription
+
+        if not store_has_active_subscription(store):
+            raise PermissionError(
+                "Cannot create roles while your subscription is inactive. "
+                "Renew or pick a new plan to continue."
+            )
 
     if is_system and not actor.is_superuser:
         raise PermissionError("Only superusers can create system roles.")
@@ -162,6 +183,18 @@ def update_role(
     if role.is_system and not actor.is_superuser:
         raise PermissionError("System roles cannot be modified by non-superusers.")
 
+    # Active-subscription guard for store-scoped roles — see
+    # ``create_role`` for rationale. Skipped for system roles
+    # (``role.store is None``) which only superusers can touch.
+    if role.store is not None and not getattr(actor, "is_superuser", False):
+        from apps.permissions.services import store_has_active_subscription
+
+        if not store_has_active_subscription(role.store):
+            raise PermissionError(
+                "Cannot edit roles while your subscription is inactive. "
+                "Renew or pick a new plan to continue."
+            )
+
     before = _serialize_role(role)
     with transaction.atomic():
         if name is not None:
@@ -199,6 +232,16 @@ def delete_role(*, actor, role: Role, request=None) -> None:
 
     if role.is_system and not actor.is_superuser:
         raise PermissionError("System roles cannot be deleted.")
+
+    # Active-subscription guard — see ``create_role`` for rationale.
+    if role.store is not None and not getattr(actor, "is_superuser", False):
+        from apps.permissions.services import store_has_active_subscription
+
+        if not store_has_active_subscription(role.store):
+            raise PermissionError(
+                "Cannot delete roles while your subscription is inactive. "
+                "Renew or pick a new plan to continue."
+            )
 
     active_members = StoreMembership.objects.filter(role=role, is_active=True).exists()
 
@@ -401,6 +444,23 @@ def add_member(
     """Add a user to a store with a given role (idempotent on user+store+role)."""
     _require_members_manage(actor, store)
 
+    # Active-subscription guard. The view-level mixin and the
+    # ``invite_member`` function-view both already enforce this, but a
+    # missing subscription means ``enforce_reserved_seat_cap`` (called
+    # below) silently fails open — the seat-cap falls back to allowing
+    # the write because ``check_plan_limits`` returns empty usage for
+    # canceled subs. That bypass would let a canceled user pre-invite
+    # hundreds of members, then re-subscribe to Starter (max_users=3)
+    # and evade the cap. Defense in depth: reject the write here too.
+    if not getattr(actor, "is_superuser", False):
+        from apps.permissions.services import store_has_active_subscription
+
+        if not store_has_active_subscription(store):
+            raise PermissionError(
+                "Cannot add members while your subscription is inactive. "
+                "Renew or pick a new plan to continue."
+            )
+
     if role.store_id is not None and role.store_id != store.id:
         raise ValueError("Role does not belong to this store.")
 
@@ -581,6 +641,16 @@ def reactivate_member(
     """
     _require_members_manage(actor, membership.store)
 
+    # Active-subscription guard — see ``add_member`` for rationale.
+    if not getattr(actor, "is_superuser", False):
+        from apps.permissions.services import store_has_active_subscription
+
+        if not store_has_active_subscription(membership.store):
+            raise PermissionError(
+                "Cannot reactivate members while your subscription is "
+                "inactive. Renew or pick a new plan to continue."
+            )
+
     # Idempotent: reactivating an already-active membership is a no-op.
     if membership.is_active:
         return membership
@@ -640,6 +710,17 @@ def set_user_override(
             raise PermissionError("Only superusers can set cross-store overrides.")
         if not user_has_permission(actor, store, PERM_OVERRIDE_GRANT):
             raise PermissionError("You don't have permission to grant overrides in this store.")
+
+    # Active-subscription guard for store-scoped overrides — see
+    # ``create_role`` for rationale.
+    if store is not None and not getattr(actor, "is_superuser", False):
+        from apps.permissions.services import store_has_active_subscription
+
+        if not store_has_active_subscription(store):
+            raise PermissionError(
+                "Cannot modify user overrides while your subscription is "
+                "inactive. Renew or pick a new plan to continue."
+            )
 
     with transaction.atomic():
         override, created = UserPermissionOverride.objects.update_or_create(
@@ -737,6 +818,17 @@ def clear_user_override(
     if not actor.is_superuser and override.store_id:
         if not user_has_permission(actor, override.store, PERM_OVERRIDE_GRANT):
             raise PermissionError("Cannot clear override in this store.")
+
+    # Active-subscription guard — see ``set_user_override`` for
+    # rationale.
+    if override.store_id and not getattr(actor, "is_superuser", False):
+        from apps.permissions.services import store_has_active_subscription
+
+        if not store_has_active_subscription(override.store):
+            raise PermissionError(
+                "Cannot clear user overrides while your subscription is "
+                "inactive. Renew or pick a new plan to continue."
+            )
 
     with transaction.atomic():
         before = {

@@ -123,6 +123,57 @@ def assert_within_plan_limit(store, limit_attr: str, current_value: int) -> None
         raise PlanLimitExceeded(limit_attr, current_value, cap)
 
 
+def store_has_active_subscription(store) -> bool:
+    """True when ``store`` has a live subscription via its tenant.
+
+    Centralized so the CBV mixin (``SubscriptionRequiredMixin``) and
+    the function-view helper (``assert_active_subscription``) share
+    the same check. Reads through the tenant-aware resolver
+    (``get_active_subscription``) so a store whose subscription was
+    promoted to its tenant still returns True.
+
+    A scheduled cancel (``status='active' + ends_at=future``) is
+    considered active — the user keeps full access until the period
+    ends. Truly terminal states (``canceled`` / ``expired`` /
+    ``past_due``) and the no-row case return False.
+    """
+    from apps.subscriptions.services import get_active_subscription
+
+    sub = get_active_subscription(store)
+    return sub is not None and sub.is_active()
+
+
+def assert_active_subscription(user, store) -> None:
+    """Function-view equivalent of ``SubscriptionRequiredMixin``.
+
+    Use in function-based views that mutate tenant state — invite
+    member, change role, etc. Raises ``PermissionDenied`` when the
+    caller is not a superuser and the store has no live
+    subscription. Returns silently for superusers so they can keep
+    administrating.
+
+    Example::
+
+        @login_required
+        @current_store
+        def invite_member(request, store_id):
+            assert_active_subscription(request.user, request.store)
+            ...
+
+    Imported here (rather than in the mixins module) to avoid the
+    circular import between ``apps.permissions.ui`` and
+    ``apps.permissions.services``.
+    """
+    from django.core.exceptions import PermissionDenied
+
+    if getattr(user, "is_superuser", False):
+        return
+    if store is None:
+        raise PermissionDenied
+    if not store_has_active_subscription(store):
+        raise PermissionDenied
+
+
 def plan_limit(store, limit_attr: str) -> int | None:
     """Return the numeric cap, or None if no active subscription.
 
