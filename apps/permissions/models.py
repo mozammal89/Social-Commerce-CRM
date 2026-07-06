@@ -545,6 +545,13 @@ class Subscription(UUIDModel, TimeStampedModel):
     stripe_customer_id = models.CharField(max_length=64, blank=True)
     stripe_subscription_id = models.CharField(max_length=64, blank=True)
 
+    # Arbitrary JSON storage used by service-layer flows that need to
+    # record transient state on the subscription (e.g. a scheduled
+    # downgrade that hasn't taken effect yet, pending metadata for the
+    # Stripe sync, etc). Default empty dict so callers don't have to
+    # special-case the unset state.
+    metadata = models.JSONField(default=dict, blank=True)
+
     class Meta:
         indexes = [
             models.Index(fields=["status"]),

@@ -849,6 +849,13 @@ def update_subscription_plan(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
     except Exception as e:
+        # Re-raise RBAC exceptions (notably ``DowngradeOverCapacity``) so
+        # DRF's ``EXCEPTION_HANDLER`` can produce the structured 400
+        # response. Catching them here would mask the structured payload
+        # and degrade the user-facing modal to a generic 500.
+        from apps.permissions.exceptions import RBACError
+        if isinstance(e, RBACError):
+            raise
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

@@ -343,12 +343,83 @@
     }
 
     function notify(message, level) {
+        // ``showNotification`` expects Bootstrap alert classes
+        // (danger / warning / success / info) — not the more common
+        // shorthand "error" — so map our level before delegating.
+        const bsLevel = level === 'error' ? 'danger' : level;
         if (typeof window.notify === 'function') {
-            window.notify(message, level);
+            window.notify(message, bsLevel);
         } else if (typeof window.showNotification === 'function') {
-            window.showNotification(message, level);
+            window.showNotification(message, bsLevel);
         } else {
             console[level === 'error' ? 'error' : 'log'](message);
+        }
+    }
+
+    /**
+     * Show a structured alert modal when the server refuses a downgrade
+     * because the user's current usage exceeds the new plan's caps.
+     * Lists the surplus stores and members so the user knows exactly
+     * which rows to delete / soft-deactivate before retrying.
+     *
+     * As a defensive fallback, also fires a top-right toast (via
+     * ``window.notify``) so the user sees *some* feedback even if the
+     * modal helper fails to render (e.g. Bootstrap not loaded, modal
+     * element missing, race condition with another open modal, etc.).
+     */
+    function showDowngradeBlockedAlert(data) {
+        // Always log to console for DevTools debugging.
+        console.warn('[plan] downgrade blocked by server:', data);
+
+        const limits = data.limits || {};
+        const stores = data.stores || [];
+        const users = data.users || [];
+        const summary = (
+            `Cannot downgrade to ${data.new_plan_slug}: ` +
+            `${stores.length} surplus store(s) and ${users.length} ` +
+            `surplus member(s) exceed the plan's caps.`
+        );
+
+        // 1) Toast fallback — always fires, regardless of modal state.
+        notify(summary, 'error');
+
+        // 2) Modal — gives the user a structured view of the surplus rows.
+        if (typeof window.confirmAction !== 'function' ||
+            typeof window.confirmAction.alert !== 'function') {
+            console.warn('[plan] confirmAction.alert not available; toast only.');
+            return;
+        }
+        const message = (
+            `The ${data.new_plan_slug} plan allows ${limits.max_stores || 0} ` +
+            `store(s) and ${limits.max_users || 0} seat(s). You currently ` +
+            `have ${stores.length} surplus store(s) and ${users.length} ` +
+            `surplus member(s). Delete or deactivate them, then try again.`
+        );
+        const items = [];
+        if (stores.length) {
+            items.push({
+                label: 'Surplus stores to delete:',
+                entries: stores.map(function (s) { return { name: s.name }; }),
+            });
+        }
+        if (users.length) {
+            items.push({
+                label: 'Surplus members to deactivate:',
+                entries: users.map(function (u) {
+                    return { email: `${u.email} (in ${u.store_name})` };
+                }),
+            });
+        }
+        try {
+            window.confirmAction.alert({
+                title: 'Cannot downgrade yet',
+                message: message,
+                items: items,
+                confirmText: 'Got it',
+                confirmClass: 'btn-primary',
+            });
+        } catch (err) {
+            console.error('[plan] confirmAction.alert threw:', err);
         }
     }
 
@@ -372,6 +443,14 @@
             const data = await response.json().catch(() => ({}));
 
             if (!response.ok) {
+                // Server refused because the user's current usage
+                // exceeds the new plan's caps. Show a structured
+                // modal that lists the surplus rows so the user can
+                // resolve the situation manually.
+                if (data && data.error === 'downgrade_over_capacity') {
+                    showDowngradeBlockedAlert(data);
+                    return;
+                }
                 notify((data && data.error) || data.detail || 'Plan change failed.', 'error');
                 return;
             }

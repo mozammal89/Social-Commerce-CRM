@@ -1001,6 +1001,35 @@ def downgrade_subscription(
         )
     else:
         # Immediate downgrade
+        # ------------------------------------------------------------
+        # Refuse the downgrade if the user's current usage exceeds the
+        # new plan's caps. We never auto-prune rows — the user is
+        # returned a structured error listing exactly which stores and
+        # memberships are blocking the change, so they can delete /
+        # soft-deactivate them and retry. The scheduled (period-end)
+        # branch above is not affected: the user has time to clean up
+        # before the change takes effect.
+        # ------------------------------------------------------------
+        from apps.permissions.services import compute_downgrade_impact
+        from apps.permissions.exceptions import DowngradeOverCapacity
+
+        if subscription.tenant_id is not None:
+            impact_scope = subscription.tenant
+        elif subscription.store_id is not None:
+            impact_scope = subscription.store
+        else:
+            impact_scope = None
+
+        if impact_scope is not None:
+            impact = compute_downgrade_impact(impact_scope, new_plan)
+            if impact["stores"] or impact["users"]:
+                raise DowngradeOverCapacity(
+                    stores=impact["stores"],
+                    users=impact["users"],
+                    limits=impact["limits"],
+                    new_plan_slug=new_plan.slug,
+                )
+
         subscription.plan = new_plan
         subscription.save(update_fields=["plan", "updated_at"])
 

@@ -16,7 +16,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
-from .exceptions import PlanLimitExceeded
+from .exceptions import DowngradeOverCapacity, PlanLimitExceeded
 
 
 def rbac_exception_handler(exc, context):
@@ -43,6 +43,25 @@ def rbac_exception_handler(exc, context):
                 "cap": exc.cap,
             },
             status=status.HTTP_403_FORBIDDEN,
+        )
+
+    # Downgrade would leave the user over the new plan's caps.
+    # Return a 400 with the structured impact so the frontend can
+    # show the user exactly which rows to delete / soft-deactivate
+    # before retrying. 400 (not 403) because the request is
+    # well-formed but the *requested transition* is not allowed
+    # given current state.
+    if isinstance(exc, DowngradeOverCapacity):
+        return Response(
+            {
+                "error": "downgrade_over_capacity",
+                "detail": str(exc),
+                "new_plan_slug": exc.new_plan_slug,
+                "limits": exc.limits,
+                "stores": exc.stores,
+                "users": exc.users,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     response = exception_handler(exc, context)

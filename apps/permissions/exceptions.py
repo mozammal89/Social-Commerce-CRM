@@ -49,3 +49,31 @@ class AuditLogImmutable(RBACError):
 
     def __init__(self) -> None:
         super().__init__("AuditLog is append-only and cannot be modified or deleted.")
+
+
+class DowngradeOverCapacity(RBACError):
+    """Raised when a plan downgrade would leave usage above the new plan's caps.
+
+    The frontend uses the structured ``stores`` and ``users`` lists to
+    show the user exactly which rows are blocking the downgrade, so
+    they can delete / soft-deactivate them and retry. The user is
+    never silently dropped to a lower-resource plan; data is never
+    auto-pruned.
+    """
+
+    def __init__(
+        self,
+        *,
+        stores: list,
+        users: list,
+        limits: dict,
+        new_plan_slug: str,
+    ) -> None:
+        self.stores = stores        # [{"id": uuid, "name": str}, ...]
+        self.users = users          # [{"id": uuid, "email": str, ...}, ...]
+        self.limits = limits        # {"max_stores": 1, "max_users": 3, ...}
+        self.new_plan_slug = new_plan_slug
+        super().__init__(
+            f"Downgrade blocked: {len(stores)} store(s) and {len(users)} "
+            f"member(s) exceed the {new_plan_slug} plan's caps."
+        )

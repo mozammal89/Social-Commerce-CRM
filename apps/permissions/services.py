@@ -178,3 +178,129 @@ def active_memberships(store) -> "models.QuerySet[StoreMembership]":
     if store is not None:
         qs = qs.filter(store=store)
     return qs
+
+
+# ---------------------------------------------------------------------------
+# Downgrade impact (used by change_plan to refuse over-cap downgrades)
+# ---------------------------------------------------------------------------
+def compute_downgrade_impact(scope, new_plan) -> dict:
+    """Return the surplus rows that would block a downgrade to ``new_plan``.
+
+    ``scope`` is either a ``Tenant`` (current architecture) or a
+    ``Store`` (legacy single-store subscription). For a Tenant we look
+    at every non-deleted store under the tenant; for a Store we look
+    only at that one store.
+
+    Returns a dict::
+
+        {
+            "stores":  [{"id": uuid, "name": str}, ...],
+            "users":   [{"id": uuid, "email": str,
+                         "store_id": uuid, "store_name": str}, ...],
+            "limits":  {"max_stores": int, "max_users": int, ...},
+        }
+
+    Conventions (mirroring ``check_plan_limits`` at
+    ``apps/subscriptions/services.py:1177-1191``):
+
+    * **Stores** are returned *newest-first* — the UI shows them as the
+      ones to consider deleting first (most recently created, typically
+      the lower-value ones).
+    * **Users** are returned *oldest-first* — soft-deactivate the
+      most-tenured non-owner memberships first. This matches the
+      "oldest first" semantics used by ``enforce_reserved_seat_cap`` and
+      is the most defensive default.
+    * **Owners are excluded** from the user count and from the surplus
+      list. The store-owner role is identified the same way
+      ``check_plan_limits`` identifies it: by user_id of every active
+      store-owner membership. (For tenant scope we use the
+      tenant's owner field; for store scope we use the active
+      store-owner memberships of that one store.)
+    * **Reserved seats count** — like ``check_plan_limits``, this
+      counts *all* non-owner memberships (active + deactivated) because
+      a deactivated row still occupies its seat. So if the user has
+      deactivated memberships, those still block the downgrade — they
+      must be hard-deleted (or the user upgraded to a higher plan) for
+      the downgrade to succeed.
+
+    Used by ``apps.subscriptions.services.downgrade_subscription`` to
+    raise ``DowngradeOverCapacity`` with the structured payload, which
+    the global exception handler turns into a 400 response carrying
+    these lists.
+    """
+    from .models import Role, StoreMembership
+    from apps.stores.models import Store
+
+    max_stores = new_plan.max_stores or 0
+    max_users = new_plan.max_users or 0
+
+    # ------------------------------------------------------------------
+    # 1) Stores in scope
+    # ------------------------------------------------------------------
+    if hasattr(scope, "stores"):  # Tenant
+        all_stores = list(
+            Store.objects.filter(tenant=scope, is_deleted=False).order_by("-created_at")
+        )
+    else:  # single Store
+        all_stores = [scope] if not getattr(scope, "is_deleted", False) else []
+
+    # Surplus stores = everything beyond max_stores, newest-first.
+    surplus_stores = all_stores[max_stores:] if max_stores else list(all_stores)
+
+    # ------------------------------------------------------------------
+    # 2) Owner user_ids (excluded from the user count)
+    # ------------------------------------------------------------------
+    if hasattr(scope, "owner") and scope.owner_id:  # Tenant has `.owner`
+        owner_ids = {scope.owner_id}
+    else:
+        owner_role = Role.objects.filter(slug="store-owner", store__isnull=True).first()
+        if owner_role:
+            owner_ids = set(
+                StoreMembership.objects.filter(
+                    role=owner_role, is_active=True,
+                ).values_list("user_id", flat=True)
+            )
+        else:
+            owner_ids = set()
+
+    # ------------------------------------------------------------------
+    # 3) Reserved (active + inactive) non-owner memberships in scope
+    # ------------------------------------------------------------------
+    in_scope_memberships = (
+        StoreMembership.objects
+        .filter(store__in=all_stores)
+        .exclude(user_id__in=owner_ids)
+        .select_related("user", "store")
+    )
+    # ``check_plan_limits`` semantics: reserved = all rows, not just active.
+    # Order newest-first so the *last* ``max_users`` of the list — i.e.
+    # the slice below — contains the OLDEST, most-tenured memberships:
+    # those are the ones the user is asked to soft-deactivate first.
+    surplus_memberships = list(
+        in_scope_memberships.order_by("-joined_at")[max_users:]
+        if max_users
+        else in_scope_memberships
+    )
+
+    return {
+        "stores": [
+            {"id": str(s.id), "name": s.name}
+            for s in surplus_stores
+        ],
+        "users": [
+            {
+                "id": str(m.user_id),
+                "email": m.user.email,
+                "store_id": str(m.store_id),
+                "store_name": m.store.name,
+            }
+            for m in surplus_memberships
+        ],
+        "limits": {
+            "max_stores": new_plan.max_stores,
+            "max_users": new_plan.max_users,
+            "max_products": new_plan.max_products,
+            "max_orders_per_month": new_plan.max_orders_per_month,
+            "max_warehouses": new_plan.max_warehouses,
+        },
+    }

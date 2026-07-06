@@ -176,6 +176,47 @@
             errorEl.id = "appConfirmModalError";
             errorEl.className = "text-danger small mt-1 d-none";
             newBody.appendChild(errorEl);
+        } else if (options.isAlert) {
+            // Alert variant: optional message + structured items list.
+            // Used for "you have over-cap usage" flows where the user
+            // needs to see exactly which rows are blocking an action.
+            if (options.message) {
+                var msgEl = document.createElement("p");
+                msgEl.className = "mb-3";
+                msgEl.textContent = options.message;
+                newBody.appendChild(msgEl);
+            }
+            if (options.items && options.items.length) {
+                var listEl = document.createElement("ul");
+                listEl.className = "list-unstyled mb-0";
+                options.items.forEach(function (group) {
+                    if (!group || !group.entries || !group.entries.length) return;
+                    var groupEl = document.createElement("li");
+                    groupEl.className = "mb-2";
+                    var labelEl = document.createElement("div");
+                    labelEl.className = "small text-muted mb-1 fw-semibold";
+                    labelEl.textContent = group.label;
+                    groupEl.appendChild(labelEl);
+                    var ul = document.createElement("ul");
+                    ul.className = "mb-0 ps-3";
+                    group.entries.slice(0, 10).forEach(function (entry) {
+                        var li = document.createElement("li");
+                        li.className = "small";
+                        // Use textContent to avoid XSS from server-side data.
+                        li.textContent = entry.label || entry.email || entry.name || String(entry);
+                        ul.appendChild(li);
+                    });
+                    if (group.entries.length > 10) {
+                        var more = document.createElement("li");
+                        more.className = "small text-muted";
+                        more.textContent = "… and " + (group.entries.length - 10) + " more";
+                        ul.appendChild(more);
+                    }
+                    groupEl.appendChild(ul);
+                    listEl.appendChild(groupEl);
+                });
+                newBody.appendChild(listEl);
+            }
         } else if (options.message) {
             var msgEl = document.createElement("p");
             msgEl.className = "mb-0";
@@ -189,6 +230,13 @@
         cancelBtn.textContent = options.cancelText || "Cancel";
         oldConfirmBtn.textContent = options.confirmText || "Confirm";
         oldConfirmBtn.className = "btn " + (options.confirmClass || "btn-primary");
+
+        // Alert variant: hide the cancel button (single dismiss action).
+        if (options.isAlert) {
+            cancelBtn.classList.add("d-none");
+        } else {
+            cancelBtn.classList.remove("d-none");
+        }
 
         // Clone the confirm button to drop any stale click handler.
         var confirmBtn = oldConfirmBtn.cloneNode(true);
@@ -267,12 +315,23 @@
     window.confirmAction = function (options) {
         options = options || {};
         options.isPrompt = false;
+        options.isAlert = false;
         return showDialog(options);
     };
     window.confirmAction.prompt = function (options) {
         options = options || {};
         options.isPrompt = true;
+        options.isAlert = false;
         return showDialog(options);
+    };
+    window.confirmAction.alert = function (options) {
+        options = options || {};
+        options.isPrompt = false;
+        options.isAlert = true;
+        // Resolves to ``true`` when the user dismisses — alerts are
+        // single-action modals with no cancel path. Matches the
+        // semantic of native ``window.alert``.
+        return showDialog(options).then(function () { return true; });
     };
 })();
 </script>
