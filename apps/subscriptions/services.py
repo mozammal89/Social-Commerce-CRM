@@ -948,7 +948,39 @@ def cancel_subscription(
         The updated Subscription instance
     """
     if cancel_at_period_end and subscription.status == STATUS_ACTIVE:
-        subscription.ends_at = subscription.current_period_end
+        # Resolve ``ends_at`` from ``current_period_end`` — but fall
+        # back to a sensible default when the row has no
+        # ``current_period_end`` set (legacy data, sub created before
+        # the billing-period fields were required, or rows that were
+        # imported without them). Without this fallback, ``ends_at``
+        # would be ``None`` and ``Subscription.is_cancel_scheduled()``
+        # would return False — the cancel API would return success
+        # but the manage-page banner and Reactivate button would never
+        # appear, leaving the user stuck with a Cancel button that's
+        # still clickable and no visible state change after reload.
+        #
+        # The fallback mirrors ``renew_subscription`` and
+        # ``create_paid_subscription``: ``now + 30 days`` is the
+        # default billing period used everywhere else in this module.
+        if subscription.current_period_end:
+            subscription.ends_at = subscription.current_period_end
+        else:
+            anchor = (
+                subscription.current_period_start
+                or subscription.starts_at
+                or timezone.now()
+            )
+            # If ``current_period_end`` was supposed to be 30 days
+            # after the anchor (the default) and is in the past,
+            # default to ``now + 30 days`` so the cancel banner
+            # displays a meaningful future date. If the anchor is in
+            # the future (e.g. a brand-new sub whose period hasn't
+            # started yet), use ``anchor + 30 days`` so the cancel
+            # date aligns with the rest of the period.
+            fallback_end = anchor + timedelta(days=30)
+            if fallback_end <= timezone.now():
+                fallback_end = timezone.now() + timedelta(days=30)
+            subscription.ends_at = fallback_end
         subscription.save(update_fields=["ends_at", "updated_at"])
 
         record_event(
@@ -961,6 +993,28 @@ def cancel_subscription(
         logger.info(f"Scheduled cancellation for subscription {subscription.id} at period end")
     else:
         transition_status(subscription, STATUS_CANCELED, actor=actor, reason=reason)
+
+    # Evict the cached subscription slot(s) so the next read picks up
+    # the updated ``ends_at`` (or ``status`` for immediate cancels).
+    # Without this, downstream callers that use ``get_active_subscription``
+    # — the dashboard's plan display, the team-management
+    # ``/filter`` endpoint, ``plan_limit`` lookups, etc. — would see a
+    # stale cached row with the pre-cancel ``ends_at=None`` /
+    # ``status='active'``, defeating the cancel. Mirrors the
+    # cache-eviction pattern in ``change_plan`` (services.py:341-351),
+    # ``reactivate_subscription`` (services.py:1017-1031), and
+    # ``renew_subscription`` (services.py:1130-1139).
+    keys_to_evict: list[str] = []
+    if subscription.tenant_id:
+        keys_to_evict.append(
+            f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.tenant_id}"
+        )
+    if subscription.store_id:
+        keys_to_evict.append(
+            f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.store_id}"
+        )
+    if keys_to_evict:
+        cache.delete_many(keys_to_evict)
 
     return subscription
 

@@ -586,6 +586,7 @@
                 body,
             });
             const data = await response.json().catch(() => ({}));
+            console.log('Cancel response:', data);
             if (!response.ok) {
                 notify((data && data.error) || data.detail || 'Cancel failed.', 'error');
                 return;

@@ -168,6 +168,191 @@ class TestCancelSubscription:
         sub.refresh_from_db()
         assert sub.is_cancel_scheduled() is True
 
+    def test_scheduled_evicts_subscription_cache(
+        self, tenant_with_growth_sub, user,
+    ):
+        """``cancel_subscription`` must evict the per-tenant and per-store
+        subscription cache keys so the next ``get_active_subscription``
+        call picks up the freshly-set ``ends_at``. Without this,
+        downstream views (dashboard's plan display, team-management
+        ``/filter``, ``plan_limit`` lookups) would keep reading the
+        pre-cancel row with ``ends_at=None`` — silently undoing the
+        cancel for any caller that reads through the cache.
+
+        Regression test for the user-reported "Cancel Subscription
+        toast shows but page state doesn't change" symptom: the cancel
+        API succeeded, but the cache was poisoned with the stale row.
+        """
+        from django.core.cache import cache
+
+        from apps.subscriptions.services import (
+            CACHE_SUBSCRIPTION_PREFIX,
+            get_active_subscription,
+        )
+
+        sub = tenant_with_growth_sub
+        sub.refresh_from_db()
+        tenant = sub.tenant
+        # The fixture only sets ``tenant``; legacy store-based rows
+        # use ``subscription.store_id`` — set both paths.
+        store_id = sub.store_id
+
+        # Prime both cache slots with the pre-cancel row.
+        if tenant:
+            cache.set(
+                f"{CACHE_SUBSCRIPTION_PREFIX}{tenant.id}",
+                sub,
+                60,
+            )
+        if store_id:
+            cache.set(
+                f"{CACHE_SUBSCRIPTION_PREFIX}{store_id}",
+                sub,
+                60,
+            )
+
+        cancel_subscription(sub, cancel_at_period_end=True, actor=user)
+        sub.refresh_from_db()
+
+        # Both cache slots must be evicted.
+        if tenant:
+            assert (
+                cache.get(f"{CACHE_SUBSCRIPTION_PREFIX}{tenant.id}") is None
+            ), "Tenant subscription cache should be evicted on cancel"
+        if store_id:
+            assert (
+                cache.get(f"{CACHE_SUBSCRIPTION_PREFIX}{store_id}") is None
+            ), "Store subscription cache should be evicted on cancel"
+
+        # And ``get_active_subscription`` (the function most views use)
+        # must now read the freshly-canceled row.
+        if store_id:
+            from apps.stores.models import Store
+            store = Store.objects.get(id=store_id)
+            fresh = get_active_subscription(store)
+            assert fresh is not None
+            assert fresh.ends_at == sub.ends_at, (
+                "get_active_subscription returned a stale row "
+                f"(cached ends_at={fresh.ends_at!r}, DB ends_at={sub.ends_at!r})"
+            )
+
+    def test_immediate_cancel_also_evicts_cache(
+        self, tenant_with_growth_sub, user,
+    ):
+        """``cancel_at_period_end=False`` also flips status to
+        ``canceled`` — same cache-eviction requirement applies so
+        downstream callers see the terminal state."""
+        from django.core.cache import cache
+
+        from apps.subscriptions.services import (
+            CACHE_SUBSCRIPTION_PREFIX,
+        )
+
+        sub = tenant_with_growth_sub
+        sub.refresh_from_db()
+        tenant = sub.tenant
+
+        if tenant:
+            cache.set(
+                f"{CACHE_SUBSCRIPTION_PREFIX}{tenant.id}",
+                sub,
+                60,
+            )
+
+        cancel_subscription(
+            sub, cancel_at_period_end=False, actor=user,
+        )
+        sub.refresh_from_db()
+        assert sub.status == "canceled"
+
+        if tenant:
+            assert (
+                cache.get(f"{CACHE_SUBSCRIPTION_PREFIX}{tenant.id}") is None
+            ), (
+                "Tenant subscription cache should be evicted on immediate "
+                "cancel too"
+            )
+
+    def test_scheduled_when_current_period_end_is_none(
+        self, tenant_with_growth_sub, user,
+    ):
+        """Regression test for the user-reported bug: cancel returns
+        ``{"ends_at": null}`` when the row has no ``current_period_end``
+        set, leaving ``is_cancel_scheduled()`` False and the
+        Cancellation banner + Reactivate button invisible. The service
+        must fall back to a sensible default period end so the cancel
+        is actually visible.
+
+        Bug repro path:
+          1. User has an active sub with ``current_period_end=None``
+             (legacy / imported / pre-migration data).
+          2. User clicks Cancel Subscription.
+          3. ``cancel_subscription`` sets ``ends_at = current_period_end``
+             which is None.
+          4. API returns 200 ``{ends_at: null}``.
+          5. Toast shows "Subscription cancelled successfully".
+          6. Reload: ``is_cancel_scheduled()`` is False, banner
+             doesn't render, Cancel button stays visible.
+
+        Fix: when ``current_period_end`` is None, fall back to
+        ``current_period_start + 30d`` (or ``starts_at + 30d``, or
+        ``now + 30d``) — whichever anchor produces a meaningful future
+        date.
+        """
+        sub = tenant_with_growth_sub
+        sub.refresh_from_db()
+        # Simulate the legacy / pre-migration data the user has.
+        sub.current_period_end = None
+        sub.current_period_start = None
+        sub.starts_at = timezone.now() - timezone.timedelta(days=5)
+        sub.save()
+
+        cancel_subscription(sub, cancel_at_period_end=True, actor=user)
+        sub.refresh_from_db()
+
+        # The cancel must actually mark the sub as canceling.
+        assert sub.ends_at is not None, (
+            "cancel_subscription left ends_at=None when current_period_end "
+            "was None — the cancel is invisible to is_cancel_scheduled() "
+            "and the banner won't render. API returned 200 but no UI "
+            "feedback."
+        )
+        assert sub.is_cancel_scheduled() is True, (
+            "Even after cancel_subscription, is_cancel_scheduled() is "
+            "False because ends_at is None — manage page shows no "
+            "banner and the user sees no state change after reload."
+        )
+        # The fallback should produce a future date so the banner
+        # shows a meaningful "ends on YYYY-MM-DD" message.
+        assert sub.ends_at > timezone.now(), (
+            f"Fallback ends_at {sub.ends_at!r} should be in the future "
+            f"(now={timezone.now()!r})."
+        )
+
+    def test_scheduled_when_current_period_end_is_in_the_past(
+        self, tenant_with_growth_sub, user,
+    ):
+        """If ``current_period_end`` is in the past (sub lapsed but
+        still marked ``status='active'`` because renewal hasn't
+        run), ``is_cancel_scheduled`` correctly returns False — the
+        period already elapsed, the user no longer has access. The
+        immediate-cancel path (``transition_status``) is the right
+        one in this state, not the period-end fallback.
+        """
+        sub = tenant_with_growth_sub
+        sub.refresh_from_db()
+        sub.current_period_end = timezone.now() - timezone.timedelta(days=1)
+        sub.save()
+
+        cancel_subscription(sub, cancel_at_period_end=True, actor=user)
+        sub.refresh_from_db()
+
+        # The past ``current_period_end`` propagates to ``ends_at``
+        # directly — the user is past their period, so a scheduled
+        # cancel at the past date doesn't make sense.
+        assert sub.ends_at is not None
+        assert sub.ends_at == sub.current_period_end
+
 
 # ---------------------------------------------------------------------------
 # reactivate_subscription — service layer

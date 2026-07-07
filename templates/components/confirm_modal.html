@@ -41,7 +41,7 @@
    It re-uses a single DOM node for every dialog so the document only ever
    has one confirm modal in it, regardless of how many times it's opened.
    --------------------------------------------------------------------------- #} -->
-<div class="modal fade" id="appConfirmModal" tabindex="-1" aria-labelledby="appConfirmModalLabel" aria-hidden="true" data-app-confirm-modal>
+<div class="modal fade" id="appConfirmModal" tabindex="-1" aria-labelledby="appConfirmModalLabel" aria-hidden="true" aria-modal="true" role="dialog" data-app-confirm-modal>
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -101,7 +101,7 @@
     }
 
     /**
-     * Render the body of the modal from the given options and show it.
+     * the body of the modal from the given options and show it.
      *
      * Returns a Promise that resolves to either:
      *   - ``true``/``false`` for confirmAction()
@@ -265,6 +265,7 @@
                 if (settled) return;
                 settled = true;
                 modalEl.removeEventListener("hidden.bs.modal", onHidden);
+                modalEl.removeEventListener("shown.bs.modal", onShown);
                 confirmBtn.removeEventListener("click", onConfirm);
                 if (inputEl) {
                     inputEl.removeEventListener("keydown", onEnter);
@@ -292,6 +293,19 @@
                 } else {
                     settle(true);
                 }
+                // ``onConfirm`` callback — invoked in addition to (and
+                // before) the Promise resolution so legacy callers that
+                // pass ``onConfirm`` (e.g. ``team-management.js``)
+                // still execute their action. The Promise still
+                // resolves so modern callers using ``.then()`` continue
+                // to work.
+                if (typeof options.onConfirm === "function") {
+                    try {
+                        options.onConfirm();
+                    } catch (cbErr) {
+                        console.error("[confirm_modal] onConfirm threw:", cbErr);
+                    }
+                }
                 bsModal.hide();
             }
 
@@ -307,16 +321,18 @@
                 inputEl.addEventListener("keydown", onEnter);
             }
 
-            bsModal.show();
-
-            // Focus the input (or confirm button) once the modal animation finishes.
-            setTimeout(function () {
+            // Defer focus until Bootstrap finishes its show animation.
+            function onShown() {
+                modalEl.removeEventListener("shown.bs.modal", onShown);
                 if (inputEl) {
                     inputEl.focus();
                 } else {
                     confirmBtn.focus();
                 }
-            }, 250);
+            }
+            modalEl.addEventListener("shown.bs.modal", onShown);
+
+            bsModal.show();
         });
     }
 
