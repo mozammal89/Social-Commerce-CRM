@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 @shared_task(name="apps.permissions.tasks.expire_trials")
 def expire_trials() -> int:
     """Move trialing subscriptions whose trial_ends_at < now to expired."""
-    from .models import Subscription
+    from apps.subscriptions.models import Subscription
     from apps.subscriptions.services import transition_status
     from .constants import SUB_TRIALING, SUB_EXPIRED
 
@@ -36,7 +36,7 @@ def expire_trials() -> int:
 @shared_task(name="apps.permissions.tasks.expire_active_periods")
 def expire_active_periods() -> int:
     """Move active subscriptions whose current_period_end < now to expired."""
-    from .models import Subscription
+    from apps.subscriptions.models import Subscription
     from apps.subscriptions.services import transition_status
     from .constants import SUB_ACTIVE, SUB_EXPIRED
 
@@ -61,7 +61,7 @@ def escalate_past_due(grace_days: int = 7) -> int:
     Idempotent: only acts on rows currently past_due.
     """
     from datetime import timedelta
-    from .models import Subscription
+    from apps.subscriptions.models import Subscription
     from apps.subscriptions.services import transition_status
     from .constants import SUB_PAST_DUE, SUB_EXPIRED
 

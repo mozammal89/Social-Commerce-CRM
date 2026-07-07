@@ -45,12 +45,12 @@ from .exceptions import (
     TransitionNotAllowedError,
     TrialExpiredError,
 )
-from apps.permissions.models import (
+from apps.subscriptions.models import (
     Subscription,
     SubscriptionPlan,
     SubscriptionEvent,
-    StoreMembership,
 )
+from apps.permissions.models import StoreMembership
 from apps.stores.models import Store
 
 logger = logging.getLogger(__name__)

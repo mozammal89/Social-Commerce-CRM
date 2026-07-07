@@ -43,7 +43,8 @@ def _resolve_current_store_for_user(request, user):
 from django.utils import timezone
 from django.db import transaction
 
-from apps.permissions.models import SubscriptionPlan, StoreMembership
+from apps.permissions.models import StoreMembership
+from apps.subscriptions.models import SubscriptionPlan
 from apps.stores.models import Store
 from apps.permissions.services import (
     add_member,
@@ -493,7 +494,7 @@ def subscription_welcome(request):
     # Check for pending subscription in User model (persists across sessions)
     if user.pending_plan_slug:
         try:
-            from apps.permissions.models import SubscriptionPlan
+            from apps.subscriptions.models import SubscriptionPlan
 
             pending_plan = SubscriptionPlan.objects.get(slug=user.pending_plan_slug)
             # If not in session, use from User model

@@ -42,7 +42,7 @@ def get_aggregated_limits(request):
     # from the same source of truth) and prevents stale ``pending_plan_slug``
     # markers from leaking through as the displayed plan name.
     from apps.subscriptions.services import resolve_user_subscription
-    from apps.permissions.models import SubscriptionPlan
+    from apps.subscriptions.models import SubscriptionPlan
 
     live_subscription = resolve_user_subscription(user)
     has_real_subscription = (
@@ -68,7 +68,7 @@ def get_aggregated_limits(request):
         # Resolve the plan from the highest-tier live subscription. Prefer
         # the live sub's plan object directly so plan_name/slug always
         # match the live subscription rather than a pending marker.
-        from apps.permissions.models import Subscription
+        from apps.subscriptions.models import Subscription
 
         accessible_store_ids = user_accessible_stores.values_list("id", flat=True)
         all_accessible_subs = (

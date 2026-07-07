@@ -9,7 +9,7 @@ from django.db import transaction
 import logging
 
 from apps.stores.models import Store
-from apps.permissions.models import Subscription
+from apps.subscriptions.models import Subscription
 from apps.accounts.models import Tenant
 
 logger = logging.getLogger(__name__)

@@ -124,7 +124,7 @@ def landing_home(request):
     """
     Landing page with all sections and features.
     """
-    from apps.permissions.models import SubscriptionPlan
+    from apps.subscriptions.models import SubscriptionPlan
 
     # Separate monthly and yearly plans
     monthly_plans = SubscriptionPlan.objects.filter(

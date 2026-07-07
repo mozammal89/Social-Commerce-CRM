@@ -17,7 +17,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.stores.models import Store
-from apps.permissions.models import StoreMembership, Role, SubscriptionPlan, Subscription
+from apps.permissions.models import StoreMembership, Role
+from apps.subscriptions.models import SubscriptionPlan, Subscription
 from apps.subscriptions.services import check_plan_limits, enforce_plan_limit
 from apps.subscriptions.exceptions import PlanLimitExceeded
 from apps.settings.views import get_store_owners, calculate_seat_usage

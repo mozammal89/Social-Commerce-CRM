@@ -34,11 +34,13 @@ from .cache import (
 )
 from .models import (
     Permission,
-    PlanFeature,
     RolePermission,
     StoreMembership,
-    Subscription,
     UserPermissionOverride,
+)
+from apps.subscriptions.models import (
+    PlanFeature,
+    Subscription,
 )
 from .registry import split_code, is_valid_permission_code
 

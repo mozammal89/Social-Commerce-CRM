@@ -7,7 +7,7 @@ Idempotent: running it twice has no effect.
 from __future__ import annotations
 
 from apps.core.seeders.base import BaseSeeder
-from apps.permissions.models import Feature, PlanFeature, SubscriptionPlan
+from apps.subscriptions.models import Feature, PlanFeature, SubscriptionPlan
 
 
 PLAN_MATRIX: list[dict] = [

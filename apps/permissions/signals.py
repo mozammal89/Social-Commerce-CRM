@@ -59,9 +59,11 @@ from .models import (
     Role,
     RolePermission,
     StoreMembership,
+    UserPermissionOverride,
+)
+from apps.subscriptions.models import (
     Subscription,
     SubscriptionPlan,
-    UserPermissionOverride,
 )
 
 logger = logging.getLogger(__name__)
@@ -132,7 +134,7 @@ def _on_plan_change(sender, instance, **kwargs):
     # to avoid transaction issues when querying Subscription table.
     def bump_plan_stores():
         try:
-            from .models import Subscription
+            from apps.subscriptions.models import Subscription
             for sid in Subscription.objects.filter(plan=instance).values_list(
                 "store_id", flat=True
             ):

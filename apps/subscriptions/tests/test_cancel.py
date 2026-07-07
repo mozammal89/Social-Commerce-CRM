@@ -583,7 +583,7 @@ class TestChangePlanReactivatesTerminalStatus:
             cancel_subscription,
             change_plan,
         )
-        from apps.permissions.models import SubscriptionPlan
+        from apps.subscriptions.models import SubscriptionPlan
 
         sub = tenant_with_growth_sub
         # Immediate cancel -> status='canceled', ends_at=None.
@@ -632,7 +632,7 @@ class TestChangePlanReactivatesTerminalStatus:
             cancel_subscription,
             change_plan,
         )
-        from apps.permissions.models import SubscriptionPlan
+        from apps.subscriptions.models import SubscriptionPlan
 
         sub = tenant_with_growth_sub
         cancel_subscription(sub, cancel_at_period_end=False, actor=user)
@@ -662,7 +662,7 @@ class TestChangePlanReactivatesTerminalStatus:
             cancel_subscription,
             change_plan,
         )
-        from apps.permissions.models import SubscriptionPlan
+        from apps.subscriptions.models import SubscriptionPlan
         from django.utils import timezone
 
         sub = tenant_with_growth_sub

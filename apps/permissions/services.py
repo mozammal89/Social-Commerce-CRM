@@ -12,10 +12,12 @@ from typing import Iterable
 
 from .exceptions import PlanLimitExceeded
 from .models import (
-    PlanFeature,
     Role,
     RolePermission,
     StoreMembership,
+)
+from apps.subscriptions.models import (
+    PlanFeature,
     Subscription,
 )
 from .resolver import PermissionResolver

@@ -178,7 +178,7 @@ def _get_user_subscription_context(user):
     if user.pending_plan_slug:
         context["has_pending_subscription"] = True
         try:
-            from apps.permissions.models import SubscriptionPlan
+            from apps.subscriptions.models import SubscriptionPlan
 
             pending_plan = SubscriptionPlan.objects.get(slug=user.pending_plan_slug)
             context["pending_plan"] = pending_plan

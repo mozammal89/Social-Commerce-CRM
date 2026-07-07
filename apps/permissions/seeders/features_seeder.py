@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from apps.core.seeders.base import BaseSeeder
 from apps.permissions.constants import DEFAULT_FEATURES
-from apps.permissions.models import Feature
+from apps.subscriptions.models import Feature
 
 
 class FeaturesSeeder(BaseSeeder):

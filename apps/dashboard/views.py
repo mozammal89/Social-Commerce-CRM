@@ -191,7 +191,7 @@ def dashboard_home(request):
     # If user has pending subscription, get plan details
     if has_pending_subscription and user.pending_plan_slug:
         try:
-            from apps.permissions.models import SubscriptionPlan
+            from apps.subscriptions.models import SubscriptionPlan
             pending_plan = SubscriptionPlan.objects.get(slug=user.pending_plan_slug)
             context["pending_plan"] = pending_plan
         except SubscriptionPlan.DoesNotExist:

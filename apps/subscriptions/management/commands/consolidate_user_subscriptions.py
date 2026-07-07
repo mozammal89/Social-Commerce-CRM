@@ -27,7 +27,7 @@ from django.core.cache import cache
 import logging
 
 from apps.accounts.models import User
-from apps.permissions.models import Subscription
+from apps.subscriptions.models import Subscription
 from apps.stores.models import Store
 from apps.subscriptions.constants import (
     CACHE_SUBSCRIPTION_PREFIX,

@@ -23,7 +23,7 @@ django.setup()
 
 from apps.accounts.models import User, Tenant
 from apps.stores.models import Store
-from apps.permissions.models import Subscription
+from apps.subscriptions.models import Subscription
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ def migrate_subscriptions_to_tenants():
 
             # Step 4: Update subscription events to reference tenant
             logger.info("Step 4: Updating subscription events to reference tenant...")
-            from apps.permissions.models import SubscriptionEvent
+            from apps.subscriptions.models import SubscriptionEvent
 
             # Note: Subscription events already reference subscription, so they should work correctly
             # after the subscription migration. No additional action needed.

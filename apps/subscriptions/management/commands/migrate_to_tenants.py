@@ -10,7 +10,7 @@ import logging
 
 from apps.accounts.models import User, Tenant
 from apps.stores.models import Store
-from apps.permissions.models import Subscription
+from apps.subscriptions.models import Subscription
 
 logger = logging.getLogger(__name__)
 

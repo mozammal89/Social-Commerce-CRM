@@ -332,7 +332,8 @@ def _resolve_max_stores_cap(user) -> int:
     in that case caused the cap to drift away from the live subscription
     (e.g. an old ``pending_plan_slug="growth"`` overriding a Starter sub).
     """
-    from apps.permissions.models import Subscription, SubscriptionPlan, StoreMembership
+    from apps.permissions.models import StoreMembership
+    from apps.subscriptions.models import Subscription, SubscriptionPlan
     from apps.accounts.models import User, Tenant
 
     max_stores = 0
@@ -393,7 +394,7 @@ def _resolve_max_stores_cap(user) -> int:
 def create_store_template(request):
     """Template view for creating a store."""
     try:
-        from apps.permissions.models import Subscription, SubscriptionPlan
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
 
         # Check for pending subscription from User model (persists across sessions)
         pending_plan_slug = request.user.pending_plan_slug or request.session.get(

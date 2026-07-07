@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from apps.permissions.models import SubscriptionPlan, Feature
+from apps.subscriptions.models import SubscriptionPlan, Feature
 from datetime import timedelta
 from django.utils import timezone
 

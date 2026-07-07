@@ -15,7 +15,8 @@ sys.path.insert(0, "/home/md-monir/Development/Social-Commerce-CRM")
 django.setup()
 
 from apps.stores.models import Store
-from apps.permissions.models import StoreMembership, Role, Subscription
+from apps.permissions.models import StoreMembership, Role
+from apps.subscriptions.models import Subscription
 from apps.accounts.models import User
 from apps.subscriptions.services import check_plan_limits
 from apps.settings.views import get_store_owners, calculate_seat_usage

@@ -9,7 +9,7 @@ import django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
-from apps.permissions.models import Subscription, SubscriptionPlan
+from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.accounts.models import Tenant, User
 from apps.stores.models import Store
 

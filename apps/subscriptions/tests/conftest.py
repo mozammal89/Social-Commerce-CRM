@@ -102,7 +102,7 @@ def extra_members(db, tenant, manager_role):
 @pytest.fixture
 def starter_plan(db):
     """The Starter plan from the seeder matrix (or a synthetic minimal one)."""
-    from apps.permissions.models import SubscriptionPlan
+    from apps.subscriptions.models import SubscriptionPlan
     plan, _ = SubscriptionPlan.objects.get_or_create(
         slug="test-starter",
         defaults={
@@ -125,7 +125,7 @@ def starter_plan(db):
 @pytest.fixture
 def growth_plan(db):
     """A higher-tier plan used as the *current* plan in downgrade tests."""
-    from apps.permissions.models import SubscriptionPlan
+    from apps.subscriptions.models import SubscriptionPlan
     plan, _ = SubscriptionPlan.objects.get_or_create(
         slug="test-growth",
         defaults={
@@ -148,7 +148,7 @@ def growth_plan(db):
 @pytest.fixture
 def tenant_with_growth_sub(db, tenant, growth_plan):
     """A tenant with an active Growth subscription."""
-    from apps.permissions.models import Subscription
+    from apps.subscriptions.models import Subscription
 
     return Subscription.objects.create(
         tenant=tenant,

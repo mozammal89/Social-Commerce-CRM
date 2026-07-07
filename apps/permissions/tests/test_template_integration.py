@@ -14,13 +14,15 @@ from django.test import RequestFactory
 from apps.permissions.constants import MODIFIER_GRANT
 from apps.permissions.models import (
     Permission,
-    PlanFeature,
     RolePermission,
     StoreMembership,
+)
+from apps.subscriptions.models import (
+    Feature,
+    PlanFeature,
     Subscription,
     SubscriptionPlan,
 )
-from apps.permissions.models import Feature
 
 
 def _render_template(path, request, current_store=None, user=None):
