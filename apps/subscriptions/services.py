@@ -247,6 +247,63 @@ def get_or_create_default_tenant(user) -> "Tenant":
     return tenant
 
 
+def find_user_subscription_row(user):
+    """Return the user's most recent ``Subscription`` row, regardless of
+    status, or ``None`` if the user has never subscribed.
+
+    Unlike ``resolve_user_subscription`` — which deliberately hides
+    terminal-state rows (``canceled`` / ``expired`` / ``past_due``)
+    because those should look like "no subscription" to the dashboard
+    and write-path gates — this helper is the reactivation / re-engage
+    lookup. The checkout flow and the in-place plan-update API use it
+    to find a row that can be revived by ``change_plan``; the dashboard
+    uses ``resolve_user_subscription`` to decide whether to render the
+    "subscription needs attention" banner. The two lookups must
+    coexist: one hides canceled rows from the UI, the other finds
+    them so a fresh plan choice actually reactivates something.
+
+    Resolution order mirrors ``resolve_user_subscription``:
+
+      1. The user's tenant-level ``Subscription`` (if any) — including
+         terminal-state rows, since the row is still "the user's".
+      2. The most recent legacy per-store ``Subscription`` attached to
+         one of the user's stores. We deliberately do *not* promote
+         the row here (no side-effecting write); the caller decides
+         whether promotion is appropriate.
+
+    Returns the most-recent row by ``starts_at`` (and ``id`` to break
+    ties deterministically). Selecting by ``starts_at`` rather than
+    ``plan__price`` because for reactivation we want the row that
+    actually exists in the user's account, not the most generous one
+    — a user who downgraded from Pro to Starter still has the Starter
+    row as "their" subscription.
+    """
+    tenant = get_or_create_default_tenant(user)
+
+    tenant_sub = (
+        Subscription.objects
+        .filter(tenant=tenant)
+        .order_by("-starts_at", "-id")
+        .first()
+    )
+    if tenant_sub is not None:
+        return tenant_sub
+
+    legacy_sub = (
+        Subscription.objects
+        .filter(tenant__isnull=True)
+        .filter(
+            Q(store__tenant=tenant)
+            | Q(store__memberships__user=user, store__memberships__is_active=True)
+        )
+        .distinct()
+        .select_related("store", "plan")
+        .order_by("-starts_at", "-id")
+        .first()
+    )
+    return legacy_sub
+
+
 def resolve_user_subscription(user):
     """Return the user's authoritative active subscription, or ``None``.
 
@@ -346,30 +403,90 @@ def change_plan(
 
     Re-activation guard: when the source subscription is in a terminal
     ``expired`` state (e.g. the 14-day trial lapsed and the user is now
-    picking a paid plan), ``upgrade_subscription`` and
+    picking a paid plan) **or** an immediate ``canceled`` state (the
+    user cancelled with ``cancel_at_period_end=False`` and is now
+    re-subscribing to a fresh plan), ``upgrade_subscription`` and
     ``downgrade_subscription`` would otherwise flip ``plan`` but leave
-    ``status='expired'`` — ``VALID_STATUS_TRANSITIONS`` blocks any
-    transition out of expired, so ``is_active()`` would keep returning
-    False and the user would be stuck on the redirect loop between
-    ``/subscriptions/manage/`` and ``/subscriptions/plans/``. Reset
-    status to ``active`` and clear ``trial_ends_at`` up-front, then
-    record an ``EVENT_REACTIVATED`` event so the audit trail shows
-    the row was revived by an explicit plan change rather than
-    silently smuggled into ``active``.
+    ``status='expired'`` / ``status='canceled'``. ``is_active()`` would
+    keep returning False and the user would be stuck on the redirect
+    loop between ``/subscriptions/manage/`` and ``/subscriptions/plans/``
+    — every gated write path (invite members, create roles, set
+    overrides) would still 403 because the subscription gate reads
+    ``is_active()``.
+
+    For ``expired``, ``VALID_STATUS_TRANSITIONS`` blocks any transition
+    out of ``expired``; we reset status to ``active`` and clear
+    ``trial_ends_at`` before the dispatch so the row is alive by the
+    time ``upgrade_subscription`` writes ``plan``.
+
+    For ``canceled``, the user keeps ``status='canceled'`` until either
+    the period ends naturally *or* they explicitly re-engage. Picking a
+    new plan is the explicit re-engagement — flip status to ``active``
+    and clear any leftover ``ends_at`` (a cancel-at-period-end that was
+    scheduled but not yet elapsed) before dispatching. The audit log
+    records the reason so we can tell reactivation-after-cancel apart
+    from the normal plan-change flow.
+
+    For the ``active + ends_at-future`` case (a scheduled cancel that
+    hasn't yet elapsed), ``is_active()`` already returns True, so the
+    write paths aren't blocked — but the Reactivate banner would keep
+    rendering on the manage page after the user picks a fresh plan.
+    Clearing ``ends_at`` here makes the row match the user's intent
+    ("I'm back to a fresh subscription").
     """
-    if subscription.status == STATUS_EXPIRED:
-        subscription.status = STATUS_ACTIVE
+    needs_reactivate = (
+        subscription.status in (STATUS_EXPIRED, STATUS_CANCELED)
+        or subscription.ends_at is not None
+    )
+    if needs_reactivate:
+        previous_status = subscription.status
+        previous_ends_at = subscription.ends_at
+        was_terminal = previous_status in (STATUS_EXPIRED, STATUS_CANCELED)
+        if was_terminal:
+            subscription.status = STATUS_ACTIVE
+        # Clear the scheduled-cancel clock so the row reflects a clean
+        # re-subscription, not a still-terminating one. ``ends_at`` is
+        # nullable; ``trial_ends_at`` is only relevant when we came
+        # from ``expired``, but resetting both is harmless.
+        subscription.ends_at = None
         subscription.trial_ends_at = None
-        subscription.save(update_fields=["status", "trial_ends_at", "updated_at"])
-        record_event(
-            subscription,
-            EVENT_REACTIVATED,
-            actor=actor,
-            metadata={
-                "reason": "plan_change_after_expiry",
-                "new_plan": new_plan.slug,
-            },
+        subscription.save(
+            update_fields=["status", "ends_at", "trial_ends_at", "updated_at"],
         )
+        # Audit only the cases where this is a *new* reactivation
+        # event (terminal -> active). For "scheduled cancel just
+        # cleared" we don't emit a reactivation event — the row never
+        # stopped being active; the user just un-cancelled their
+        # future termination.
+        if was_terminal:
+            record_event(
+                subscription,
+                EVENT_REACTIVATED,
+                actor=actor,
+                metadata={
+                    "reason": (
+                        "plan_change_after_expiry"
+                        if previous_status == STATUS_EXPIRED
+                        else "plan_change_after_cancel"
+                    ),
+                    "previous_status": previous_status,
+                    "new_plan": new_plan.slug,
+                },
+            )
+        elif previous_ends_at is not None:
+            record_event(
+                subscription,
+                EVENT_REACTIVATED,
+                actor=actor,
+                metadata={
+                    "reason": "cancel_reversed_by_plan_change",
+                    "previous_ends_at": (
+                        previous_ends_at.isoformat()
+                        if previous_ends_at else None
+                    ),
+                    "new_plan": new_plan.slug,
+                },
+            )
         # Evict tenant/store sub caches so the next read picks up the
         # freshly-active row (the upgrade/downgrade helpers below also
         # evict, but doing it here keeps observers consistent for any
@@ -687,8 +804,8 @@ def create_paid_subscription(
         starts_at=now,
         current_period_start=billing_period_start or now,
         current_period_end=billing_period_end or (now + timedelta(days=30)),
-        stripe_customer_id=customer_id,
-        stripe_subscription_id=payment_gateway_id,
+        stripe_customer_id=customer_id or "",
+        stripe_subscription_id=payment_gateway_id or "",
     )
 
     record_event(subscription, EVENT_CREATED, actor=actor, metadata=metadata or {})
@@ -801,8 +918,8 @@ def create_paid_subscription_for_tenant(
         starts_at=now,
         current_period_start=billing_period_start or now,
         current_period_end=billing_period_end or (now + timedelta(days=30)),
-        stripe_customer_id=customer_id,
-        stripe_subscription_id=payment_gateway_id,
+        stripe_customer_id=customer_id or "",
+        stripe_subscription_id=payment_gateway_id or "",
     )
 
     record_event(subscription, EVENT_CREATED, actor=actor, metadata=metadata or {})

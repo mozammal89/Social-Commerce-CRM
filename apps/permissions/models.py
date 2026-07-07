@@ -542,8 +542,8 @@ class Subscription(UUIDModel, TimeStampedModel):
     current_period_start = models.DateTimeField(null=True, blank=True)
     current_period_end = models.DateTimeField(null=True, blank=True)
 
-    stripe_customer_id = models.CharField(max_length=64, blank=True)
-    stripe_subscription_id = models.CharField(max_length=64, blank=True)
+    stripe_customer_id = models.CharField(max_length=64, blank=True, null=True)
+    stripe_subscription_id = models.CharField(max_length=64, blank=True, null=True)
 
     # Arbitrary JSON storage used by service-layer flows that need to
     # record transient state on the subscription (e.g. a scheduled

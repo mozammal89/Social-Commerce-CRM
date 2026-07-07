@@ -287,6 +287,23 @@ def subscription_checkout(request, plan_slug):
     subscription row update. The user is then sent to the welcome page
     (so the same "Add Another Store / Go to Dashboard" affordances are
     shown), and any subsequent reads reflect the new plan.
+
+    Re-subscribe path: a user whose subscription has been *canceled*
+    (``status='canceled'``) still owns the row in the DB. The previous
+    version of this view resolved ``resolve_user_subscription(user)``,
+    which deliberately hides canceled rows; ``has_live_subscription``
+    was then False, and the view fell into the first-time-signup branch
+    — writing ``pending_plan_slug`` and redirecting to /welcome/ while
+    the existing row stayed canceled. After re-subscribing, the user
+    saw the dashboard's "subscription needs attention" banner, every
+    gated write path 403-ing, and ``/filter`` reporting ``max_seats:
+    null`` because ``get_active_subscription`` returns None. The fix
+    is to look up the user's *row* (regardless of state) via
+    ``find_user_subscription_row`` and route through ``change_plan``
+    whenever one exists. ``change_plan`` itself detects the canceled
+    state and reactivates the row (clearing ``ends_at``, flipping
+    status back to ``active``, recording ``EVENT_REACTIVATED``) so the
+    user lands on a live subscription after the redirect.
     """
     user = request.user
 
@@ -295,32 +312,53 @@ def subscription_checkout(request, plan_slug):
     except SubscriptionPlan.DoesNotExist:
         return redirect("subscriptions:plans")
 
-    # Resolve the user's live subscription once. ``resolve_user_subscription``
-    # walks the tenant -> store fallback chain and returns the authoritative
-    # active row (or ``None`` for true first-time signup).
-    from .services import resolve_user_subscription, change_plan
+    # Resolve the user's *row* (regardless of state) once. We prefer
+    # ``find_user_subscription_row`` over ``resolve_user_subscription``
+    # here because the latter hides canceled / expired rows — exactly
+    # the rows we want to revive when the user re-subscribes after a
+    # cancel.
+    from .services import (
+        resolve_user_subscription,
+        find_user_subscription_row,
+        change_plan,
+    )
     from django.utils import timezone
     from django.contrib import messages as dj_messages
 
-    live_subscription = resolve_user_subscription(user)
-    has_live_subscription = (
-        live_subscription is not None
-        and getattr(live_subscription, "is_active", lambda: False)()
+    existing_subscription = find_user_subscription_row(user)
+    has_existing_row = existing_subscription is not None
+
+    # Whether the existing row is *live* (active / trialing / scheduled
+    # cancel) determines whether we treat this as a plan upgrade vs a
+    # full re-subscription. ``change_plan`` handles both: a live row
+    # gets ``plan`` flipped, a canceled/expired row gets reactivated.
+    live_subscription = (
+        existing_subscription
+        if has_existing_row
+        and getattr(existing_subscription, "is_active", lambda: False)()
+        else None
     )
+    has_live_subscription = live_subscription is not None
+    # The single dispatch predicate used in the POST handler below.
+    # ``has_existing_row`` is the source of truth — even a canceled
+    # row is still the user's subscription, so we route through
+    # ``change_plan`` rather than the first-time-signup branch.
+    should_change_plan = has_existing_row
 
     # Handle POST - either upgrade an existing sub in place, or record
     # the pending marker for first-time signup.
     if request.method == "POST":
         start_trial = request.POST.get("start_trial", "true").lower() == "true"
 
-        if has_live_subscription and live_subscription is not None:
+        if should_change_plan and existing_subscription is not None:
             # Apply the plan change immediately through the standard
             # service. ``change_plan`` handles upgrade/downgrade
-            # dispatch, cache invalidation, and ``pending_plan_slug``
-            # clearing (see Fix 4 in ``apps/subscriptions/services.py``).
+            # dispatch, reactivation of canceled/expired rows, cache
+            # invalidation, and ``pending_plan_slug`` clearing (see
+            # Fix 4 in ``apps/subscriptions/services.py``).
             try:
                 change_plan(
-                    live_subscription,
+                    existing_subscription,
                     plan,
                     actor=user,
                     effective_immediately=True,
@@ -334,10 +372,24 @@ def subscription_checkout(request, plan_slug):
                 )
                 return redirect("subscriptions:manage")
 
-            dj_messages.success(
-                request,
-                f"Subscription upgraded to {plan.name}.",
-            )
+            # Success copy depends on the prior state. Upgrading a live
+            # row says "upgraded"; reviving a canceled row says
+            # "subscribed" (or "reactivated" when the user is picking
+            # the same plan they had before the cancel).
+            if has_live_subscription:
+                success_action = "upgraded"
+                success_message = f"Subscription upgraded to {plan.name}."
+            elif existing_subscription.plan_id == plan.id:
+                success_action = "reactivated"
+                success_message = (
+                    f"Subscription reactivated on {plan.name}."
+                )
+            else:
+                success_action = "subscribed"
+                success_message = (
+                    f"Subscribed to {plan.name}."
+                )
+            dj_messages.success(request, success_message)
 
             # Drop the pending marker too in case it was set from a
             # prior (now-irrelevant) checkout attempt.
@@ -364,7 +416,7 @@ def subscription_checkout(request, plan_slug):
             # up — with the new plan name already applied to the live
             # subscription, the welcome banner correctly reflects it.
             request.session["plan_changed_just_now"] = {
-                "action": "upgraded",
+                "action": success_action,
                 "plan_name": plan.name,
                 "plan_slug": plan.slug,
                 "effective_immediately": True,
@@ -828,33 +880,36 @@ def update_subscription_plan(request):
     """
     Upgrade or downgrade subscription plan.
     Updated for tenant-based architecture.
+
+    Re-subscribe path: a user whose subscription has been *canceled*
+    still owns the row in the DB. The previous version of this view
+    used ``tenant.subscription`` (the reverse OneToOne on
+    ``Subscription.tenant``) and ``get_active_subscription(store)`` as
+    fallbacks — both return ``None`` / fail-open for canceled rows.
+    After a cancel, the view responded 404 "No active subscription
+    found" even though the user's row was right there, ready to be
+    revived.
+
+    The fix is to use ``find_user_subscription_row`` which returns the
+    user's most-recent row regardless of state. ``change_plan`` then
+    detects the canceled state and reactivates the row before the
+    upgrade/downgrade dispatch. Endpoint behaviour is identical for
+    live rows; only the cancel-then-resubscribe path needed widening.
     """
     serializer = SubscriptionUpdateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 
     user = request.user
 
-    # Get user's tenant subscription (new architecture)
-    from apps.accounts.models import Tenant
+    # Resolve the user's *row* regardless of state. ``resolve_user_subscription``
+    # would hide canceled/expired rows; that's the wrong tool here
+    # because the user is about to flip status back to active.
+    from .services import find_user_subscription_row
 
-    subscription = None
-    try:
-        tenant = Tenant.objects.filter(owner=user).first()
-        if tenant and hasattr(tenant, "subscription") and tenant.subscription:
-            subscription = tenant.subscription
-    except Exception:
-        pass
-
-    # Fallback to store-based subscription (migration period)
-    if not subscription:
-        memberships = active_memberships(None).filter(user=user)
-        if memberships.exists():
-            store = _resolve_current_store_for_user(request, user)
-            if store:
-                subscription = get_active_subscription(store)
+    subscription = find_user_subscription_row(user)
 
     if not subscription:
-        return Response({"error": "No active subscription found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"error": "No subscription found"}, status=status.HTTP_404_NOT_FOUND)
 
     # If the resolved sub is still attached to a single legacy store
     # (no tenant FK), promote it to a tenant sub before we mutate ``plan``.

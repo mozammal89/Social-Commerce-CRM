@@ -374,6 +374,135 @@ class TestResolveUserSubscription:
 
 
 # ---------------------------------------------------------------------------
+# change_plan — reactivate after terminal state (canceled/expired)
+# ---------------------------------------------------------------------------
+@pytest.mark.django_db
+class TestChangePlanReactivatesTerminalStatus:
+    """When a user with ``status='canceled'`` (immediate cancel) or
+    ``status='expired'`` (lapsed trial) picks a new plan, ``change_plan``
+    must flip them back to ``active`` before dispatch. Otherwise the
+    row keeps its terminal status, ``is_active()`` keeps returning False,
+    and every gated write path (invite members, create roles, override
+    permissions) keeps 403-ing the user even though they just paid.
+
+    Reactivating the row in ``change_plan`` is a one-stop fix that
+    applies whether the user came in through the checkout flow
+    (``subscription_checkout`` POST -> ``change_plan``) or the in-place
+    API (``POST /subscriptions/api/update-plan/`` -> ``change_plan``).
+    """
+
+    def test_canceled_sub_picks_new_plan_becomes_active(
+        self, tenant_with_growth_sub, user,
+    ):
+        from apps.subscriptions.services import (
+            cancel_subscription,
+            change_plan,
+        )
+        from apps.permissions.models import SubscriptionPlan
+
+        sub = tenant_with_growth_sub
+        # Immediate cancel -> status='canceled', ends_at=None.
+        cancel_subscription(sub, cancel_at_period_end=False, actor=user)
+        sub.refresh_from_db()
+        assert sub.status == "canceled"
+        assert sub.ends_at is None
+
+        # Pick a higher-priced plan. (We need a separate plan row with a
+        # higher ``price`` so ``change_plan`` dispatches to the upgrade
+        # branch. The Growth fixture plan is $49.)
+        higher = SubscriptionPlan.objects.create(
+            name="Test Pro", slug="test-pro", price=149,
+            max_users=20, max_stores=3, max_products=10000,
+        )
+
+        result = change_plan(
+            sub, higher, actor=user, effective_immediately=True,
+        )
+        result.refresh_from_db()
+
+        # Status flipped to active; the user is no longer canceled.
+        assert result.status == "active"
+        # ends_at stayed clear (no scheduled-cancel ghost).
+        assert result.ends_at is None
+        # Plan was actually applied.
+        assert result.plan_id == higher.id
+        # Audit trail: an EVENT_REACTIVATED event was recorded.
+        events = list(result.events.order_by("occurred_at"))
+        reactivated = [
+            e for e in events
+            if e.event_type == "subscription.reactivated"
+        ]
+        assert reactivated, (
+            "Expected an EVENT_REACTIVATED event after plan change on a "
+            "canceled subscription."
+        )
+        assert reactivated[-1].metadata.get("previous_status") == "canceled"
+
+    def test_canceled_sub_picks_lower_plan_becomes_active(
+        self, tenant_with_growth_sub, user,
+    ):
+        """The downgrade branch must also flip status — same fix as
+        upgrade, just the dispatch path differs."""
+        from apps.subscriptions.services import (
+            cancel_subscription,
+            change_plan,
+        )
+        from apps.permissions.models import SubscriptionPlan
+
+        sub = tenant_with_growth_sub
+        cancel_subscription(sub, cancel_at_period_end=False, actor=user)
+        sub.refresh_from_db()
+        assert sub.status == "canceled"
+
+        lower = SubscriptionPlan.objects.create(
+            name="Test Starter", slug="test-starter", price=19,
+            max_users=3, max_stores=1, max_products=500,
+        )
+
+        result = change_plan(
+            sub, lower, actor=user, effective_immediately=True,
+        )
+        result.refresh_from_db()
+        assert result.status == "active"
+        assert result.plan_id == lower.id
+
+    def test_scheduled_cancel_picks_new_plan_also_reactivates(
+        self, tenant_with_growth_sub, user,
+    ):
+        """A sub with ``status='active' + ends_at=future`` (scheduled
+        cancel) must also be reactivated in full — the new fix clears
+        ``ends_at`` along with flipping status so the user doesn't carry
+        the scheduled-cancel ghost into the new billing period."""
+        from apps.subscriptions.services import (
+            cancel_subscription,
+            change_plan,
+        )
+        from apps.permissions.models import SubscriptionPlan
+        from django.utils import timezone
+
+        sub = tenant_with_growth_sub
+        cancel_subscription(sub, cancel_at_period_end=True, actor=user)
+        sub.refresh_from_db()
+        assert sub.status == "active"
+        assert sub.ends_at is not None
+        assert sub.ends_at > timezone.now()
+
+        higher = SubscriptionPlan.objects.create(
+            name="Test Pro", slug="test-pro", price=149,
+            max_users=20, max_stores=3, max_products=10000,
+        )
+        result = change_plan(
+            sub, higher, actor=user, effective_immediately=True,
+        )
+        result.refresh_from_db()
+
+        # Status stays active (already was), but ends_at is now wiped.
+        assert result.status == "active"
+        assert result.ends_at is None
+        assert result.plan_id == higher.id
+
+
+# ---------------------------------------------------------------------------
 # dashboard_home — subscription-needs-attention banner vs hard redirect
 # ---------------------------------------------------------------------------
 @pytest.mark.django_db
