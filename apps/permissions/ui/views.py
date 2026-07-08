@@ -669,6 +669,12 @@ class OverrideListView(StoreScopedPermissionMixin, ListView):
     paginate_by = 25
     required_permission = PERM_PERMISSIONS_OVERRIDE
 
+    def get_template_names(self):
+        """Return partial template for AJAX requests."""
+        if self.request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return ["role_permission/overrides/partials/override_table.html"]
+        return super().get_template_names()
+
     def get_queryset(self):
         qs = UserPermissionOverride.objects.select_related(
             "user", "permission", "permission__resource", "store", "granted_by"
@@ -730,6 +736,9 @@ class OverrideListView(StoreScopedPermissionMixin, ListView):
         ctx["active_filter"] = self.request.GET.get("active", "")
         ctx["store_filter"] = self.request.GET.get("store", "")
         return ctx
+        # ctx["active_filter"] = self.request.GET.get("active", "")
+        # ctx["store_filter"] = self.request.GET.get("store", "")
+        # return ctx
 
 
 class OverrideCreateView(SubscriptionRequiredMixin, CreateView):

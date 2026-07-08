@@ -1,0 +1,118 @@
+{% load static %}
+{% load humanize %}
+
+<div id="overrideResults" data-results-container>
+{% if not overrides %}
+<div class="empty-state">
+    <div class="card">
+        <div class="card-body">
+            {% if search_query or kind_filter or active_filter %}
+                {% include "components/empty_state.html" with empty_state_icon="search" empty_state_title="No matches" empty_state_message="Try adjusting your filters." %}
+            {% else %}
+                {% include "components/empty_state.html" with empty_state_icon="person-check" empty_state_title="No overrides yet" empty_state_message="Create one to grant or deny a specific permission to a single user." %}
+                {% if can_manage %}
+                <div class="text-center mt-3">
+                    <a href="{% url 'role_permission:override_create' %}" class="btn btn-primary">
+                        <i class="bi bi-plus-lg me-1"></i> Create override
+                    </a>
+                </div>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card border-0 shadow-sm" data-ajax-table>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>User</th>
+                    <th>Permission</th>
+                    <th>Scope</th>
+                    <th>Kind</th>
+                    <th>Reason / Expires</th>
+                    {% if can_manage %}<th class="text-end">Actions</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for o in overrides %}
+                <tr data-override-id="{{ o.id }}">
+                    <td>
+                        <div class="fw-semibold">{% if o.user.get_full_name %}{{ o.user.get_full_name }}{% else %}{{ o.user.email }}{% endif %}</div>
+                        <div class="text-muted small">{{ o.user.email }}</div>
+                    </td>
+                    <td>
+                        <code class="small">{{ o.permission.code }}</code>
+                        <div class="text-muted small">{{ o.permission.name }}</div>
+                    </td>
+                    <td>
+                        {% if o.store %}
+                        <span class="badge bg-light text-dark">{{ o.store.name }}</span>
+                        {% else %}
+                        <span class="badge bg-info-subtle text-info-emphasis">All stores</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if o.is_granted %}
+                        <span class="badge bg-success-subtle text-success-emphasis">
+                            <i class="bi bi-check-circle me-1"></i>Grant
+                        </span>
+                        {% else %}
+                        <span class="badge bg-danger-subtle text-danger-emphasis">
+                            <i class="bi bi-slash-circle me-1"></i>Deny
+                        </span>
+                        {% endif %}
+                        {% if not o.is_active %}
+                        <div class="text-muted small mt-1">
+                            <i class="bi bi-clock-history"></i> Expired
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if o.reason %}
+                        <div class="small">{{ o.reason|truncatechars:40 }}</div>
+                        {% endif %}
+                        {% if o.expires_at %}
+                        <div class="text-muted small">
+                            expires {{ o.expires_at|date:"M j, Y H:i" }}
+                        </div>
+                        {% elif o.granted_by %}
+                        <div class="text-muted small">
+                            by {{ o.granted_by.email }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    {% if can_manage %}
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm">
+                            <a href="{% url 'role_permission:override_edit' override_id=o.id %}"
+                               class="btn btn-outline-secondary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form method="post" action="{% url 'role_permission:override_delete' override_id=o.id %}"
+                                  class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-danger"
+                                        data-confirm="Remove this override? The user will fall back to their role permissions."
+                                        data-confirm-title="Remove override?"
+                                        data-confirm-text="Remove"
+                                        data-confirm-class="btn-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="mt-4" data-pagination>
+    {% include "components/pagination.html" %}
+</div>
+{% endif %}
+</div>

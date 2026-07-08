@@ -33,7 +33,7 @@
     </div>
 
     {# Filters #}
-    <form method="get" class="card mb-4">
+    <form method="get" class="card mb-4" id="filterForm" data-auto-submit-form="true" data-ajax-submit="true">
         <div class="card-body">
             <div class="row g-3">
                 <div class="col-md-4">
@@ -45,13 +45,13 @@
                             value="{{ search_query }}"
                             placeholder="Search by user, permission, or reason…"
                             class="form-control"
-                            data-debounce="300" data-auto-submit
+                            data-debounce="300"
                         />
                     </div>
                 </div>
                 <div class="col-md-3">
                     <label for="kind" class="visually-hidden">Kind</label>
-                    <select id="kind" name="kind" class="form-select" data-auto-submit>
+                    <select id="kind" name="kind" class="form-select">
                         <option value="">All kinds</option>
                         <option value="grant" {% if kind_filter == "grant" %}selected{% endif %}>Grants</option>
                         <option value="deny" {% if kind_filter == "deny" %}selected{% endif %}>Denies</option>
@@ -59,7 +59,7 @@
                 </div>
                 <div class="col-md-3">
                     <label for="active" class="visually-hidden">Active</label>
-                    <select id="active" name="active" class="form-select" data-auto-submit>
+                    <select id="active" name="active" class="form-select">
                         <option value="">All</option>
                         <option value="yes" {% if active_filter == "yes" %}selected{% endif %}>Active now</option>
                         <option value="no" {% if active_filter == "no" %}selected{% endif %}>Expired</option>
@@ -68,7 +68,7 @@
                 {% if is_superuser %}
                 <div class="col-md-2">
                     <label for="store" class="visually-hidden">Store</label>
-                    <select id="store" name="store" class="form-select" data-auto-submit>
+                    <select id="store" name="store" class="form-select">
                         <option value="">All stores</option>
                         {% for s in admin_stores %}
                         <option value="{{ s.id }}" {% if store_filter == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
@@ -80,6 +80,8 @@
         </div>
     </form>
 
+    {# Results container for AJAX updates #}
+    <div id="overrideResults" data-results-container>
     {% if not overrides %}
         <div class="card">
             <div class="card-body">
@@ -191,10 +193,150 @@
             {% include "components/pagination.html" %}
         </div>
     {% endif %}
-</div>
-{% endblock %}
+    </div>
 
-{% block extra_bottom_content %}
-{{ block.super }}
-<script type="module" src="{% static 'permissions/js/rp/app.js' %}"></script>
+    <script>
+    console.log('Override filter script loaded');
+
+    // Debounce utility function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// AJAX form submission
+async function submitFormAjax(form) {
+    console.log('Submitting form via AJAX...');
+    const formData = new FormData(form);
+    const params = new URLSearchParams(formData).toString();
+    const url = `${window.location.pathname}?${params}`;
+
+    // Show loading state
+    const resultsContainer = document.querySelector('[data-results-container]');
+    if (resultsContainer) {
+        resultsContainer.style.opacity = '0.5';
+    }
+
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+
+        const html = await response.text();
+        console.log('AJAX response received');
+
+        // Parse the response
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        // Update the results container
+        const newResults = doc.querySelector('[data-results-container]');
+        const currentResults = document.querySelector('[data-results-container]');
+
+        if (newResults && currentResults) {
+            currentResults.innerHTML = newResults.innerHTML;
+        } else {
+            console.error('Could not find results containers');
+        }
+
+        // Update URL without reloading
+        window.history.replaceState({}, '', url);
+
+    } catch (error) {
+        console.error('Error loading results:', error);
+        // Fallback to regular form submission on error
+        form.submit();
+    } finally {
+        if (resultsContainer) {
+            resultsContainer.style.opacity = '1';
+        }
+    }
+}
+
+// Initialize auto-submit functionality
+function initOverrideFilters() {
+    console.log('Initializing override filters...');
+
+    const filterForm = document.getElementById('filterForm');
+
+    if (!filterForm) {
+        console.error('Filter form #filterForm not found');
+        return;
+    }
+
+    console.log('Filter form found, attaching event listeners...');
+
+    // Prevent normal form submission
+    filterForm.addEventListener('submit', function(e) {
+        console.log('Form submit event intercepted');
+        e.preventDefault();
+        e.stopPropagation();
+        submitFormAjax(filterForm);
+        return false;
+    });
+
+    // Attach listeners to all inputs and selects
+    const inputs = filterForm.querySelectorAll('input, select');
+    console.log(`Found ${inputs.length} inputs to attach to`);
+
+    inputs.forEach((input, index) => {
+        const inputName = input.name || input.id || 'unnamed';
+        const debounceTime = parseInt(input.dataset.debounce || '0', 10);
+
+        if (debounceTime > 0) {
+            // Debounced input (search boxes)
+            input.addEventListener('input', debounce(function() {
+                console.log(`Debounced input changed: ${inputName}`);
+                submitFormAjax(filterForm);
+            }, debounceTime));
+            console.log(`Attached debounced listener to: ${inputName} (${debounceTime}ms)`);
+        } else {
+            // Immediate submit (select dropdowns)
+            input.addEventListener('change', function() {
+                console.log(`Filter changed: ${inputName}`);
+                submitFormAjax(filterForm);
+            });
+            console.log(`Attached change listener to: ${inputName}`);
+        }
+    });
+
+    console.log('Override filters initialized successfully');
+}
+
+// Flag to prevent double initialization
+let initialized = false;
+
+// Wait for DOM to be ready
+function initWhenReady() {
+    if (initialized) {
+        console.log('Already initialized, skipping...');
+        return;
+    }
+    initialized = true;
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initOverrideFilters);
+    } else {
+        // DOM is already ready
+        initOverrideFilters();
+    }
+}
+
+// Start initialization
+initWhenReady();
+</script>
 {% endblock %}
