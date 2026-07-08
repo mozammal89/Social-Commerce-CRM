@@ -77,15 +77,41 @@ class StoreListView(generics.ListCreateAPIView):
     parser_classes = [JSONParser, FormParser, MultiPartParser]
 
     def get_queryset(self):
-        """Return stores where the user has an active membership."""
+        """Return stores where the user has an active membership with member counts."""
+        from django.db.models import Subquery, OuterRef, Count
+        from apps.permissions.models import StoreMembership
+
         user = self.request.user
         if getattr(user, "is_superuser", False):
-            return Store.objects.filter(is_deleted=False).distinct()
-        return Store.objects.filter(
-            memberships__user=user,
-            memberships__is_active=True,
-            is_deleted=False,
-        ).distinct()
+            # For superusers, return all stores with member counts
+            member_count_subquery = (
+                StoreMembership.objects.filter(store=OuterRef("id"), is_active=True)
+                .values("store")
+                .annotate(count=Count("id"))
+                .values("count")
+            )
+            return (
+                Store.objects.filter(is_deleted=False)
+                .annotate(member_count=Subquery(member_count_subquery[:1]))
+                .distinct()
+            )
+
+        # For regular users, return stores they have access to with member counts
+        member_count_subquery = (
+            StoreMembership.objects.filter(store=OuterRef("id"), is_active=True)
+            .values("store")
+            .annotate(count=Count("id"))
+            .values("count")
+        )
+        return (
+            Store.objects.filter(
+                memberships__user=user,
+                memberships__is_active=True,
+                is_deleted=False,
+            )
+            .annotate(member_count=Subquery(member_count_subquery[:1]))
+            .distinct()
+        )
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -484,18 +510,35 @@ def store_list_template(request):
         user = request.user
 
         # Get user's stores through active memberships with member counts
-        from django.db.models import Count
+        from django.db.models import Count, Subquery, OuterRef
+        from apps.permissions.models import StoreMembership
 
-        stores = (
+        # First get store IDs the user has access to
+        accessible_store_ids = (
             Store.objects.filter(
                 memberships__user=user,
                 memberships__is_active=True,
                 is_deleted=False,
             )
-            .annotate(
-                member_count=Count("memberships", filter=models.Q(memberships__is_active=True))
-            )
+            .values_list("id", flat=True)
             .distinct()
+        )
+
+        # Subquery to count ALL active memberships for each store
+        member_count_subquery = (
+            StoreMembership.objects.filter(store=OuterRef("id"), is_active=True)
+            .values("store")
+            .annotate(count=Count("id"))
+            .values("count")
+        )
+
+        # Get stores with correct member count
+        stores = (
+            Store.objects.filter(
+                id__in=accessible_store_ids,
+                is_deleted=False,
+            )
+            .annotate(member_count=Subquery(member_count_subquery[:1]))
             .order_by("-created_at")
         )
 

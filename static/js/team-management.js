@@ -511,7 +511,7 @@ const TeamManagement = (function() {
         
         if (modal && membershipIdInput) {
             membershipIdInput.value = membershipId;
-            const bsModal = new bootstrap.Modal(modal);
+            const bsModal = bootstrap.Modal.getInstance(modal) || new bootstrap.Modal(modal);
             bsModal.show();
         }
     }

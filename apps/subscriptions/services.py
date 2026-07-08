@@ -455,14 +455,38 @@ def change_plan(
         was_terminal = previous_status in (STATUS_EXPIRED, STATUS_CANCELED)
         if was_terminal:
             subscription.status = STATUS_ACTIVE
+            # Anchor a fresh 30-day billing period. Without this the
+            # row would land in ``active`` with ``current_period_end``
+            # still None (or stale from the prior subscription), which
+            # breaks the renewal task's
+            # ``current_period_end__lt=now`` query and leaves the
+            # manage page's "Next Billing" field blank. Mirrors the
+            # anchor in ``create_paid_subscription_for_tenant`` and
+            # ``renew_subscription`` so all three reactivation paths
+            # produce the same row shape.
+            _now = timezone.now()
+            subscription.current_period_start = _now
+            subscription.current_period_end = _now + timedelta(days=30)
         # Clear the scheduled-cancel clock so the row reflects a clean
         # re-subscription, not a still-terminating one. ``ends_at`` is
         # nullable; ``trial_ends_at`` is only relevant when we came
         # from ``expired``, but resetting both is harmless.
         subscription.ends_at = None
         subscription.trial_ends_at = None
+        # ``current_period_start`` and ``current_period_end`` are only
+        # set when we came from a terminal state (see the
+        # ``was_terminal`` block above), but listing them in
+        # ``update_fields`` is harmless for the active+ends_at-future
+        # branch (the values are already correct on those rows).
         subscription.save(
-            update_fields=["status", "ends_at", "trial_ends_at", "updated_at"],
+            update_fields=[
+                "status",
+                "ends_at",
+                "trial_ends_at",
+                "current_period_start",
+                "current_period_end",
+                "updated_at",
+            ],
         )
         # Audit only the cases where this is a *new* reactivation
         # event (terminal -> active). For "scheduled cancel just

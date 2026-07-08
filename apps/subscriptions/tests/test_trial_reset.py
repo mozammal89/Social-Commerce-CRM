@@ -256,3 +256,162 @@ class TestChangePlanResetsTrialClock:
         # trial_ends_at was NOT touched (the trial-reset branch didn't
         # run because source wasn't trialing).
         assert sub.trial_ends_at is None
+
+
+# ---------------------------------------------------------------------------
+# change_plan: terminal → active reactivation anchors billing period
+# ---------------------------------------------------------------------------
+@pytest.mark.django_db
+class TestChangePlanReactivationAnchorsPeriod:
+    """When ``change_plan`` flips a terminal row (``expired`` /
+    ``canceled``) back to ``active``, the billing period clock
+    (``current_period_start`` / ``current_period_end``) must be
+    re-anchored. Without this the row lands in ``active`` with
+    ``current_period_end=None`` (or stale from the prior subscription),
+    which breaks the renewal task's ``current_period_end__lt=now``
+    query and leaves the manage page's "Next Billing" field blank."""
+
+    def test_expired_to_paid_anchors_billing_period(
+        self, tenant_with_growth_sub,
+    ):
+        from apps.subscriptions.services import change_plan
+        from apps.subscriptions.constants import STATUS_EXPIRED
+
+        sub = tenant_with_growth_sub
+        sub.refresh_from_db()
+        # Simulate: trial has lapsed and the expire_trials task moved
+        # the row to ``expired`` with no current_period_end set.
+        sub.status = STATUS_EXPIRED
+        sub.current_period_start = None
+        sub.current_period_end = None
+        sub.trial_ends_at = None
+        sub.save()
+
+        # User picks a new paid plan via the checkout flow.
+        from apps.subscriptions.models import SubscriptionPlan
+        pro, _ = SubscriptionPlan.objects.get_or_create(
+            slug="test-pro-period-anchor",
+            defaults={
+                "name": "Pro (period-anchor test)",
+                "price": 99,
+                "currency": "USD",
+                "billing_period": "monthly",
+                "trial_days": 0,
+                "max_users": 25,
+                "max_stores": 5,
+                "max_products": 5000,
+                "max_orders_per_month": 20000,
+                "max_warehouses": 5,
+                "is_active": True,
+                "is_public": True,
+            },
+        )
+
+        change_plan(sub, pro)
+
+        sub.refresh_from_db()
+        assert sub.status == "active"
+        # The fix: current_period_start/end are anchored to a fresh
+        # 30-day window. They were None before, so the absence of an
+        # anchor is the original bug.
+        assert sub.current_period_start is not None
+        assert sub.current_period_end is not None
+        days = (sub.current_period_end - sub.current_period_start).days
+        assert 29 <= days <= 31
+
+    def test_canceled_to_paid_anchors_billing_period(
+        self, tenant_with_growth_sub,
+    ):
+        """Same anchor applies to the canceled → active branch."""
+        from apps.subscriptions.services import change_plan
+        from apps.subscriptions.constants import STATUS_CANCELED
+
+        sub = tenant_with_growth_sub
+        sub.refresh_from_db()
+        sub.status = STATUS_CANCELED
+        sub.current_period_start = None
+        sub.current_period_end = None
+        sub.ends_at = None
+        sub.save()
+
+        from apps.subscriptions.models import SubscriptionPlan
+        pro, _ = SubscriptionPlan.objects.get_or_create(
+            slug="test-pro-period-anchor-cancel",
+            defaults={
+                "name": "Pro (cancel anchor test)",
+                "price": 99,
+                "currency": "USD",
+                "billing_period": "monthly",
+                "trial_days": 0,
+                "max_users": 25,
+                "max_stores": 5,
+                "max_products": 5000,
+                "max_orders_per_month": 20000,
+                "max_warehouses": 5,
+                "is_active": True,
+                "is_public": True,
+            },
+        )
+
+        change_plan(sub, pro)
+
+        sub.refresh_from_db()
+        assert sub.status == "active"
+        assert sub.current_period_end is not None
+
+    def test_renewal_task_picks_up_reactivated_sub(
+        self, tenant_with_growth_sub,
+    ):
+        """End-to-end: after the reactivation, the
+        ``renew_due_subscriptions`` task must be able to find the row
+        when its period ends. Verifies the fix actually fixes the
+        original bug (the renewal query was returning 0 rows because
+        of the NULL ``current_period_end``)."""
+        from apps.subscriptions.services import change_plan
+        from apps.permissions.tasks import renew_due_subscriptions
+        from apps.subscriptions.constants import STATUS_EXPIRED
+
+        sub = tenant_with_growth_sub
+        sub.refresh_from_db()
+        sub.status = STATUS_EXPIRED
+        sub.current_period_start = None
+        sub.current_period_end = None
+        sub.trial_ends_at = None
+        sub.save()
+
+        from apps.subscriptions.models import SubscriptionPlan
+        pro, _ = SubscriptionPlan.objects.get_or_create(
+            slug="test-pro-renewal-pickup",
+            defaults={
+                "name": "Pro (renewal pickup)",
+                "price": 99,
+                "currency": "USD",
+                "billing_period": "monthly",
+                "trial_days": 0,
+                "max_users": 25,
+                "max_stores": 5,
+                "max_products": 5000,
+                "max_orders_per_month": 20000,
+                "max_warehouses": 5,
+                "is_active": True,
+                "is_public": True,
+            },
+        )
+
+        change_plan(sub, pro)
+        sub.refresh_from_db()
+        assert sub.current_period_end is not None
+
+        # Force the period end into the past so the renewal task
+        # would match this row.
+        from django.utils import timezone
+        from datetime import timedelta
+        sub.current_period_end = timezone.now() - timedelta(days=1)
+        sub.save()
+        sub.refresh_from_db()
+
+        count = renew_due_subscriptions()
+        assert count == 1
+        sub.refresh_from_db()
+        # Period clock was advanced by renewal.
+        assert sub.current_period_end > timezone.now() + timedelta(days=29)

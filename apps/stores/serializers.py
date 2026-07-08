@@ -16,6 +16,7 @@ class StoreSerializer(serializers.ModelSerializer):
     owner_count = serializers.SerializerMethodField()
     manager_count = serializers.SerializerMethodField()
     staff_count = serializers.SerializerMethodField()
+    member_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Store
@@ -32,6 +33,7 @@ class StoreSerializer(serializers.ModelSerializer):
             "owner_count",
             "manager_count",
             "staff_count",
+            "member_count",
             "settings",
             "created_at",
             "updated_at",
@@ -54,6 +56,12 @@ class StoreSerializer(serializers.ModelSerializer):
     def get_staff_count(self, obj):
         """Return count of store staff."""
         return obj.staff.count()
+
+    def get_member_count(self, obj):
+        """Return count of all active members including owners."""
+        from apps.permissions.models import StoreMembership
+
+        return StoreMembership.objects.filter(store=obj, is_active=True).count()
 
 
 class StoreCreateSerializer(serializers.ModelSerializer):
@@ -161,7 +169,9 @@ class StoreStaffSerializer(serializers.Serializer):
         user = User.objects.get(id=user_id)
 
         active = StoreMembership.objects.filter(
-            user=user, store=store, is_active=True,
+            user=user,
+            store=store,
+            is_active=True,
         )
         owner_role = store.owners.filter(id=user_id).exists()
 
