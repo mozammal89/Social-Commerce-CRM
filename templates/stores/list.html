@@ -188,18 +188,18 @@
                         <td style="text-align: right;">
                             <div class="d-inline-flex gap-1">
                                 <a href="{% url 'stores:store_detail_html' store_id=store.id %}"
-                                   class="btn btn-sm btn-icon btn-outline-secondary"
+                                   class="btn btn-sm btn-icon btn-action btn-action-view"
                                    title="View Details" aria-label="View Details">
                                     <i class="bi bi-eye"></i>
                                 </a>
                                 <a href="{% url 'stores:store_edit_html' store_id=store.id %}"
-                                   class="btn btn-sm btn-icon btn-outline-secondary"
+                                   class="btn btn-sm btn-icon btn-action btn-action-edit"
                                    title="Edit Store" aria-label="Edit Store">
                                     <i class="bi bi-pencil"></i>
                                 </a>
                                 {% if store != current_store %}
                                 <button type="button"
-                                        class="btn btn-sm btn-icon btn-outline-secondary"
+                                        class="btn btn-sm btn-icon btn-action btn-action-switch"
                                         title="Switch to This Store"
                                         aria-label="Switch to This Store"
                                         onclick="switchStore('{{ store.id }}', '{{ store.name }}')">
@@ -207,7 +207,7 @@
                                 </button>
                                 {% endif %}
                                 <button type="button"
-                                        class="btn btn-sm btn-icon btn-outline-danger"
+                                        class="btn btn-sm btn-icon btn-action btn-action-delete"
                                         title="Delete Store" aria-label="Delete Store"
                                         onclick="deleteStore('{{ store.id }}', '{{ store.name }}')">
                                     <i class="bi bi-trash"></i>
@@ -444,6 +444,73 @@ function _performDeleteStore(storeId, storeName) {
      justify-content: center;
      padding: 0;
  }
+
+/* Action button styles */
+.btn-action {
+    background: transparent;
+    border: 1px solid;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.btn-action:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* View button - Blue */
+.btn-action-view {
+    color: #3b82f6;
+    border-color: #3b82f6;
+}
+
+.btn-action-view:hover {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border-color: #2563eb;
+    color: white;
+}
+
+/* Edit button - Indigo */
+.btn-action-edit {
+    color: #6366f1;
+    border-color: #6366f1;
+}
+
+.btn-action-edit:hover {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    border-color: #4f46e5;
+    color: white;
+}
+
+/* Switch button - Teal */
+.btn-action-switch {
+    color: #14b8a6;
+    border-color: #14b8a6;
+}
+
+.btn-action-switch:hover {
+    background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+    border-color: #0d9488;
+    color: white;
+}
+
+/* Delete button - Red */
+.btn-action-delete {
+    color: #ef4444;
+    border-color: #ef4444;
+}
+
+.btn-action-delete:hover {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    border-color: #dc2626;
+    color: white;
+}
+
+/* Button active state */
+.btn-action:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
 
 /* Mobile responsive */
 @media (max-width: 768px) {
