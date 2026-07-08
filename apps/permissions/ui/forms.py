@@ -163,7 +163,6 @@ class UserOverrideForm(forms.ModelForm):
         widget=forms.Select(attrs={"class": "form-select"}),
     )
 
-    # Explicitly define is_granted field to ensure proper rendering
     is_granted = forms.ChoiceField(
         choices=[
             (True, "GRANT"),
@@ -202,87 +201,37 @@ class UserOverrideForm(forms.ModelForm):
         self.fields["permission"].queryset = Permission.objects.select_related("resource").order_by(
             "resource__category", "resource__code", "action"
         )
-        # Only set initial user + lock the field if the override already
-        # has a user assigned. A fresh instance has no `user_id` yet.
-        if self.instance and self.instance.pk and getattr(self.instance, "user_id", None):
-            self.fields["user"].initial = self.instance.user
-            self.fields["user"].disabled = True
-        if not (actor and actor.is_superuser):
-            self.fields["store"] = forms.ModelChoiceField(
-                queryset=Store.objects.filter(id=store.id) if store else Store.objects.none(),
-                disabled=True,
-                required=False,
-            )
 
-    # Explicitly define is_granted field to ensure proper rendering
-    is_granted = forms.TypedChoiceField(
-        choices=[
-            (True, "GRANT"),
-            (False, "DENY"),
-        ],
-        initial=True,
-        label="Override Type",
-        help_text="Grant gives permission, Deny blocks it.",
-        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
-        coerce=lambda x: x == "True",
-    )
+        # Filter user field and permission field for non-superusers
+        if actor and not actor.is_superuser and store:
+            # Filter user field: only show users who are members of this store
+            store_member_ids = StoreMembership.objects.filter(
+                store=store,
+                is_active=True
+            ).values_list("user_id", flat=True)
+            self.fields["user"].queryset = get_user_model().objects.filter(
+                id__in=store_member_ids
+            ).order_by("email")
 
-    class Meta:
-        model = UserPermissionOverride
-        fields = ("user", "permission", "is_granted", "reason", "expires_at")
-        widgets = {
-            "permission": forms.Select(attrs={"class": "form-select"}),
-            "reason": forms.Textarea(attrs={"rows": 3, "class": "form-control"}),
-            "expires_at": forms.DateTimeInput(
-                attrs={"type": "datetime-local", "class": "form-control"}
-            ),
-        }
+            # Filter permission field: only show permissions the actor has
+            # Get actor's membership and role for this store
+            actor_membership = StoreMembership.objects.filter(
+                user=actor,
+                store=store,
+                is_active=True
+            ).first()
 
-    def __init__(self, *args, actor=None, store=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["permission"].queryset = Permission.objects.select_related("resource").order_by(
-            "resource__category", "resource__code", "action"
-        )
-        # Only set initial user + lock the field if the override already
-        # has a user assigned. A fresh instance has no `user_id` yet.
-        if self.instance and self.instance.pk and getattr(self.instance, "user_id", None):
-            self.fields["user"].initial = self.instance.user
-            self.fields["user"].disabled = True
-        if not (actor and actor.is_superuser):
-            self.fields["store"] = forms.ModelChoiceField(
-                queryset=Store.objects.filter(id=store.id) if store else Store.objects.none(),
-                disabled=True,
-                required=False,
-            )
+            if actor_membership and actor_membership.role:
+                # Get permissions from the actor's role
+                role_perm_ids = actor_membership.role.role_permissions.values_list(
+                    "permission_id", flat=True
+                )
+                self.fields["permission"].queryset = Permission.objects.filter(
+                    id__in=role_perm_ids
+                ).select_related("resource").order_by(
+                    "resource__category", "resource__code", "action"
+                )
 
-    # Explicitly define is_granted field to ensure proper rendering
-    is_granted = forms.ChoiceField(
-        choices=[
-            (True, "GRANT"),
-            (False, "DENY"),
-        ],
-        initial=True,
-        label="Override Type",
-        help_text="Grant gives permission, Deny blocks it.",
-        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
-    )
-
-    class Meta:
-        model = UserPermissionOverride
-        fields = ("user", "permission", "is_granted", "reason", "expires_at")
-        widgets = {
-            "permission": forms.Select(attrs={"class": "form-select"}),
-            "reason": forms.Textarea(attrs={"rows": 3, "class": "form-control"}),
-            "expires_at": forms.DateTimeInput(
-                attrs={"type": "datetime-local", "class": "form-control"}
-            ),
-        }
-
-    def __init__(self, *args, actor=None, store=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["permission"].queryset = Permission.objects.select_related("resource").order_by(
-            "resource__category", "resource__code", "action"
-        )
         # Only set initial user + lock the field if the override already
         # has a user assigned. A fresh instance has no `user_id` yet.
         if self.instance and self.instance.pk and getattr(self.instance, "user_id", None):
