@@ -433,7 +433,18 @@ def change_plan(
     rendering on the manage page after the user picks a fresh plan.
     Clearing ``ends_at`` here makes the row match the user's intent
     ("I'm back to a fresh subscription").
+
+    For the ``trialing`` case, picking a new plan means the user wants
+    to be on the new plan — not "the new plan, but still pinned to the
+    old plan's trial clock". Without this reset the manage-page banner
+    would keep showing the old trial-expiry countdown against the new
+    plan name, which is confusing. We re-anchor the trial clock to the
+    *new* plan's trial window so the countdown matches the plan the
+    user actually sees in the UI. ``change_plan`` itself doesn't change
+    ``status`` to ``active`` — a trialing user stays trialing, just on
+    a fresh trial of the new plan.
     """
+    was_trialing = subscription.status == STATUS_TRIALING
     needs_reactivate = (
         subscription.status in (STATUS_EXPIRED, STATUS_CANCELED)
         or subscription.ends_at is not None
@@ -491,6 +502,54 @@ def change_plan(
         # freshly-active row (the upgrade/downgrade helpers below also
         # evict, but doing it here keeps observers consistent for any
         # intermediate caller that only re-checks ``is_active()``).
+        keys_to_evict: list[str] = []
+        if subscription.tenant_id:
+            keys_to_evict.append(
+                f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.tenant_id}"
+            )
+        if subscription.store_id:
+            keys_to_evict.append(
+                f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.store_id}"
+            )
+        if keys_to_evict:
+            cache.delete_many(keys_to_evict)
+
+    # Trial-reset on plan change (when source status is ``trialing``).
+    # A user on the Starter trial who picks a Growth plan should see
+    # a fresh trial of the *Growth* plan, not remain pinned to the
+    # Starter trial clock. The status stays ``trialing`` (the user is
+    # still in their free-trial window), but ``trial_ends_at`` is
+    # re-anchored to ``now + new_plan.trial_days`` so the countdown
+    # banner matches the plan name displayed on the manage page.
+    # If the new plan doesn't offer a trial (or its ``trial_days`` is
+    # zero), ``trial_ends_at`` is cleared and status is bumped to
+    # ``active`` — the user has effectively committed to a paid plan.
+    # The cache eviction mirrors the rest of this function so the next
+    # read picks up the updated row instead of the stale trialing one.
+    if was_trialing and not needs_reactivate:
+        new_trial_days = new_plan.trial_days or 0
+        if new_trial_days > 0:
+            subscription.trial_ends_at = timezone.now() + timedelta(
+                days=new_trial_days,
+            )
+            subscription.save(update_fields=["trial_ends_at", "updated_at"])
+        else:
+            # New plan has no trial → treat as immediate activation.
+            subscription.status = STATUS_ACTIVE
+            subscription.trial_ends_at = None
+            subscription.current_period_start = timezone.now()
+            subscription.current_period_end = (
+                timezone.now() + timedelta(days=30)
+            )
+            subscription.save(
+                update_fields=[
+                    "status",
+                    "trial_ends_at",
+                    "current_period_start",
+                    "current_period_end",
+                    "updated_at",
+                ],
+            )
         keys_to_evict: list[str] = []
         if subscription.tenant_id:
             keys_to_evict.append(
@@ -1131,6 +1190,22 @@ def renew_subscription(
     )
 
     record_event(subscription, EVENT_RENEWED, actor=actor)
+
+    # Evict the cached subscription slot(s) so the next read picks up
+    # the new period clock. Mirrors the cache-eviction pattern used in
+    # ``reactivate_subscription`` (services.py:1075-1085) and
+    # ``cancel_subscription`` (services.py:~).
+    keys_to_evict: list[str] = []
+    if subscription.tenant_id:
+        keys_to_evict.append(
+            f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.tenant_id}"
+        )
+    if subscription.store_id:
+        keys_to_evict.append(
+            f"{CACHE_SUBSCRIPTION_PREFIX}{subscription.store_id}"
+        )
+    if keys_to_evict:
+        cache.delete_many(keys_to_evict)
 
     logger.info(f"Renewed subscription {subscription.id}")
     return subscription

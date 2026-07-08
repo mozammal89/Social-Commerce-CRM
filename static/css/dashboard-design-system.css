@@ -1876,7 +1876,7 @@ textarea.form-control {
 
 .alert-info i,
 .alert--info i {
-    color: var(--info-600);
+    /* color: var(--info-50); */
 }
 
 /* Alert close button styling */
@@ -1904,7 +1904,7 @@ textarea.form-control {
 
 /* Alert link styling */
 .alert a {
-    color: inherit;
+    /* color: inherit; */
     text-decoration: underline;
     font-weight: var(--font-weight-semibold);
 }

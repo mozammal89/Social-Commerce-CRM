@@ -26,6 +26,15 @@ app.conf.beat_schedule = {
         "task": "apps.accounts.tasks.cleanup_refresh_tokens",
         "schedule": crontab(hour=0, minute=0),
     },
+    "renew-due-subscriptions-hourly": {
+        "task": "apps.permissions.tasks.renew_due_subscriptions",
+        # Runs before the expire sweeps so a renewed row (with a fresh
+        # ``current_period_end`` in the future) is no longer matched by
+        # ``expire_active_periods``. If renewal raises, the row is left
+        # with its old period end and the :30 sweep degrades gracefully
+        # to the existing expire behavior.
+        "schedule": crontab(minute=5),  # every hour at :05
+    },
     "expire-trials-hourly": {
         "task": "apps.permissions.tasks.expire_trials",
         "schedule": crontab(minute=15),  # every hour at :15

@@ -104,6 +104,21 @@ def dashboard_home(request):
     except Exception:
         user_subscription = None
 
+    # Trial-expiry banner context. Computed from ``user_subscription``
+    # (the same resolver used by the manage page) so the same row drives
+    # both banners — a trialing user sees a consistent countdown on
+    # both pages. ``is_trial`` + ``trial_days_remaining`` mirrors the
+    # context shape in ``apps.subscriptions.views.manage_subscription``
+    # so the dashboard template can render the same banner block.
+    is_trial = bool(user_subscription and user_subscription.status == "trialing")
+    trial_days_remaining = None
+    if is_trial and user_subscription.trial_ends_at:
+        _trial_end = user_subscription.trial_ends_at
+        from django.utils import timezone as _tz
+
+        if _trial_end > _tz.now():
+            trial_days_remaining = (_trial_end - _tz.now()).days
+
     if user_subscription is None:
         # No real subscription. The signup marker may still be set,
         # meaning the user paid but hasn't created their first store yet.
@@ -186,6 +201,14 @@ def dashboard_home(request):
         "subscription_needs_attention": subscription_needs_attention,
         # Plan-change banner payload (or None)
         "plan_changed": plan_changed,
+        # Trial-expiry banner context. ``is_trial`` is True only when
+        # the resolved subscription is in ``trialing`` status;
+        # ``trial_days_remaining`` is the integer day count used to
+        # decide whether to render the banner. Mirrors the context
+        # shape from ``manage_subscription`` (apps/subscriptions/views.py)
+        # so the same banner template logic works in both places.
+        "is_trial": is_trial,
+        "trial_days_remaining": trial_days_remaining,
     }
 
     # If user has pending subscription, get plan details
