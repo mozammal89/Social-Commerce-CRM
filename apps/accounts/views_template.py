@@ -207,4 +207,4 @@ class CustomPasswordChangeView(DjangoPasswordChangeView):
 @login_required
 def change_password_done(request):
     """Password change done view."""
-    return render(request, 'accounts/change_password_done.html')
+    return render(request, 'auth/change_password_done.html')

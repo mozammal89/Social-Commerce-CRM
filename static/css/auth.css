@@ -344,14 +344,14 @@
 }
 
 .auth-page a {
-  color: var(--auth-primary);
+  /* color: var(--auth-primary); */
   font-weight: 600;
   transition: var(--auth-transition);
   text-decoration: none;
 }
 
 .auth-page a:hover {
-  color: var(--auth-primary-dark);
+  /* color: var(--auth-primary-dark); */
   text-decoration: underline;
 }
 
