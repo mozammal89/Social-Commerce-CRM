@@ -45,11 +45,15 @@ class FacebookAdapter(BaseChannelAdapter):
     # ------------------------------------------------------------------
     def verify_webhook(self, *, method, headers, query_params, body, account) -> tuple[bool, Any]:
         app_secret = self._cred(account, "app_secret")
+        # The verify token lives on the account (or in credentials as a
+        # fallback); it is distinct from the app secret used for HMAC.
+        verify_token = account.webhook_verify_token or self._cred(account, "verify_token")
         ok, challenge = webhook.verify(
             query_params=query_params,
             body=body,
             headers=headers,
             app_secret=app_secret,
+            verify_token=verify_token,
         )
         # GET returns the challenge; POST returns "".
         return ok, challenge

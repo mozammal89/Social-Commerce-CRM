@@ -35,19 +35,22 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Verification
 # ---------------------------------------------------------------------------
-def verify(*, query_params: dict[str, str], body: bytes, headers: dict[str, str], app_secret: str) -> tuple[bool, str]:
+def verify(*, query_params: dict[str, str], body: bytes, headers: dict[str, str], app_secret: str, verify_token: str = "") -> tuple[bool, str]:
     """Validate a Facebook webhook request.
 
-    For GET (subscription verification): checks ``hub.verify_token`` and
+    For GET (subscription verification): checks ``hub.verify_token``
+    against ``verify_token`` (the account's stored verify token) and
     returns ``(True, hub.challenge)``.
     For POST (event delivery): checks the ``X-Hub-Signature-256`` /
-    ``X-Hub-Signature`` HMAC and returns ``(ok, "")``.
+    ``X-Hub-Signature`` HMAC (using ``app_secret``) and returns ``(ok, "")``.
     """
     method_hint = (query_params.get("hub.mode") or "").lower()
-    # Subscription handshake
+    # Subscription handshake — compare against the verify token, NOT the
+    # app secret. The verify token is a value the store owner picks when
+    # subscribing the webhook; the app secret is only for HMAC signatures.
     if method_hint == "subscribe":
         token = query_params.get("hub.verify_token", "")
-        if not hmac.compare_digest(token, app_secret):
+        if not verify_token or not hmac.compare_digest(token, verify_token):
             raise WebhookVerificationError("Facebook hub.verify_token mismatch.")
         return True, query_params.get("hub.challenge", "")
 

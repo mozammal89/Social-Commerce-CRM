@@ -80,6 +80,16 @@ class SubscriptionPlan(UUIDModel, TimeStampedModel):
     max_products = models.PositiveIntegerField(default=500)
     max_orders_per_month = models.PositiveIntegerField(default=1000)
     max_warehouses = models.PositiveIntegerField(default=1)
+    # Omnichannel messaging: how long a store on this plan keeps its
+    # message history. A daily Celery beat task hard-purges Message rows
+    # (and cascaded attachments/reactions) older than this for each store.
+    # ``None`` = unlimited (subject to the global MESSAGING_MAX_RETENTION_DAYS
+    # safety cap in settings). Typical tiers: 30 / 60 / 90 days.
+    message_retention_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=_("Message history retention in days. NULL = unlimited (capped by MESSAGING_MAX_RETENTION_DAYS)."),
+    )
 
     is_active = models.BooleanField(default=True)
     is_public = models.BooleanField(

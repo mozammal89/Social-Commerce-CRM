@@ -1874,10 +1874,10 @@ textarea.form-control {
     color: var(--warning-600);
 }
 
-.alert-info i,
+/* .alert-info i,
 .alert--info i {
-    /* color: var(--info-50); */
-}
+    color: var(--info-50);
+} */
 
 /* Alert close button styling */
 .alert .btn-close {

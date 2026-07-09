@@ -377,3 +377,8 @@ MESSAGING_ENCRYPTION_KEY = env.str(
     "MESSAGING_ENCRYPTION_KEY",
     default="uTZ5mqfZu7u_aKaPTaIrOAtJGjOE6e-Yc4AC0Y5Zcdc=",
 )
+
+# Hard cap (days) on message history regardless of plan, so a mis-set
+# ``SubscriptionPlan.message_retention_days`` can never cause unbounded
+# growth. Plans use 30/60/90 days; anything higher is clipped to this.
+MESSAGING_MAX_RETENTION_DAYS = env.int("MESSAGING_MAX_RETENTION_DAYS", default=90)
