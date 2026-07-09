@@ -1,0 +1,160 @@
+"""
+Base channel adapter — the contract every messaging platform implements.
+
+Design (Open/Closed + Dependency Inversion)
+-------------------------------------------
+The service layer depends on ``BaseChannelAdapter`` (this abstraction),
+never on a concrete ``FacebookAdapter`` or ``WhatsAppAdapter``. Adding a
+new platform means:
+
+1. Subclass ``BaseChannelAdapter`` and set ``channel_type``.
+2. Implement the abstract methods (webhook verification/parsing, sending,
+   identity lookup, account authentication).
+3. Register it with ``@register("<channel_type>")``.
+
+The core models, services and realtime layer then work with the new
+channel **unchanged**. Services hand adapters normalized DTOs
+(``OutboundMessage``) and receive normalized DTOs back
+(``NormalizedIncomingEvent`` / ``DeliveryUpdate``) — platform JSON never
+leaves the adapter.
+
+Adapters are instantiated per-call (see ``registry.get_adapter``) and
+receive the ``ConnectedAccount`` they operate on, so they are stateless
+and safe to use across threads/requests.
+"""
+
+from __future__ import annotations
+
+import abc
+from typing import TYPE_CHECKING, Any
+
+from .dto import (
+    DeliveryUpdate,
+    NormalizedIncomingEvent,
+    OutboundMessage,
+    SendResult,
+)
+
+if TYPE_CHECKING:  # pragma: no cover - type-only imports
+    from ..models import ConnectedAccount
+
+
+class BaseChannelAdapter(abc.ABC):
+    """Abstract base for all channel adapters.
+
+    Subclasses set ``channel_type`` (matching a ``ChannelType`` value)
+    and implement the abstract methods. Concrete adapters live in
+    platform subpackages (e.g. ``apps/messaging/adapters/facebook/``).
+    """
+
+    #: Stable identifier matching ``Channel.channel_type`` and the
+    #: registry key. Subclasses MUST override this.
+    channel_type: str = ""
+
+    # ------------------------------------------------------------------
+    # Webhook ingestion (platform -> CRM)
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    def verify_webhook(
+        self,
+        *,
+        method: str,
+        headers: dict[str, str],
+        query_params: dict[str, str],
+        body: bytes,
+        account: "ConnectedAccount",
+    ) -> tuple[bool, Any]:
+        """Validate the inbound webhook request.
+
+        Returns ``(ok, response_payload)``:
+
+        * For GET subscription verification (e.g. Facebook's
+          ``hub.challenge`` handshake), ``ok`` is True and
+          ``response_payload`` is the challenge string to echo back.
+        * For POST event delivery, ``ok`` indicates whether the
+          signature / verify-token check passed; ``response_payload``
+          is unused (the caller returns 200 regardless to acknowledge
+          the webhook fast).
+        * When ``ok`` is False the caller returns 403.
+        """
+
+    @abc.abstractmethod
+    def parse_webhook(
+        self,
+        *,
+        headers: dict[str, str],
+        body: bytes,
+        account: "ConnectedAccount",
+    ) -> list[NormalizedIncomingEvent | DeliveryUpdate]:
+        """Parse a verified webhook body into normalized events.
+
+        A single platform payload may contain multiple messages or a
+        mix of messages and status receipts; return them all. Invalid
+        or unsupported entries should be skipped (and logged) rather
+        than raising — one bad event must not drop the whole batch.
+        """
+
+    # ------------------------------------------------------------------
+    # Sending (CRM -> platform)
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    def send_message(
+        self,
+        *,
+        account: "ConnectedAccount",
+        recipient_external_id: str,
+        message: OutboundMessage,
+    ) -> SendResult:
+        """Send an outbound message via the platform's send API.
+
+        Implementations should translate ``message`` into the platform
+        payload, call the API, and return a ``SendResult``. Network /
+        API errors raise ``SendMessageError`` (caught by the service
+        layer, which marks the message FAILED).
+        """
+
+    # ------------------------------------------------------------------
+    # Identity / profile enrichment
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    def fetch_identity_profile(
+        self,
+        *,
+        account: "ConnectedAccount",
+        external_id: str,
+    ) -> dict[str, Any]:
+        """Fetch the platform-side profile for a customer id.
+
+        Returns a dict with at least ``display_name`` and ``avatar_url``
+        (empty strings when unavailable) plus any platform-specific
+        fields under ``extra``. Adapters that can't fetch profiles
+        (e.g. WhatsApp Cloud API without a contacts lookup) should
+        return an empty-ish dict rather than raising.
+        """
+
+    # ------------------------------------------------------------------
+    # Account connection / lifecycle
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    def authenticate_account(
+        self,
+        *,
+        account: "ConnectedAccount",
+        credentials: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Validate exchanged credentials and return normalized ones.
+
+        Given a freshly-authorized account and the raw credentials
+        (OAuth code, short-lived token, etc.), perform any token
+        exchange/long-lived-token conversion and return the
+        **normalized** credentials dict to store (encrypted) on the
+        account. Raise ``AuthenticationError`` on failure.
+        """
+
+    def refresh_credentials(self, *, account: "ConnectedAccount") -> None:
+        """Refresh expiring credentials (e.g. FB long-lived tokens).
+
+        Default no-op; adapters with expiring tokens override this.
+        It is called by a periodic Celery task (the channel service).
+        """
+        return None

@@ -1,23 +1,69 @@
 """
 Channel adapter package.
 
-Concrete adapters (Facebook, WhatsApp, ...) live in subpackages and
-register themselves with ``apps/messaging/adapters/registry.py``. The
-``MessagingConfig.ready()`` hook imports this package so adapters are
-registered on startup.
+Platform-specific adapters (Facebook, WhatsApp, ...) live in
+subpackages and register themselves with the registry via the
+``@register`` decorator. Importing this package eagerly imports every
+bundled adapter so they are registered on startup — both here and in
+``MessagingConfig.ready()`` (which imports this package).
 
-Phase 1 (this commit) ships the package skeleton so the app imports
-cleanly; the base adapter, registry and platform adapters are added in
-the subsequent service-layer phase. Importing this package must never
-fail when no adapter modules exist yet.
+Re-exports the public adapter API so callers can do::
+
+    from apps.messaging.adapters import get_adapter, register, BaseChannelAdapter
 """
 
-# The registry is imported eagerly so that any adapter module added
-# later can rely on ``register`` / ``get_adapter`` being available as
-# soon as the app registry is ready.
-try:
-    from .registry import get_adapter, register  # noqa: F401
-except Exception:  # pragma: no cover - registry not yet present in phase 1
-    # During early phases the registry module may not exist yet; keep
-    # the package importable so AppConfig.ready() is a no-op.
-    pass
+from .base import BaseChannelAdapter
+from .dto import (
+    DeliveryUpdate,
+    NormalizedAttachment,
+    NormalizedIncomingEvent,
+    OutboundAttachment,
+    OutboundMessage,
+    SendResult,
+)
+from .exceptions import (
+    AdapterError,
+    AuthenticationError,
+    ConfigurationError,
+    SendMessageError,
+    WebhookParseError,
+    WebhookVerificationError,
+)
+from .registry import (
+    get_adapter,
+    get_adapter_class,
+    get_adapter_for_account,
+    register,
+    registered_channel_types,
+)
+
+# Eagerly import bundled adapters so they self-register. Done at the
+# bottom (after the registry is importable) and guarded so a missing
+# optional adapter never breaks the whole app.
+from .registry import _import_adapters  # noqa: E402
+
+_import_adapters()
+
+__all__ = [
+    # Base + DTOs
+    "BaseChannelAdapter",
+    "NormalizedAttachment",
+    "NormalizedIncomingEvent",
+    "DeliveryUpdate",
+    "OutboundAttachment",
+    "OutboundMessage",
+    "SendResult",
+    # Exceptions
+    "AdapterError",
+    "AuthenticationError",
+    "ConfigurationError",
+    "SendMessageError",
+    "WebhookParseError",
+    "WebhookVerificationError",
+    # Registry
+    "register",
+    "get_adapter",
+    "get_adapter_class",
+    "get_adapter_for_account",
+    "registered_channel_types",
+]
