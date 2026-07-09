@@ -142,6 +142,33 @@ RESOURCES: Dict[str, dict] = {
         "description": "Third-party integrations (FB, WhatsApp, etc.).",
         "actions": ["view", "create", "update", "delete"],
     },
+    # ----- Omnichannel messaging -----------------------------------------
+    # Store-aware resources for the unified inbox. ``customers`` (above)
+    # is reused for the unified customer profile model.
+    "connected_channels": {
+        "name": "Connected Channels",
+        "category": "platform",
+        "description": "Connected messaging accounts (Facebook pages, WhatsApp numbers, ...).",
+        "actions": ["view", "create", "update", "delete", "manage"],
+    },
+    "conversations": {
+        "name": "Conversations",
+        "category": "core",
+        "description": "Unified-inbox conversations across all channels.",
+        "actions": ["view", "create", "update", "delete", "assign", "manage"],
+    },
+    "messages": {
+        "name": "Messages",
+        "category": "core",
+        "description": "Messages sent and received through the unified inbox.",
+        "actions": ["view", "create", "delete", "manage"],
+    },
+    "notes": {
+        "name": "Internal Notes",
+        "category": "core",
+        "description": "Private agent notes on conversations and customers.",
+        "actions": ["view", "create", "update", "delete"],
+    },
     "settings": {
         "name": "Store Settings",
         "category": "platform",

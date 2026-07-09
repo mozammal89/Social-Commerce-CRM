@@ -55,6 +55,7 @@ LOCAL_APPS = [
     "apps.permissions",
     "apps.permissions.ui",
     "apps.subscriptions",
+    "apps.messaging",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -354,3 +355,25 @@ STORAGES = {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# Omnichannel messaging
+#
+# ``MESSAGING_ENCRYPTION_KEY`` is the Fernet key used by
+# ``apps.messaging.fields.EncryptedJSONField`` to encrypt connected-account
+# credentials (OAuth tokens, app secrets, webhook signing secrets) at rest.
+# Generate a production key with::
+#
+#     python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+#
+# The value below is a throwaway dev key; ALWAYS override it in production
+# via the environment so stored credentials are not decryptable with a
+# public key. Rotating the key invalidates existing ciphertext (the field
+# degrades to surfacing raw text rather than crashing), so rotate
+# deliberately and re-connect accounts afterward.
+# ---------------------------------------------------------------------------
+MESSAGING_ENCRYPTION_KEY = env.str(
+    "MESSAGING_ENCRYPTION_KEY",
+    default="uTZ5mqfZu7u_aKaPTaIrOAtJGjOE6e-Yc4AC0Y5Zcdc=",
+)

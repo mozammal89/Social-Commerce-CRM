@@ -27,6 +27,7 @@ urlpatterns = [
     path("reports/", include("apps.reports.urls")),
     path("settings/", include("apps.settings.urls")),
     path("help/", include("apps.help.urls")),
+    path("messaging/", include("apps.messaging.urls")),  # Omnichannel messaging
     # API Routes
     path("api/v1/health/", include("apps.core.urls")),
     path("api/v1/auth/", include("apps.accounts.urls_api")),  # API routes
