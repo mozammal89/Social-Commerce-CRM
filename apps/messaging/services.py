@@ -481,7 +481,9 @@ class ConversationService:
     @staticmethod
     def add_internal_note(*, conversation: Conversation, author: User, body: str, mentions=None) -> InternalNote:
         with transaction.atomic():
-            note = InternalNote.objects.create(conversation=conversation, author=author, body=body)
+            note = InternalNote.objects.create(
+                store=conversation.store, conversation=conversation, author=author, body=body,
+            )
             if mentions:
                 note.mentions.set(mentions)
             Activity.objects.create(
