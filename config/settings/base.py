@@ -55,6 +55,7 @@ LOCAL_APPS = [
     "apps.permissions",
     "apps.permissions.ui",
     "apps.subscriptions",
+    "apps.help",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

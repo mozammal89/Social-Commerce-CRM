@@ -289,6 +289,14 @@
                     </div>
                     <span class="sidebar-nav-label">Support</span>
                 </a>
+                {% if user.is_staff or user.is_superuser %}
+                <a href="{% url 'help:staff_dashboard' %}" class="sidebar-nav-item {% if request.resolver_match.url_name == 'staff_dashboard' or 'staff_' in request.resolver_match.url_name %}active{% endif %}">
+                    <div class="sidebar-nav-icon">
+                        <i class="bi bi-headset"></i>
+                    </div>
+                    <span class="sidebar-nav-label">Staff Support</span>
+                </a>
+                {% endif %}
             </div>
         </nav>
     </div>

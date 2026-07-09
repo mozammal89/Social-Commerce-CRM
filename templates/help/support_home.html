@@ -1,0 +1,183 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% load static %}
+
+{% block title %}Support Center - {{ APP_NAME }}{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/support.css' %}">
+{% endblock %}
+
+{% block breadcrumbs %}
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-4">
+            <li class="breadcrumb-item"><a href="{% url 'dashboard:home' %}">Dashboard</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Support</li>
+        </ol>
+    </nav>
+{% endblock %}
+
+{% block content %}
+<!-- Support Hero Section -->
+<div class="support-hero">
+    <div class="support-hero-content">
+        <h1 class="support-hero-title">How can we help you today?</h1>
+        <p class="support-hero-subtitle">Search our knowledge base or create a support ticket</p>
+
+        <!-- Search Box -->
+        <div class="support-search-container">
+            <div class="support-search-box">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="support-search-icon">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input
+                    type="text"
+                    id="faqSearchInput"
+                    class="support-search-input"
+                    placeholder="Search for answers..."
+                    autocomplete="off"
+                >
+                <div id="searchSpinner" class="search-spinner d-none">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div id="searchResults" class="search-results d-none"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Access Cards -->
+<div class="support-quick-actions">
+    <div class="row g-4">
+        <!-- Browse FAQs -->
+        <div class="col-md-4">
+            <a href="#faq-categories" class="support-quick-card">
+                <div class="support-quick-card-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                    </svg>
+                </div>
+                <h3 class="support-quick-card-title">Browse FAQs</h3>
+                <p class="support-quick-card-desc">Find answers to common questions by category</p>
+            </a>
+        </div>
+
+        <!-- My Tickets -->
+        <div class="col-md-4">
+            <a href="{% url 'help:my_tickets' %}" class="support-quick-card">
+                <div class="support-quick-card-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                </div>
+                <h3 class="support-quick-card-title">My Tickets</h3>
+                <p class="support-quick-card-desc">View and manage your support tickets</p>
+            </a>
+        </div>
+
+        <!-- Create Ticket -->
+        <div class="col-md-4">
+            <a href="{% url 'help:create_ticket' %}" class="support-quick-card">
+                <div class="support-quick-card-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                </div>
+                <h3 class="support-quick-card-title">Contact Support</h3>
+                <p class="support-quick-card-desc">Can't find an answer? Create a support ticket</p>
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- FAQ Categories Section -->
+<div id="faq-categories" class="support-section">
+    <h2 class="support-section-title">Frequently Asked Questions</h2>
+
+    {% if categories %}
+    <div class="row g-4">
+        {% for category in categories %}
+        <div class="col-lg-6">
+            <div class="support-faq-category-card">
+                <div class="support-faq-category-header">
+                    <div class="support-faq-category-icon">
+                        <i class="{{ category.icon }}"></i>
+                    </div>
+                    <div>
+                        <h3 class="support-faq-category-title">{{ category.name }}</h3>
+                        <p class="support-faq-category-count">{{ category.article_count }} articles</p>
+                    </div>
+                </div>
+                <div class="support-faq-category-articles">
+                    {% for article in category.articles.all|slice:":3" %}
+                    <a href="{% url 'help:faq_detail' article.slug %}" class="support-faq-article-link">
+                        <span class="support-faq-article-dot"></span>
+                        {{ article.question }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>
+        No FAQ articles available at the moment.
+    </div>
+    {% endif %}
+</div>
+
+<!-- Contact Options Section -->
+<div class="support-section support-contact-section">
+    <h2 class="support-section-title">Need More Help?</h2>
+    <div class="row g-4">
+        <div class="col-md-8">
+            <div class="support-contact-card">
+                <h3 class="support-contact-title">Create a Support Ticket</h3>
+                <p class="support-contact-desc">
+                    Our support team is available to help you. Submit a ticket and we'll get back to you within 24 hours.
+                </p>
+                <div class="support-contact-details">
+                    <div class="support-contact-item">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span>Response time: Within 24 hours</span>
+                    </div>
+                    <div class="support-contact-item">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                        <span>Secure & private communication</span>
+                    </div>
+                </div>
+                <a href="{% url 'help:create_ticket' %}" class="btn btn-primary btn-lg">
+                    Create Support Ticket
+                </a>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="support-info-card">
+                <h3 class="support-info-title">Quick Links</h3>
+                <ul class="support-info-links">
+                    <li><a href="{% url 'accounts:profile' %}"><i class="bi bi-person"></i> Account Settings</a></li>
+                    <li><a href="{% url 'help:documentation' %}"><i class="bi bi-book"></i> Documentation</a></li>
+                    <li><a href="{% url 'subscriptions:plans' %}"><i class="bi bi-credit-card"></i> Subscription Plans</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/support.js' %}"></script>
+{% endblock %}

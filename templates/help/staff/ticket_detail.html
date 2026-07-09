@@ -1,0 +1,250 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% load static %}
+
+{% block title %}{{ ticket.ticket_id }} - {{ APP_NAME }}{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/support.css' %}">
+{% endblock %}
+
+{% block breadcrumbs %}
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-4">
+            <li class="breadcrumb-item"><a href="{% url 'dashboard:home' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'help:staff_tickets_queue' %}">Tickets Queue</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ ticket.ticket_id }}</li>
+        </ol>
+    </nav>
+{% endblock %}
+
+{% block content %}
+<div class="support-ticket-detail-container">
+    <!-- Ticket Header -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                <div class="flex-grow-1">
+                    <h1 class="h3 mb-2">{{ ticket.subject }}</h1>
+                    <div class="d-flex gap-3 flex-wrap text-muted">
+                        <span class="support-ticket-detail-id">{{ ticket.ticket_id }}</span>
+                        <span>Created {{ ticket.created_at|date:"F d, Y · g:i A" }}</span>
+                        {% if ticket.store %}
+                        <span>Store: {{ ticket.store.name }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <span class="badge support-ticket-status-badge status-{{ ticket.status }} fs-6">
+                        {{ ticket.get_status_display }}
+                    </span>
+                    <span class="badge support-ticket-priority-badge priority-{{ ticket.priority }} fs-6">
+                        {{ ticket.get_priority_display }}
+                    </span>
+                    <span class="badge support-ticket-category-badge fs-6">
+                        {{ ticket.get_category_display }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Conversation Thread -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <!-- Original Ticket Description -->
+                    <div class="support-comment support-comment--user mb-4">
+                        <div class="support-comment-header">
+                            <div class="support-comment-avatar">
+                                <div class="support-comment-avatar-user">
+                                    {{ ticket.user.first_name|first }}{{ ticket.user.last_name|first }}
+                                </div>
+                            </div>
+                            <div>
+                                <div class="support-comment-author">{{ ticket.user.get_full_name|default:ticket.user.email }}</div>
+                                <div class="support-comment-time">{{ ticket.created_at|date:"M d, Y · g:i A" }}</div>
+                            </div>
+                        </div>
+                        <div class="support-comment-content">{{ ticket.description|linebreaks }}</div>
+                        {% if ticket.attachment %}
+                        <div class="support-comment-attachment">
+                            <i class="bi bi-paperclip"></i>
+                            <a href="{{ ticket.attachment.url }}" target="_blank">View attachment</a>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Comments Thread -->
+                    {% for comment in comments %}
+                    <div class="support-comment {% if comment.is_staff_response %}support-comment--staff{% else %}support-comment--user{% endif %} mb-3">
+                        <div class="support-comment-header">
+                            <div class="support-comment-avatar">
+                                {% if comment.is_staff_response %}
+                                    <div class="support-comment-avatar-staff">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                        </svg>
+                                    </div>
+                                {% else %}
+                                    <div class="support-comment-avatar-user">
+                                        {{ comment.user.first_name|first }}{{ comment.user.last_name|first }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <div class="support-comment-author">
+                                    {% if comment.is_staff_response %}
+                                        Support Team
+                                    {% else %}
+                                        {{ comment.user.get_full_name|default:comment.user.email }}
+                                    {% endif %}
+                                </div>
+                                <div class="support-comment-time">{{ comment.created_at|date:"M d, Y · g:i A" }}</div>
+                            </div>
+                        </div>
+                        <div class="support-comment-content">{{ comment.content|linebreaks }}</div>
+                        {% if comment.attachment %}
+                        <div class="support-comment-attachment">
+                            <i class="bi bi-paperclip"></i>
+                            <a href="{{ comment.attachment.url }}" target="_blank">View attachment</a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+
+                    <!-- Staff Response Form -->
+                    {% if ticket.status != 'closed' %}
+                    <div class="border-top pt-4 mt-4">
+                        <h5 class="mb-3">Post a Response</h5>
+                        <form method="post" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <textarea
+                                    name="content"
+                                    class="form-control"
+                                    rows="4"
+                                    placeholder="Type your response here..."
+                                    required
+                                ></textarea>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <input type="file" name="attachment" class="form-control form-control-sm" style="width: auto;">
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <select name="change_status" class="form-select form-select-sm" style="width: auto;">
+                                        <option value="">Keep status: {{ ticket.get_status_display }}</option>
+                                        {% for value, label in status_choices %}
+                                            {% if value != ticket.status %}
+                                            <option value="{{ value }}">{{ label }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn btn-primary btn-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="d-inline-block align-text-bottom me-1">
+                                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                        </svg>
+                                        Send Response
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Ticket Details -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Ticket Details</h5>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5 text-muted">Status</dt>
+                        <dd class="col-sm-7">
+                            <span class="badge support-ticket-status-badge status-{{ ticket.status }}">
+                                {{ ticket.get_status_display }}
+                            </span>
+                        </dd>
+
+                        <dt class="col-sm-5 text-muted">Priority</dt>
+                        <dd class="col-sm-7">
+                            <span class="badge support-ticket-priority-badge priority-{{ ticket.priority }}">
+                                {{ ticket.get_priority_display }}
+                            </span>
+                        </dd>
+
+                        <dt class="col-sm-5 text-muted">Category</dt>
+                        <dd class="col-sm-7">{{ ticket.get_category_display }}</dd>
+
+                        <dt class="col-sm-5 text-muted">User</dt>
+                        <dd class="col-sm-7">
+                            <a href="mailto:{{ ticket.user.email }}">{{ ticket.user.email }}</a>
+                        </dd>
+
+                        <dt class="col-sm-5 text-muted">Created</dt>
+                        <dd class="col-sm-7">{{ ticket.created_at|date:"M d, Y · g:i A" }}</dd>
+
+                        {% if ticket.updated_at != ticket.created_at %}
+                        <dt class="col-sm-5 text-muted">Last Updated</dt>
+                        <dd class="col-sm-7">{{ ticket.updated_at|date:"M d, Y · g:i A" }}</dd>
+                        {% endif %}
+
+                        <dt class="col-sm-5 text-muted">Last Response</dt>
+                        <dd class="col-sm-7">{% if ticket.last_response_from == 'support' %}Support Team{% else %}User{% endif %}</dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Quick Actions</h5>
+                    <div class="d-grid gap-2">
+                        {% if ticket.status != 'in_progress' and ticket.status != 'resolved' %}
+                        <form method="post" action="{% url 'help:staff_assign_ticket' ticket.ticket_id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-primary btn-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="d-inline-block align-text-bottom me-1">
+                                    <polyline points="16 18 22 12 16 6"></polyline>
+                                    <polyline points="8 6 2 12 8 18"></polyline>
+                                </svg>
+                                Assign to Me (In Progress)
+                            </button>
+                        </form>
+                        {% endif %}
+
+                        <form method="post" action="{% url 'help:staff_internal_note' ticket.ticket_id %}">
+                            {% csrf_token %}
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="content" class="form-control" placeholder="Add internal note..." required>
+                                <button type="submit" class="btn btn-outline-secondary">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                        <polyline points="10 9 9 9 8 9"></polyline>
+                                    </svg>
+                                </button>
+                            </div>
+                        </form>
+
+                        <a href="{% url 'help:staff_tickets_queue' %}" class="btn btn-outline-secondary btn-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="d-inline-block align-text-bottom me-1">
+                                <path d="M19 12H5M12 19l-7-7 7-7"></path>
+                            </svg>
+                            Back to Queue
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

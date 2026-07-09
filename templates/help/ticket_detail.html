@@ -1,0 +1,232 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% load static %}
+
+{% block title %}{{ ticket.ticket_id }} - {{ APP_NAME }}{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/support.css' %}">
+{% endblock %}
+
+{% block breadcrumbs %}
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-4">
+            <li class="breadcrumb-item"><a href="{% url 'dashboard:home' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'help:support' %}">Support</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'help:my_tickets' %}">My Tickets</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ ticket.ticket_id }}</li>
+        </ol>
+    </nav>
+{% endblock %}
+
+{% block content %}
+<div class="support-ticket-detail-container">
+    <!-- Ticket Header -->
+    <div class="support-ticket-detail-header">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h1 class="support-ticket-detail-title">{{ ticket.subject }}</h1>
+                <div class="support-ticket-detail-meta">
+                    <span class="support-ticket-detail-id">{{ ticket.ticket_id }}</span>
+                    <span class="support-ticket-detail-separator">•</span>
+                    <span>Created {{ ticket.created_at|date:"F d, Y" }}</span>
+                </div>
+            </div>
+            <div class="support-ticket-detail-badges">
+                <span class="badge support-ticket-status-badge status-{{ ticket.status }}">
+                    {{ ticket.get_status_display }}
+                </span>
+                <span class="badge support-ticket-priority-badge priority-{{ ticket.priority }}">
+                    {{ ticket.get_priority_display }}
+                </span>
+                <span class="badge support-ticket-category-badge">
+                    {{ ticket.get_category_display }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Conversation Thread -->
+            <div class="support-conversation">
+                {% for comment in comments %}
+                <div class="support-comment {% if comment.is_staff_response %}support-comment--staff{% else %}support-comment--user{% endif %}">
+                    <div class="support-comment-header">
+                        <div class="support-comment-avatar">
+                            {% if comment.is_staff_response %}
+                                <div class="support-comment-avatar-staff">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                    </svg>
+                                </div>
+                            {% else %}
+                                <div class="support-comment-avatar-user">
+                                    {{ comment.user.first_name|first }}{{ comment.user.last_name|first }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <div class="support-comment-author">
+                                {% if comment.is_staff_response %}
+                                    Support Team
+                                {% else %}
+                                    You
+                                {% endif %}
+                            </div>
+                            <div class="support-comment-time">{{ comment.created_at|date:"M d, Y · g:i A" }}</div>
+                        </div>
+                    </div>
+                    <div class="support-comment-content">{{ comment.content|linebreaks }}</div>
+                    {% if comment.attachment %}
+                    <div class="support-comment-attachment">
+                        <i class="bi bi-paperclip"></i>
+                        <a href="{{ comment.attachment.url }}" target="_blank">View attachment</a>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                <!-- Reply Form -->
+                {% if ticket.status != 'closed' %}
+                <form method="post" enctype="multipart/form-data" class="support-reply-form">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <textarea
+                            name="content"
+                            class="form-control"
+                            rows="4"
+                            placeholder="Type your response here..."
+                            required
+                            id="replyContent"
+                        ></textarea>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="support-attachment-upload">
+                            <input type="file" name="attachment" class="d-none" id="replyAttachment">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('replyAttachment').click()">
+                                <i class="bi bi-paperclip"></i>
+                                Attach file
+                            </button>
+                            <span class="text-muted small ms-2" id="replyFileName"></span>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="d-inline-block align-text-bottom me-1">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                            Send Response
+                        </button>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Ticket Details Card -->
+            <div class="card border-0 mb-4">
+                <div class="card-body">
+                    <h3 class="support-sidebar-section-title">Ticket Details</h3>
+                    <dl class="support-ticket-details">
+                        <div class="support-ticket-detail-item">
+                            <dt>Status</dt>
+                            <dd>
+                                <span class="badge support-ticket-status-badge status-{{ ticket.status }}">
+                                    {{ ticket.get_status_display }}
+                                </span>
+                            </dd>
+                        </div>
+                        <div class="support-ticket-detail-item">
+                            <dt>Priority</dt>
+                            <dd>
+                                <span class="badge support-ticket-priority-badge priority-{{ ticket.priority }}">
+                                    {{ ticket.get_priority_display }}
+                                </span>
+                            </dd>
+                        </div>
+                        <div class="support-ticket-detail-item">
+                            <dt>Category</dt>
+                            <dd>{{ ticket.get_category_display }}</dd>
+                        </div>
+                        <div class="support-ticket-detail-item">
+                            <dt>Created</dt>
+                            <dd>{{ ticket.created_at|date:"F d, Y · g:i A" }}</dd>
+                        </div>
+                        {% if ticket.updated_at != ticket.created_at %}
+                        <div class="support-ticket-detail-item">
+                            <dt>Last Updated</dt>
+                            <dd>{{ ticket.updated_at|date:"F d, Y · g:i A" }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if ticket.store %}
+                        <div class="support-ticket-detail-item">
+                            <dt>Store</dt>
+                            <dd>{{ ticket.store.name }}</dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Actions Card -->
+            <div class="card border-0">
+                <div class="card-body">
+                    <h3 class="support-sidebar-section-title">Actions</h3>
+                    <div class="d-grid gap-2">
+                        {% if ticket.status == 'closed' %}
+                        <form method="post" action="{% url 'help:reopen_ticket' ticket.ticket_id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-primary">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="d-inline-block align-text-bottom me-1">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                </svg>
+                                Reopen Ticket
+                            </button>
+                        </form>
+                        {% elif ticket.status != 'closed' %}
+                        <form method="post" action="{% url 'help:close_ticket' ticket.ticket_id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-danger">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="d-inline-block align-text-bottom me-1">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                                Close Ticket
+                            </button>
+                        </form>
+                        {% endif %}
+                        <a href="{% url 'help:my_tickets' %}" class="btn btn-outline-secondary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="d-inline-block align-text-bottom me-1">
+                                <path d="M19 12H5M12 19l-7-7 7-7"></path>
+                            </svg>
+                            Back to My Tickets
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.getElementById('replyAttachment');
+    const fileNameDisplay = document.getElementById('replyFileName');
+
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            if (this.files[0]) {
+                fileNameDisplay.textContent = this.files[0].name;
+            } else {
+                fileNameDisplay.textContent = '';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

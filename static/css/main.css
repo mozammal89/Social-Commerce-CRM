@@ -139,7 +139,7 @@ body {
 
 .status-pending {
     background: var(--warning-50);
-    color: var(--warning-600);
+    color: var(--warning-50);
 }
 
 .status-archived {

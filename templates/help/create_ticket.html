@@ -1,0 +1,329 @@
+{% extends 'layouts/dashboard.html' %}
+
+{% load static %}
+
+{% block title %}Create Support Ticket - {{ APP_NAME }}{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/support.css' %}">
+{% endblock %}
+
+{% block breadcrumbs %}
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-4">
+            <li class="breadcrumb-item"><a href="{% url 'dashboard:home' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'help:support' %}">Support</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Create Ticket</li>
+        </ol>
+    </nav>
+{% endblock %}
+
+{% block content %}
+<div class="support-create-ticket-container">
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Create Ticket Form -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h1 class="support-form-title">Create Support Ticket</h1>
+                    <p class="support-form-subtitle">Fill out the form below and our support team will get back to you within 24 hours.</p>
+
+                    <form method="post" enctype="multipart/form-data" class="support-ticket-form" id="ticketForm" novalidate>
+                        {% csrf_token %}
+
+                        <!-- Subject -->
+                        <div class="mb-4">
+                            <label for="{{ form.subject.id_for_label }}" class="form-label support-form-label">
+                                Subject <span class="text-danger">*</span>
+                            </label>
+                            {{ form.subject }}
+                            {% if form.subject.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.subject.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="form-text">Brief summary of your issue (min. 10 characters)</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Category & Priority Row -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label for="{{ form.category.id_for_label }}" class="form-label support-form-label">
+                                    Category <span class="text-danger">*</span>
+                                </label>
+                                {{ form.category }}
+                                {% if form.category.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.category.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="{{ form.priority.id_for_label }}" class="form-label support-form-label">
+                                    Priority <span class="text-danger">*</span>
+                                </label>
+                                {{ form.priority }}
+                                {% if form.priority.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.priority.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Store (Optional) -->
+                        {% if form.store.field.queryset.exists %}
+                        <div class="mb-4">
+                            <label for="{{ form.store.id_for_label }}" class="form-label support-form-label">
+                                Store <span class="text-muted">(Optional)</span>
+                            </label>
+                            {{ form.store }}
+                            <div class="form-text">Select a store if this issue is related to a specific store</div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Description -->
+                        <div class="mb-4">
+                            <label for="{{ form.description.id_for_label }}" class="form-label support-form-label">
+                                Description <span class="text-danger">*</span>
+                            </label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.description.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="form-text">Please provide detailed information about your issue (min. 50 characters)</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Attachment -->
+                        <div class="mb-4">
+                            <label class="form-label support-form-label">
+                                Attachment <span class="text-muted">(Optional)</span>
+                            </label>
+                            <div class="support-file-upload" id="fileUploadArea">
+                                <input type="file" name="{{ form.attachment.html_name }}" id="{{ form.attachment.id_for_label }}" class="d-none" accept="image/png,image/jpeg,application/pdf,.doc,.docx">
+                                <div class="support-file-upload-content" id="fileUploadContent">
+                                    <div class="upload-placeholder">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                            <polyline points="17 8 12 3 7 8"></polyline>
+                                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                                        </svg>
+                                        <p class="mb-1 fw-semibold">Drop a file here or click to upload</p>
+                                        <p class="text-muted small mb-0">PNG, JPG, PDF, DOC up to 5MB</p>
+                                    </div>
+                                </div>
+                                <div class="support-file-preview d-none" id="filePreview">
+                                    <div class="support-file-info">
+                                        <i class="bi bi-file-earmark-text fs-4" id="previewIcon"></i>
+                                        <div class="file-details">
+                                            <span id="previewFileName" class="fw-medium"></span>
+                                            <span class="text-muted small" id="previewFileSize"></span>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" id="removeFile">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% if form.attachment.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.attachment.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="d-flex gap-3 pt-3">
+                            <button type="submit" class="btn btn-primary btn-lg px-5">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="d-inline-block align-text-bottom me-2">
+                                    <path d="M22 2L11 13"></path>
+                                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                </svg>
+                                Submit Ticket
+                            </button>
+                            <a href="{% url 'help:support' %}" class="btn btn-outline-secondary btn-lg px-5">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Info -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h3 class="support-sidebar-title">Tips for Faster Support</h3>
+                    <ul class="support-tips-list">
+                        <li>
+                            <div class="support-tip-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                </svg>
+                            </div>
+                            <div>
+                                <strong>Be Specific</strong>
+                                <p class="text-muted small mb-0">Include exact error messages and steps to reproduce</p>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="support-tip-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                    <polyline points="21 15 16 10 5 21"></polyline>
+                                </svg>
+                            </div>
+                            <div>
+                                <strong>Include Screenshots</strong>
+                                <p class="text-muted small mb-0">Attach relevant screenshots to help us understand the issue</p>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="support-tip-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <strong>Check Existing Tickets</strong>
+                                <p class="text-muted small mb-0">Review your previous tickets for similar issues</p>
+                            </div>
+                        </li>
+                    </ul>
+
+                    <div class="support-sidebar-footer mt-4">
+                        <h4 class="support-sidebar-footer-title">Average Response Time</h4>
+                        <div class="support-response-time">
+                            <span class="support-response-time-value">2-4 hours</span>
+                            <span class="support-response-time-label">during business hours</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('ticketForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            if (!form.checkValidity()) {
+                e.preventDefault();
+                e.stopPropagation();
+                form.classList.add('was-validated');
+            }
+        });
+    }
+
+    // File upload handling
+    const fileInput = document.getElementById('{{ form.attachment.id_for_label }}');
+    const fileUploadArea = document.getElementById('fileUploadArea');
+    const fileUploadContent = document.getElementById('fileUploadContent');
+    const filePreview = document.getElementById('filePreview');
+    const removeFileBtn = document.getElementById('removeFile');
+
+    if (fileUploadArea) {
+        fileUploadArea.addEventListener('click', function(e) {
+            if (e.target === fileUploadArea || fileUploadArea.contains(e.target)) {
+                if (!filePreview.classList.contains('d-none')) return;
+                fileInput.click();
+            }
+        });
+    }
+
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            handleFileSelect(this.files[0]);
+        });
+    }
+
+    if (removeFileBtn) {
+        removeFileBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            fileInput.value = '';
+            fileUploadContent.classList.remove('d-none');
+            filePreview.classList.add('d-none');
+        });
+    }
+
+    function handleFileSelect(file) {
+        if (!file) return;
+
+        // Validate file size (5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File size exceeds 5MB limit. Please choose a smaller file.');
+            fileInput.value = '';
+            return;
+        }
+
+        // Validate file type
+        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        if (!allowedTypes.includes(file.type)) {
+            alert('Invalid file type. Please upload PNG, JPG, PDF, or DOC files.');
+            fileInput.value = '';
+            return;
+        }
+
+        // Update UI
+        document.getElementById('previewFileName').textContent = file.name;
+        document.getElementById('previewFileSize').textContent = formatFileSize(file.size);
+
+        fileUploadContent.classList.add('d-none');
+        filePreview.classList.remove('d-none');
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    // Drag and drop
+    if (fileUploadArea) {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            fileUploadArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            fileUploadArea.addEventListener(eventName, function() {
+                fileUploadArea.classList.add('drag-over');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            fileUploadArea.addEventListener(eventName, function() {
+                fileUploadArea.classList.remove('drag-over');
+            });
+        });
+
+        fileUploadArea.addEventListener('drop', function(e) {
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                fileInput.files = dt.files;
+                handleFileSelect(file);
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
