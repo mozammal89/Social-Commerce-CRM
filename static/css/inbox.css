@@ -1,0 +1,500 @@
+/*
+ * Unified Inbox — three-pane layout styles.
+ *
+ * Uses design-system tokens from dashboard-design-system.css
+ * (--brand-*, --surface-*, --text-*, --border-*, --space-*, --radius-*).
+ * Scoped under #inbox-root so page styles don't leak.
+ */
+
+/* Hide Alpine-controlled elements until Alpine initializes (no FOUC). */
+[x-cloak] { display: none !important; }
+
+#inbox-root {
+    --inbox-list-width: 340px;
+    --inbox-detail-width: 1fr;
+    --inbox-customer-width: 320px;
+    height: calc(100vh - var(--navbar-height) - 1px);
+}
+
+/* The inbox fills the viewport under the navbar; no page padding. */
+#inbox-root .inbox-shell {
+    display: flex;
+    height: 100%;
+    background: var(--surface-secondary);
+    border-top: 1px solid var(--border-light);
+}
+
+/* ================================================================
+ * Pane 1 — Conversation list
+ * ================================================================ */
+.inbox-list {
+    width: var(--inbox-list-width);
+    flex: 0 0 var(--inbox-list-width);
+    background: var(--surface-primary);
+    border-right: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+}
+
+.inbox-list-header {
+    padding: var(--space-3) var(--space-3);
+    border-bottom: 1px solid var(--border-light);
+    background: var(--surface-primary);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.inbox-list-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-2);
+}
+
+.inbox-list-title h2 {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.inbox-search {
+    position: relative;
+    margin-bottom: var(--space-2);
+}
+.inbox-search input {
+    width: 100%;
+    padding: var(--space-2) var(--space-2) var(--space-2) calc(var(--space-5) + var(--space-2));
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    background: var(--surface-secondary);
+    transition: border-color var(--transition-fast);
+}
+.inbox-search input:focus {
+    outline: none;
+    border-color: var(--brand-400);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+.inbox-search .bi {
+    position: absolute;
+    left: var(--space-3);
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.inbox-filters {
+    display: flex;
+    gap: var(--space-1);
+    flex-wrap: wrap;
+}
+.inbox-filters select {
+    flex: 1;
+    min-width: 0;
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    background: var(--surface-primary);
+    color: var(--text-secondary);
+}
+
+/* Conversation list body */
+.inbox-list-body {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.conv-item {
+    display: flex;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border-light);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    border-left: 3px solid transparent;
+}
+.conv-item:hover {
+    background: var(--surface-secondary);
+}
+.conv-item.active {
+    background: var(--brand-50);
+    border-left-color: var(--brand-600);
+}
+.conv-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: var(--surface-tertiary);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-sm);
+    flex-shrink: 0;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+}
+.conv-body {
+    flex: 1;
+    min-width: 0;
+}
+.conv-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-1);
+}
+.conv-name {
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.conv-time {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.conv-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+.conv-preview {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+.conv-preview .bi {
+    font-size: .7rem;
+    color: var(--text-muted);
+}
+.conv-badge {
+    flex-shrink: 0;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--radius-full);
+    background: var(--brand-600);
+    color: var(--text-inverse);
+    font-size: .7rem;
+    font-weight: var(--font-weight-semibold);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.conv-channel-icon {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+}
+
+/* ================================================================
+ * Pane 2 — Message thread
+ * ================================================================ */
+.inbox-detail {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface-secondary);
+}
+
+.inbox-detail-header {
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface-primary);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.inbox-detail-header .customer-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+}
+.inbox-detail-header .customer-info .meta {
+    min-width: 0;
+}
+.inbox-detail-header .customer-info .name {
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-base);
+}
+.inbox-detail-header .customer-info .sub {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+.inbox-detail-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+/* Thread messages */
+#thread-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.msg-row {
+    display: flex;
+    gap: var(--space-2);
+    max-width: 75%;
+}
+.msg-row.outbound {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+.msg-bubble {
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+    word-break: break-word;
+}
+.msg-row.inbound .msg-bubble {
+    background: var(--surface-primary);
+    border: 1px solid var(--border-light);
+    border-bottom-left-radius: var(--radius-sm);
+    color: var(--text-primary);
+}
+.msg-row.outbound .msg-bubble {
+    background: var(--brand-600);
+    color: var(--text-inverse);
+    border-bottom-right-radius: var(--radius-sm);
+}
+.msg-meta {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    margin-top: var(--space-1);
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+.msg-row.outbound .msg-meta {
+    justify-content: flex-end;
+}
+
+/* Composer */
+.inbox-composer {
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface-primary);
+    border-top: 1px solid var(--border-light);
+}
+.inbox-composer form {
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-end;
+}
+.inbox-composer textarea {
+    flex: 1;
+    resize: none;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-sm);
+    min-height: 40px;
+    max-height: 120px;
+    font-family: inherit;
+}
+.inbox-composer textarea:focus {
+    outline: none;
+    border-color: var(--brand-400);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Notes panel (slide-over within detail pane) */
+.inbox-notes {
+    border-top: 1px solid var(--border-light);
+    background: var(--surface-elevated);
+    padding: var(--space-3) var(--space-4);
+    max-height: 240px;
+    overflow-y: auto;
+}
+.note-item {
+    padding: var(--space-2);
+    background: var(--warning-50, #fffbeb);
+    border-left: 3px solid var(--warning-500, #f59e0b);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-2);
+    font-size: var(--font-size-sm);
+}
+
+/* ================================================================
+ * Pane 3 — Customer panel
+ * ================================================================ */
+.inbox-customer {
+    width: var(--inbox-customer-width);
+    flex: 0 0 var(--inbox-customer-width);
+    background: var(--surface-primary);
+    border-left: 1px solid var(--border-light);
+    overflow-y: auto;
+    padding: var(--space-4);
+}
+
+.customer-avatar-lg {
+    width: 72px;
+    height: 72px;
+    border-radius: var(--radius-full);
+    background: var(--surface-tertiary);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-semibold);
+    margin: 0 auto var(--space-3);
+    background-size: cover;
+    background-position: center;
+}
+
+.customer-section {
+    margin-bottom: var(--space-4);
+}
+.customer-section h4 {
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: var(--space-2);
+    font-weight: var(--font-weight-semibold);
+}
+.customer-attr {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--font-size-sm);
+    padding: var(--space-1) 0;
+}
+.customer-attr .label {
+    color: var(--text-muted);
+}
+.customer-attr .value {
+    color: var(--text-primary);
+    font-weight: var(--font-weight-medium);
+    text-align: right;
+    word-break: break-all;
+}
+
+/* ================================================================
+ * Empty / loading states
+ * ================================================================ */
+.inbox-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    text-align: center;
+    padding: var(--space-8);
+    gap: var(--space-3);
+}
+.inbox-empty .bi {
+    font-size: 3rem;
+    color: var(--text-muted);
+    opacity: 0.4;
+}
+
+.inbox-skeleton {
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border-light);
+}
+.inbox-skeleton .line {
+    height: 10px;
+    background: var(--surface-tertiary);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-2);
+    animation: inbox-shimmer 1.5s infinite;
+}
+.inbox-skeleton .line.short { width: 40%; }
+.inbox-skeleton .line.medium { width: 70%; }
+@keyframes inbox-shimmer {
+    0% { opacity: 1; }
+    50% { opacity: 0.4; }
+    100% { opacity: 1; }
+}
+
+/* ================================================================
+ * Toasts
+ * ================================================================ */
+.inbox-toasts {
+    position: fixed;
+    bottom: var(--space-4);
+    right: var(--space-4);
+    z-index: var(--z-popover, 1060);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+.inbox-toast {
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    font-size: var(--font-size-sm);
+    color: var(--text-inverse);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    animation: inbox-toast-in var(--transition-base);
+}
+.inbox-toast.success { background: var(--success-600); }
+.inbox-toast.danger { background: var(--danger-600); }
+.inbox-toast.info { background: var(--info-600); }
+@keyframes inbox-toast-in {
+    from { transform: translateY(10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* WS status pill */
+.ws-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+.ws-status .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--text-muted);
+}
+.ws-status.live .dot {
+    background: var(--success-500);
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
+}
+
+/* Responsive: hide customer pane on narrow screens */
+@media (max-width: 1100px) {
+    #inbox-root { --inbox-customer-width: 0px; }
+    .inbox-customer { display: none; }
+}
+@media (max-width: 768px) {
+    #inbox-root { --inbox-list-width: 0px; }
+    .inbox-list { display: none; }
+}

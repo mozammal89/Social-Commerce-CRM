@@ -1,0 +1,362 @@
+{% extends 'layouts/dashboard.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - {{ APP_NAME }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/inbox.css' %}">
+{% endblock %}
+
+{% block content %}
+<!-- The dashboard layout wraps this in .content-container which adds padding.
+   The inbox is full-bleed, so we break out of it with negative margins. -->
+<div id="inbox-root"
+     class="m-n3"
+     x-data="inboxApp()"
+     data-store-id="{{ store_id }}"
+     data-current-user-id="{{ current_user_id }}"
+     x-cloak>
+
+  <div class="inbox-shell">
+
+    <!-- {# ================================================================
+       Pane 1 — Conversation list
+       ================================================================ #} -->
+    <aside class="inbox-list">
+      <div class="inbox-list-header">
+        <div class="inbox-list-title">
+          <h2>
+            <i class="bi bi-chat-dots"></i>
+            Inbox
+            <span x-show="unreadTotal > 0" class="conv-badge" x-text="unreadTotal"></span>
+          </h2>
+          <span class="ws-status" :class="{ live: wsConnected }">
+            <span class="dot"></span>
+            <span x-text="wsConnected ? 'Live' : 'Connecting…'"></span>
+          </span>
+        </div>
+
+         <!-- Search -->
+        <div class="inbox-search">
+          <i class="bi bi-search"></i>
+          <input type="text"
+                 placeholder="Search conversations…"
+                 x-model="searchQuery"
+                 @input.debounce.400ms="loadConversations()">
+        </div>
+
+         <!-- Filters -->
+        <div class="inbox-filters">
+          <select x-model="statusFilter" @change="loadConversations()">
+            <option value="">All statuses</option>
+            <option value="open">Open</option>
+            <option value="pending">Pending</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
+          </select>
+          <select x-model="channelFilter" @change="loadConversations()">
+            <option value="">All channels</option>
+            <template x-for="ch in channels" :key="ch.id">
+              <option :value="ch.channel.id" x-text="ch.name"></option>
+            </template>
+          </select>
+          <select x-model="assigneeFilter" @change="loadConversations()">
+            <option value="">Anyone</option>
+            <option value="me">Assigned to me</option>
+            <option value="unassigned">Unassigned</option>
+          </select>
+        </div>
+      </div>
+
+       <!-- List body -->
+      <div class="inbox-list-body">
+        {# Loading skeletons #}
+        <template x-if="loadingList">
+          <div>
+            <template x-for="i in 5" :key="i">
+              <div class="inbox-skeleton">
+                <div class="line medium"></div>
+                <div class="line short"></div>
+              </div>
+            </template>
+          </div>
+        </template>
+
+         <!-- Error -->
+        <template x-if="listError">
+          <div class="inbox-empty">
+            <i class="bi bi-exclamation-triangle"></i>
+            <p x-text="listError"></p>
+            <button class="btn btn-sm btn-secondary" @click="loadConversations()">Retry</button>
+          </div>
+        </template>
+
+        <!-- Empty -->
+        <template x-if="!loadingList && conversations.length === 0 && !listError">
+          <div class="inbox-empty">
+            <i class="bi bi-inbox"></i>
+            <p>No conversations yet.</p>
+          </div>
+        </template>
+
+         <!-- Conversation items -->
+        <template x-for="conv in conversations" :key="conv.id">
+          <div class="conv-item"
+               :class="{ active: conv.id === activeConversationId }"
+               @click="selectConversation(conv)">
+            <div class="conv-avatar"
+                 :style="conv.customer_avatar ? `background-image: url('${conv.customer_avatar}')` : ''"
+                 x-text="conv.customer_avatar ? '' : (conv.customer_name || '?').charAt(0).toUpperCase()"></div>
+            <div class="conv-body">
+              <div class="conv-top">
+                <span class="conv-name" x-text="conv.customer_name || 'Unknown'"></span>
+                <span class="conv-time" x-text="fmtTime(conv.last_message_at || conv.created_at)"></span>
+              </div>
+              <div class="conv-bottom">
+                <span class="conv-preview">
+                  <i class="bi" :class="conv.last_message_direction === 'outbound' ? 'bi-arrow-up-left' : ''"></i>
+                  <span x-text="conv.last_message_preview || '(no preview)'"></span>
+                </span>
+                <span style="display:flex; align-items:center; gap:4px;">
+                  <i class="bi conv-channel-icon" :class="channelIcon(conv)"></i>
+                  <span x-show="conv.unread_count > 0" class="conv-badge" x-text="conv.unread_count"></span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </aside>
+
+    <!-- ================================================================
+       Pane 2 — Message thread
+    ================================================================ -->
+    <section class="inbox-detail">
+      <template x-if="!activeConversationId">
+        <div class="inbox-empty">
+          <i class="bi bi-chat-square-text"></i>
+          <h5>Select a conversation</h5>
+          <p>Choose a conversation from the list to view messages.</p>
+        </div>
+      </template>
+
+      <template x-if="activeConversationId">
+        <div style="display:flex; flex-direction:column; height:100%;">
+          <!-- Thread header -->
+          <div class="inbox-detail-header">
+            <div class="customer-info">
+              <div class="conv-avatar"
+                   :style="activeConversation.customer_avatar ? `background-image: url('${activeConversation.customer_avatar}')` : ''"
+                   x-text="activeConversation.customer_avatar ? '' : (activeConversation.customer_name || '?').charAt(0).toUpperCase()"></div>
+              <div class="meta">
+                <div class="name" x-text="activeConversation.customer_name || 'Unknown'"></div>
+                <div class="sub">
+                  <i class="bi" :class="channelIcon(activeConversation)"></i>
+                  <span x-text="activeConversation.channel?.name || 'Channel'"></span>
+                </div>
+              </div>
+            </div>
+            <div class="inbox-detail-actions">
+              <!-- Status badge -->
+              <span class="status-badge"
+                    :class="statusMeta(activeConversation.status).cls">
+                <i class="bi" :class="statusMeta(activeConversation.status).icon"></i>
+                <span x-text="statusMeta(activeConversation.status).label"></span>
+              </span>
+              <!-- Status dropdown -->
+              <div class="dropdown">
+                <button class="btn btn-sm btn-ghost" data-bs-toggle="dropdown">
+                  <i class="bi bi-three-dots"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><h6 class="dropdown-header">Set status</h6></li>
+                  <li><a class="dropdown-item" @click="setStatus('open')"><i class="bi bi-chat-dots me-2"></i>Open</a></li>
+                  <li><a class="dropdown-item" @click="setStatus('pending')"><i class="bi bi-clock me-2"></i>Pending</a></li>
+                  <li><a class="dropdown-item" @click="setStatus('resolved')"><i class="bi bi-check2-circle me-2"></i>Resolved</a></li>
+                  <li><a class="dropdown-item" @click="setStatus('closed')"><i class="bi bi-lock me-2"></i>Closed</a></li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li><a class="dropdown-item" @click="assignToMe()"><i class="bi bi-person-check me-2"></i>Assign to me</a></li>
+                  <li><a class="dropdown-item" @click="unassign()"><i class="bi bi-person-x me-2"></i>Unassign</a></li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li><a class="dropdown-item" @click="toggleNotes()"><i class="bi bi-sticky me-2"></i>Internal notes</a></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Messages -->
+          <div id="thread-messages">
+            <template x-if="loadingMessages">
+              <div class="inbox-empty">
+                <div class="spinner-border spinner-border-sm text-muted"></div>
+                <p>Loading messages…</p>
+              </div>
+            </template>
+            <template x-if="!loadingMessages && threadError">
+              <div class="inbox-empty">
+                <i class="bi bi-exclamation-triangle"></i>
+                <p x-text="threadError"></p>
+              </div>
+            </template>
+            <template x-for="msg in messages" :key="msg.id">
+              <div class="msg-row" :class="msg.direction">
+                <div>
+                  <div class="msg-bubble" x-text="msg.text || '[' + msg.message_type + ']'"></div>
+                  <div class="msg-meta">
+                    <span x-text="fmtTime(msg.created_at)"></span>
+                    <template x-if="msg.direction === 'outbound'">
+                      <i class="bi" :class="deliveryMeta(msg.delivery_status).icon"
+                         :title="deliveryMeta(msg.delivery_status).label"></i>
+                    </template>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <!-- Internal notes (collapsible) -->
+          <div class="inbox-notes" x-show="showNotes" x-transition style="display:none;">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <strong><i class="bi bi-sticky me-1"></i>Internal Notes</strong>
+              <button class="btn btn-sm btn-ghost" @click="showNotes = false"><i class="bi bi-x"></i></button>
+            </div>
+            <div class="mb-2 d-flex gap-2">
+              <input type="text" class="form-control form-control-sm" placeholder="Add a private note…"
+                     x-model="newNote" @keydown.enter="addNote()" :disabled="savingNote">
+              <button class="btn btn-sm btn-primary" @click="addNote()" :disabled="savingNote || !newNote.trim()">
+                <i class="bi bi-send"></i>
+              </button>
+            </div>
+            <template x-for="note in notes" :key="note.id">
+              <div class="note-item">
+                <div x-text="note.body"></div>
+                <div class="msg-meta">
+                  <span x-text="note.author?.full_name || note.author?.email || 'Someone'"></span>
+                  · <span x-text="fmtTime(note.created_at)"></span>
+                </div>
+              </div>
+            </template>
+            <template x-if="notes.length === 0 && !loadingNotes">
+              <p class="text-muted small mb-0">No notes yet.</p>
+            </template>
+          </div>
+
+           <!-- Composer -->
+          <div class="inbox-composer">
+            <form @submit.prevent="sendReply()">
+              <textarea placeholder="Type a reply… (Enter to send, Shift+Enter for newline)"
+                        x-model="replyText"
+                        @keydown.enter.prevent="sendReply()"
+                        :disabled="sending"
+                        rows="1"></textarea>
+              <button type="submit" class="btn btn-primary" :disabled="sending || !replyText.trim()">
+                <i class="bi bi-send"></i>
+              </button>
+            </form>
+            <template x-if="threadError">
+              <div class="text-danger small mt-1" x-text="threadError"></div>
+            </template>
+          </div>
+        </div>
+      </template>
+    </section>
+
+    <!-- ================================================================
+       Pane 3 — Customer panel
+    ================================================================ -->
+    <aside class="inbox-customer">
+      <template x-if="!activeConversation">
+        <div class="inbox-empty">
+          <i class="bi bi-person"></i>
+          <p>Select a conversation to view the customer.</p>
+        </div>
+      </template>
+
+      <template x-if="activeConversation">
+        <div>
+          <template x-if="loadingCustomer">
+            <div class="text-center py-4"><div class="spinner-border spinner-border-sm text-muted"></div></div>
+          </template>
+
+          <template x-if="customer">
+            <div>
+              <div class="customer-avatar-lg"
+                   :style="customer.avatar ? `background-image: url('${customer.avatar}')` : ''"
+                   x-text="customer.avatar ? '' : (customer.display_name || '?').charAt(0).toUpperCase()"></div>
+              <h5 class="text-center mb-1" x-text="customer.display_name || customer.first_name || 'Customer'"></h5>
+              <p class="text-center text-muted small mb-3" x-text="customer.email || customer.phone || ''"></p>
+
+              <div class="customer-section">
+                <h4>Details</h4>
+                <div class="customer-attr">
+                  <span class="label">First seen</span>
+                  <span class="value" x-text="fmtTime(customer.first_seen_at)"></span>
+                </div>
+                <div class="customer-attr">
+                  <span class="label">Last seen</span>
+                  <span class="value" x-text="fmtTime(customer.last_seen_at)"></span>
+                </div>
+                <div class="customer-attr">
+                  <span class="label">Phone</span>
+                  <span class="value" x-text="customer.phone || '—'"></span>
+                </div>
+                <div class="customer-attr">
+                  <span class="label">Email</span>
+                  <span class="value" x-text="customer.email || '—'"></span>
+                </div>
+              </div>
+
+              <div class="customer-section" x-show="customer.channel_identities && customer.channel_identities.length">
+                <h4>Channels</h4>
+                <template x-for="ci in customer.channel_identities" :key="ci.id">
+                  <div class="customer-attr">
+                    <span class="label">
+                      <i class="bi" :class="channelIcon({channel: ci.channel})"></i>
+                      <span x-text="ci.channel?.name || 'Channel'"></span>
+                    </span>
+                    <span class="value" x-text="ci.display_name || ci.external_id"></span>
+                  </div>
+                </template>
+              </div>
+
+              <div class="customer-section" x-show="customer.tags && customer.tags.length">
+                <h4>Tags</h4>
+                <div class="d-flex flex-wrap gap-1">
+                  <template x-for="tag in customer.tags" :key="tag">
+                    <span class="badge bg-secondary-subtle text-secondary" x-text="tag"></span>
+                  </template>
+                </div>
+              </div>
+
+              <div class="customer-section" x-show="customer.open_conversations_count !== undefined">
+                <h4>Conversations</h4>
+                <div class="customer-attr">
+                  <span class="label">Open</span>
+                  <span class="value" x-text="customer.open_conversations_count ?? 0"></span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+    </aside>
+  </div>
+
+  <!-- Toasts -->
+  <div class="inbox-toasts">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="inbox-toast" :class="t.type">
+        <i class="bi" :class="t.type === 'success' ? 'bi-check-circle' : t.type === 'danger' ? 'bi-exclamation-triangle' : 'bi-info-circle'"></i>
+        <span x-text="t.message"></span>
+      </div>
+    </template>
+  </div>
+</div>
+
+<!-- Hidden CSRF form for the JS getCSRFToken() helper. -->
+<form style="display:none">{% csrf_token %}</form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/inbox.js' %}"></script>
+{% endblock %}
