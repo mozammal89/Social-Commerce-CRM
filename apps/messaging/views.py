@@ -1,22 +1,23 @@
 """
 Template views for the omnichannel messaging module.
 
-The Unified Inbox (``inbox``) is a fully-built single-page view backed
-by the REST API + WebSocket realtime layer. The Channels and Customers
-pages still render a "coming soon" page until their dedicated UIs ship.
+All three messaging pages — Inbox, Channels, Customers — are fully-built
+single-page views backed by the DRF messaging API. Each renders only a
+shell that passes the resolved store id (and current user id where
+useful) to its Alpine component; all data loading and mutations happen
+client-side over the REST API (and WebSockets for the inbox).
 
-Store resolution for the inbox mirrors the dashboard: the session's
+Store resolution mirrors the dashboard: the session's
 ``current_store_id`` is honored if set; otherwise it falls back to the
 first store the user has an active membership in (and seeds the session
-so subsequent requests don't re-resolve). This avoids the "Store context
-required" 403 a user hits right after login, before they've switched
-stores. RBAC (``conversations.view``) is enforced against the resolved
-store via the resolver, which is store-aware.
+so subsequent requests + the API/WS pick up the same store). Each page
+enforces its own store-aware permission via ``PermissionResolver``.
 """
 
 from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import render
 
 from apps.permissions.models import StoreMembership
@@ -24,16 +25,8 @@ from apps.permissions.resolver import PermissionResolver
 from apps.stores.models import Store
 
 
-# Context shared by every messaging coming-soon page. ``active_section``
-# drives which sidebar item is highlighted and which card is emphasised.
-_COMMON_CONTEXT = {
-    "title": "Messaging",
-    "active_section": "inbox",
-}
-
-
 def _resolve_store(request):
-    """Resolve the current store for the inbox, with a first-store fallback.
+    """Resolve the current store, with a first-store fallback.
 
     Resolution order:
       1. ``session["current_store_id"]`` if it points to a store the user
@@ -65,120 +58,49 @@ def _resolve_store(request):
     return store
 
 
-@login_required
-def inbox(request):
-    """Unified Inbox — three-pane SPA (conversation list, thread, customer panel).
+def _require_store_permission(request, code: str) -> Store:
+    """Resolve the store and enforce a store-aware permission code.
 
-    The view itself renders only the shell + passes the resolved store id
-    and current user id to the template (and thus to ``inbox.js``). All
-    data loading, realtime updates and mutations happen client-side via
-    the REST API and the WebSocket inbox consumer.
+    Returns the resolved store. Raises ``PermissionDenied`` if there's no
+    store or the user lacks ``code``. Used by all three messaging pages.
     """
     store = _resolve_store(request)
+    if store is None or not PermissionResolver().check(request.user, store, code):
+        raise PermissionDenied("You do not have permission to access this page.")
+    return store
 
-    # Store-aware RBAC: deny closed if there's no store or the user lacks
-    # the permission. We check here (rather than via the @permission_required
-    # decorator) because we resolve the store leniently first.
-    if store is not None and not PermissionResolver().check(
-        request.user, store, "conversations.view"
-    ):
-        from django.core.exceptions import PermissionDenied
-        raise PermissionDenied("You do not have permission to view conversations.")
 
-    context = {
-        "title": "Unified Inbox",
-        "active_section": "inbox",
-        "store_id": str(store.id) if store else "",
+def _base_ctx(request, store: Store, title: str, section: str) -> dict:
+    """Shared template context for the three messaging pages."""
+    return {
+        "title": title,
+        "active_section": section,
+        "store_id": str(store.id),
         "current_user_id": str(request.user.id),
         "current_user_name": request.user.get_full_name() or request.user.email,
+        "current_user_email": request.user.email,
     }
-    return render(request, "messaging/inbox.html", context)
+
+
+@login_required
+def inbox(request):
+    """Unified Inbox — three-pane SPA."""
+    store = _require_store_permission(request, "conversations.view")
+    return render(request, "messaging/inbox.html", _base_ctx(request, store, "Unified Inbox", "inbox"))
 
 
 @login_required
 def channels(request):
-    """Connected Channels management page (coming soon)."""
-    context = {
-        **_COMMON_CONTEXT,
-        "title": "Channels",
-        "active_section": "channels",
-        "feature": {
-            "name": "Connected Channels",
-            "icon": "bi-broadcast",
-            "blurb": "Connect Facebook Pages, WhatsApp Business numbers and more.",
-            "capabilities": [
-                "Connect multiple Facebook Pages per store",
-                "Connect multiple WhatsApp Business Accounts",
-                "Enable, disable and configure each channel",
-                "Secure webhook handling for every platform",
-            ],
-        },
-    }
-    return render(request, "messaging/coming_soon.html", context)
+    """Connected Channels — connect/enable/disable FB & WA accounts."""
+    store = _require_store_permission(request, "connected_channels.view")
+    return render(request, "messaging/channels.html", _base_ctx(request, store, "Channels", "channels"))
 
 
 @login_required
 def customers(request):
-    """Unified Customers page (coming soon)."""
-    context = {
-        **_COMMON_CONTEXT,
-        "title": "Customers",
-        "active_section": "customers",
-        "feature": {
-            "name": "Customers",
-            "icon": "bi-person-rolodex",
-            "blurb": "A unified profile for every customer across all their channels.",
-            "capabilities": [
-                "Merge profiles when a customer reaches out on multiple channels",
-                "Unified timeline: messages, orders, notes and activities",
-                "Tags, assignments and full conversation history",
-                "360° customer context while you chat",
-            ],
-        },
-    }
-    return render(request, "messaging/coming_soon.html", context)
+    """Unified Customers — list, search, timeline, merge."""
+    store = _require_store_permission(request, "customers.view")
+    return render(request, "messaging/customers.html", _base_ctx(request, store, "Customers", "customers"))
 
 
 
-@login_required
-def channels(request):
-    """Connected Channels management page (coming soon)."""
-    context = {
-        **_COMMON_CONTEXT,
-        "title": "Channels",
-        "active_section": "channels",
-        "feature": {
-            "name": "Connected Channels",
-            "icon": "bi-broadcast",
-            "blurb": "Connect Facebook Pages, WhatsApp Business numbers and more.",
-            "capabilities": [
-                "Connect multiple Facebook Pages per store",
-                "Connect multiple WhatsApp Business Accounts",
-                "Enable, disable and configure each channel",
-                "Secure webhook handling for every platform",
-            ],
-        },
-    }
-    return render(request, "messaging/coming_soon.html", context)
-
-
-@login_required
-def customers(request):
-    """Unified Customers page (coming soon)."""
-    context = {
-        **_COMMON_CONTEXT,
-        "title": "Customers",
-        "active_section": "customers",
-        "feature": {
-            "name": "Customers",
-            "icon": "bi-person-rolodex",
-            "blurb": "A unified profile for every customer across all their channels.",
-            "capabilities": [
-                "Merge profiles when a customer reaches out on multiple channels",
-                "Unified timeline: messages, orders, notes and activities",
-                "Tags, assignments and full conversation history",
-                "360° customer context while you chat",
-            ],
-        },
-    }
-    return render(request, "messaging/coming_soon.html", context)
