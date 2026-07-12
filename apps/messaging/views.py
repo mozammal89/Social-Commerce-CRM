@@ -79,6 +79,7 @@ def _base_ctx(request, store: Store, title: str, section: str) -> dict:
         "current_user_id": str(request.user.id),
         "current_user_name": request.user.get_full_name() or request.user.email,
         "current_user_email": request.user.email,
+        "is_superuser": bool(getattr(request.user, "is_superuser", False)),
     }
 
 

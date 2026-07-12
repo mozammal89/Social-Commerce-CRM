@@ -4,7 +4,7 @@
 {% block title %}{{ title }} - {{ APP_NAME }}{% endblock %}
 
 {% block content %}
-<div class="dashboard-container" x-data="channelsApp()" data-store-id="{{ store_id }}" x-cloak>
+<div class="dashboard-container" x-data="channelsApp()" data-store-id="{{ store_id }}" data-is-superuser="{{ is_superuser|yesno:'true,false' }}" x-cloak>
 
   {# Page header #}
   <div class="section-header mb-4">
@@ -130,6 +130,64 @@
       <template x-if="catalog.length === 0">
         <div class="col-12"><p class="text-muted small mb-0">All available channels are already connected.</p></div>
       </template>
+    </div>
+  </div>
+
+  <!-- ================================================================
+  Super-admin: platform channel catalog management
+  (only superusers see this — toggle channels on/off globally)
+  ================================================================ #} -->
+  <div class="mt-5" x-show="isSuperuser" x-cloak>
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <h5 class="fw-bold mb-0">Platform Channels</h5>
+      <span class="badge bg-warning-subtle text-warning small">
+        <i class="bi bi-shield-check me-1"></i>Super Admin
+      </span>
+    </div>
+    <p class="text-muted small mb-3">
+      Control which channels are available to all stores. Enable a channel here to make it appear in every store's
+      "Available Channels" list. Channels without a built adapter show as "Coming soon" but can still be toggled on.
+    </p>
+    <div class="card border-0 shadow-sm">
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Channel</th>
+              <th>Type</th>
+              <th>Adapter</th>
+              <th class="text-center">Enabled</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="ch in adminCatalog" :key="ch.id">
+              <tr>
+                <td>
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi fs-5" :class="ch.icon || 'bi-chat'" :style="!ch.is_enabled ? 'opacity:.4' : ''"></i>
+                    <div>
+                      <div class="fw-semibold" x-text="ch.name"></div>
+                      <small class="text-muted" x-text="ch.description"></small>
+                    </div>
+                  </div>
+                </td>
+                <td><code class="small" x-text="ch.channel_type"></code></td>
+                <td>
+                  <span x-show="ch.adapter_available" class="badge bg-success-subtle text-success small">Available</span>
+                  <span x-show="!ch.adapter_available" class="badge bg-warning-subtle text-warning small">Coming soon</span>
+                </td>
+                <td class="text-center">
+                  <div class="form-check form-switch d-inline-block">
+                    <input class="form-check-input" type="checkbox" :checked="ch.is_enabled"
+                           @change="adminToggle(ch, $event.target.checked)"
+                           :disabled="togglingId === ch.id">
+                  </div>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 

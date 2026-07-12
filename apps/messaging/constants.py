@@ -285,7 +285,7 @@ DEFAULT_CHANNELS = [
         "adapter_class": "",
         "icon": "bi-instagram",
         "sort_order": 30,
-        "is_enabled": False,
+        "is_enabled": True,
     },
     {
         "slug": "telegram",
@@ -295,7 +295,7 @@ DEFAULT_CHANNELS = [
         "adapter_class": "",
         "icon": "bi-telegram",
         "sort_order": 40,
-        "is_enabled": False,
+        "is_enabled": True,
     },
     {
         "slug": "email",
@@ -325,7 +325,7 @@ DEFAULT_CHANNELS = [
         "adapter_class": "",
         "icon": "bi-tiktok",
         "sort_order": 70,
-        "is_enabled": False,
+        "is_enabled": True,
     },
     {
         "slug": "live-chat",
@@ -335,7 +335,7 @@ DEFAULT_CHANNELS = [
         "adapter_class": "",
         "icon": "bi-chat-left-text",
         "sort_order": 80,
-        "is_enabled": False,
+        "is_enabled": True,
     },
 ]
 

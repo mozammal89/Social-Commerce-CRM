@@ -76,9 +76,14 @@ function channelsApp() {
         apiBase: '/api/v1/messaging',
 
         accounts: [],
-        catalog: [],                // connectable channels
+        catalog: [],                // connectable channels (enabled, not connected)
         loading: false,
         error: '',
+
+        // Super-admin platform catalog management
+        isSuperuser: false,
+        adminCatalog: [],           // ALL channels (enabled + disabled)
+        togglingId: null,           // id of the channel currently being toggled
 
         // Connect modal state
         showConnect: false,
@@ -93,12 +98,17 @@ function channelsApp() {
 
         /* ---- lifecycle ---- */
         async init() {
-            this.storeId = this.$el.dataset.storeId || '';
+            const el = this.$el;
+            this.storeId = el.dataset.storeId || '';
+            this.isSuperuser = el.dataset.isSuperuser === 'true';
             if (!this.storeId) { this.error = 'No store selected.'; return; }
             // Accounts must load before the catalog so we can hide already-
             // connected channels from the "Available" section.
             await this.loadAccounts();
             await this.loadCatalog();
+            // Super-admin: load the full catalog (incl. disabled) for the
+            // platform management section at the bottom of the page.
+            if (this.isSuperuser) await this.loadAdminCatalog();
             // Generate a default verify token suggestion
             this.connectVerifyToken = 'crm_' + Math.random().toString(36).slice(2, 14);
         },
@@ -124,6 +134,38 @@ function channelsApp() {
                 const connectedTypes = new Set(this.accounts.map(a => a.channel?.channel_type));
                 this.catalog = all.filter(c => !connectedTypes.has(c.channel_type));
             } catch { this.catalog = []; }
+        },
+
+        async loadAdminCatalog() {
+            // Super-admin only: fetch the FULL catalog (enabled + disabled)
+            // for the platform management section. No store header needed
+            // (the catalog is global).
+            try {
+                const data = await api(`${this.apiBase}/admin/channels/`);
+                this.adminCatalog = data.results || data || [];
+            } catch { this.adminCatalog = []; }
+        },
+
+        async adminToggle(channel, enable) {
+            // Flip a channel's is_enabled platform-wide. Super-admin only
+            // (the endpoint enforces it too).
+            this.togglingId = channel.id;
+            try {
+                const updated = await api(`${this.apiBase}/admin/channels/${channel.id}/toggle/`, {
+                    method: 'PATCH', body: { is_enabled: enable },
+                });
+                const idx = this.adminCatalog.findIndex(c => c.id === channel.id);
+                if (idx !== -1) this.adminCatalog.splice(idx, 1, updated);
+                this.toast(`${channel.name} ${enable ? 'enabled' : 'disabled'} for all stores.`, 'success');
+                // Refresh the connectable catalog so the change is reflected.
+                await this.loadCatalog();
+            } catch (err) {
+                // Revert the switch on failure.
+                channel.is_enabled = !enable;
+                this.toast(err.message, 'danger');
+            } finally {
+                this.togglingId = null;
+            }
         },
 
         /* ---- connect modal ---- */
