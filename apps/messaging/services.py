@@ -941,25 +941,118 @@ ConversationService._apply_outbound_message = staticmethod(_apply_outbound_messa
 # ---------------------------------------------------------------------------
 # Realtime / notification hook points.
 #
-# These are intentionally no-ops in Phase 1/2. The realtime phase (Phase 5)
-# implements them via Django Channels (channel_layer.group_send) and Celery
-# (notification fan-out). Keeping them as named functions means the service
-# layer won't change when realtime is added — only these bodies will.
+# These broadcast over the Django Channels Redis layer so any connected
+# WebSocket client (inbox or per-conversation) receives the event live.
+# The service layer runs in a sync context (Django views / Celery tasks),
+# so ``async_to_sync`` bridges to the channel layer's async ``group_send``.
+#
+# Payloads are plain dicts (not DRF-serialized) to keep them lightweight
+# and avoid importing serializers here (which would create a circular
+# import). The inbox client merges these into its local state.
+#
+# All broadcasts are best-effort: if the channel layer is unavailable
+# (e.g. Redis down), the message is still persisted — realtime is a
+# enhancement, never a dependency of correctness.
 # ---------------------------------------------------------------------------
+def _channel_layer():
+    """Lazily fetch the channel layer. Returns None if unavailable."""
+    try:
+        from channels.layers import get_channel_layer
+        return get_channel_layer()
+    except Exception:  # pragma: no cover - channels not configured
+        return None
+
+
+def _broadcast(group_name: str, event_type: str, payload: dict) -> None:
+    """Send an event to a channel-layer group. Swallows errors so a
+    realtime outage never breaks message ingestion."""
+    layer = _channel_layer()
+    if layer is None:
+        return
+    try:
+        from asgiref.sync import async_to_sync
+        async_to_sync(layer.group_send)(
+            group_name,
+            {"type": event_type, "payload": payload},
+        )
+    except Exception:  # pragma: no cover - Redis down / serialization
+        logger.warning("Realtime broadcast to %s failed", group_name, exc_info=True)
+
+
+def _serialize_message_brief(message: Message) -> dict:
+    """Minimal message representation for realtime (no FK joins)."""
+    return {
+        "id": str(message.id),
+        "conversation_id": str(message.conversation_id),
+        "direction": message.direction,
+        "sender_type": message.sender_type,
+        "message_type": message.message_type,
+        "text": message.text,
+        "delivery_status": message.delivery_status,
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+    }
+
+
+def _serialize_conversation_brief(conversation: Conversation) -> dict:
+    """Minimal conversation representation for realtime updates."""
+    return {
+        "id": str(conversation.id),
+        "status": conversation.status,
+        "priority": conversation.priority,
+        "assigned_to_id": str(conversation.assigned_to_id) if conversation.assigned_to_id else None,
+        "unread_count": conversation.unread_count,
+        "message_count": conversation.message_count,
+        "last_message_at": conversation.last_message_at.isoformat() if conversation.last_message_at else None,
+        "last_message_preview": conversation.last_message_preview,
+        "last_message_direction": conversation.last_message_direction,
+    }
+
+
 def _emit_message_received(message: Message, conversation: Conversation) -> None:
-    """Hook: broadcast a new/updated message to subscribed inbox clients."""
-    # Phase 5: channel_layer.group_send(f"inbox.{conversation.store_id}", {...})
-    return None
+    """Broadcast a new/updated message to the store inbox + the conversation."""
+    payload = _serialize_message_brief(message)
+    store_id = str(conversation.store_id)
+    conv_id = str(conversation.id)
+    # Inbox feed: new message in any conversation.
+    _broadcast(f"inbox.{store_id}", "message.new", payload)
+    # Per-conversation feed: message in this thread.
+    _broadcast(f"conversation.{conv_id}", "message.new", payload)
 
 
 def _emit_conversation_updated(conversation: Conversation) -> None:
-    """Hook: broadcast a conversation metadata change (status, assignment, ...)."""
-    return None
+    """Broadcast a conversation metadata change (status, assignment, preview)."""
+    payload = _serialize_conversation_brief(conversation)
+    _broadcast(f"inbox.{str(conversation.store_id)}", "conversation.updated", payload)
 
 
 def _emit_delivery_updated(account: ConnectedAccount, message_ids: list[str], status: str) -> None:
-    """Hook: broadcast a delivery-status change for a set of messages."""
-    return None
+    """Broadcast a delivery-status change for a set of messages.
+
+    Delivered to the per-conversation group(s). Since one receipt may
+    cover messages across conversations, we look up the conversation ids
+    and broadcast per conversation. The inbox group gets a lighter
+    ``message.updated`` event too.
+    """
+    if not message_ids:
+        return
+    # Resolve conversation ids for the affected messages (one query).
+    conv_ids = set(
+        Message.objects
+        .filter(connected_account=account, external_id__in=message_ids)
+        .values_list("conversation_id", flat=True)
+    )
+    for cid in conv_ids:
+        _broadcast(
+            f"conversation.{cid}",
+            "message.updated",
+            {"message_ids": message_ids, "status": status},
+        )
+    # Inbox-level signal so list items can update their tick marks.
+    _broadcast(
+        f"inbox.{str(account.store_id)}",
+        "message.updated",
+        {"message_ids": message_ids, "status": status},
+    )
 
 
 class _TransientAccount:

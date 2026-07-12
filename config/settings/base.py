@@ -5,6 +5,7 @@ This file contains shared settings across all environments.
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from environ import Env
@@ -27,6 +28,9 @@ REDIS_URL = env.str("REDIS_URL", default="redis://localhost:6379/0")
 
 
 DJANGO_APPS = [
+    # Daphne must be listed before django.contrib.staticfiles so it
+    # replaces the runserver command with the ASGI-aware version.
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -38,6 +42,7 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
+    "channels",
     "rest_framework",
     "rest_framework_simplejwt",
     "drf_spectacular",
@@ -106,6 +111,8 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+# Channels: the ASGI application is now a ProtocolTypeRouter that splits
+# HTTP and WebSocket traffic. See ``config/asgi.py``.
 ASGI_APPLICATION = "config.asgi.application"
 
 
@@ -116,7 +123,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
         "OPTIONS": {
-            "min_length": 8,
+            "min_length": 6,
         },
     },
     {
@@ -183,6 +190,20 @@ CACHES = {
     },
 }
 
+# Django Channels — Redis-backed channel layer for cross-process WebSocket
+# broadcast. Celery workers (webhook ingestion) call
+# ``channel_layer.group_send(...)`` and every Daphne instance subscribed
+# to that group delivers the event to its connected clients. A separate
+# Redis DB (``REDIS_URL`` is reused but Channels uses its own keyspace).
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [REDIS_URL],
+        },
+    },
+}
+
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -217,8 +238,11 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": "timedelta(hours=1)",
-    "REFRESH_TOKEN_LIFETIME": "timedelta(days=7)",
+    # SimpleJWT expects actual timedelta objects, not strings — the string
+    # form ("timedelta(hours=1)") crashes token generation with
+    # ``TypeError: unsupported operand type(s) for +: datetime and str``.
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "ALGORITHM": "HS256",
