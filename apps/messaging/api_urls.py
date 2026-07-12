@@ -48,4 +48,9 @@ urlpatterns = [
     # ---- Connected channels -------------------------------------------
     path("channels/", api_views.ConnectedAccountListView.as_view(), name="channels"),
     path("channels/<uuid:id>/", api_views.ConnectedAccountDetailView.as_view(), name="channel-detail"),
+
+    # ---- Channel catalog (dynamic connect UI source) ------------------
+    path("catalog/", api_views.CatalogListView.as_view(), name="catalog"),
+    path("admin/channels/", api_views.CatalogAdminListView.as_view(), name="admin-channels"),
+    path("admin/channels/<uuid:channel_id>/toggle/", api_views.toggle_channel, name="admin-channel-toggle"),
 ]

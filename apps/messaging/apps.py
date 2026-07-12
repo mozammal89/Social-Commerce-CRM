@@ -19,3 +19,7 @@ class MessagingConfig(AppConfig):
         # apps registry (and thus the model references inside adapters)
         # is fully populated first.
         from . import adapters  # noqa: F401  (side-effect import)
+        # Wire ``sync_channels`` to ``post_migrate`` so the global channel
+        # catalog auto-reconciles on every migrate/deploy, mirroring how
+        # ``sync_permissions`` is wired in apps.permissions.
+        from . import signals  # noqa: F401  (side-effect: connects signal)

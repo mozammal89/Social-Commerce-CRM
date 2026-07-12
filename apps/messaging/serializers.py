@@ -53,6 +53,34 @@ class ChannelBriefSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class ChannelCatalogSerializer(serializers.ModelSerializer):
+    """Full catalog row — drives the dynamic connect UI + admin toggle.
+
+    ``adapter_available`` indicates whether a working adapter is loaded
+    for this channel (i.e. it can actually send/receive), independent of
+    ``is_enabled`` (which is the admin's on/off gate).
+    """
+
+    adapter_available = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Channel
+        fields = [
+            "id", "slug", "channel_type", "name", "description", "icon",
+            "is_enabled", "capabilities", "adapter_class", "adapter_available",
+            "sort_order",
+        ]
+        read_only_fields = fields
+
+    def get_adapter_available(self, obj: Channel) -> bool:
+        # A channel is connectable iff it's enabled AND a registered
+        # adapter exists for its channel_type.
+        if not obj.is_enabled:
+            return False
+        from .adapters.registry import get_adapter_class
+        return get_adapter_class(obj.channel_type) is not None
+
+
 # ===========================================================================
 # Attachment
 # ===========================================================================

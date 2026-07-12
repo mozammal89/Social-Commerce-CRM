@@ -1,0 +1,204 @@
+{% extends 'layouts/dashboard.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - {{ APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container" x-data="customersApp()" data-store-id="{{ store_id }}" x-cloak>
+
+  {# Page header #}
+  <div class="section-header mb-4">
+    <div>
+      <h1 class="section-title"><i class="bi bi-person-rolodex me-2"></i>Customers</h1>
+      <p class="section-subtitle">Unified customer profiles across all your messaging channels.</p>
+    </div>
+    <div class="section-actions" style="position:relative;">
+      <i class="bi bi-search position-absolute" style="left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:.875rem;"></i>
+      <input type="text" class="form-control" placeholder="Search by name, email, phone…"
+             style="padding-left:40px;min-width:280px;"
+             x-model="searchQuery" @input.debounce.400ms="loadCustomers()">
+    </div>
+  </div>
+
+  {# Loading #}
+  <template x-if="loading">
+    <div class="card border-0 shadow-sm">
+      <template x-for="i in 5" :key="i">
+        <div class="p-3 border-bottom">
+          <div class="d-flex gap-3">
+            <div class="skeleton" style="width:40px;height:40px;border-radius:50%;"></div>
+            <div class="flex-grow-1">
+              <div class="skeleton" style="height:14px;width:30%;margin-bottom:8px;"></div>
+              <div class="skeleton" style="height:12px;width:50%;"></div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </template>
+
+  {# Error #}
+  <template x-if="error">
+    <div class="alert alert-danger d-flex align-items-center gap-2">
+      <i class="bi bi-exclamation-triangle"></i><span x-text="error"></span>
+      <button class="btn btn-sm btn-outline-danger ms-auto" @click="loadCustomers()">Retry</button>
+    </div>
+  </template>
+
+  {# Empty #}
+  <template x-if="!loading && customers.length === 0 && !error">
+    <div class="empty-state text-center py-5">
+      <div class="empty-state-icon"><i class="bi bi-people"></i></div>
+      <h5 class="empty-state-title">No customers found</h5>
+      <p class="empty-state-description">Customers appear here automatically when they message you.</p>
+    </div>
+  </template>
+
+  {# Customer list #}
+  <template x-if="!loading && customers.length > 0">
+    <div class="card border-0 shadow-sm">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Name</th>
+              <th>Contact</th>
+              <th>Channels</th>
+              <th>Last Seen</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="cust in customers" :key="cust.id">
+              <tr style="cursor:pointer;" @click="openTimeline(cust)">
+                <td>
+                  <div class="d-flex align-items-center gap-2">
+                    <div class="conv-avatar" style="width:36px;height:36px;font-size:.8rem;" x-text="initials(cust.display_name || cust.first_name)"></div>
+                    <div>
+                      <div class="fw-semibold" x-text="cust.display_name || (cust.first_name + ' ' + cust.last_name) || 'Unknown'"></div>
+                      <small class="text-muted" x-show="cust.is_merged" x-text="'merged'"></small>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="small" x-text="cust.email || '—'"></div>
+                  <div class="small text-muted" x-text="cust.phone || ''"></div>
+                </td>
+                <td>
+                  <template x-for="ci in (cust.channel_identities || []).slice(0,3)" :key="ci.id">
+                    <i class="bi me-1 text-muted" :class="channelIcon(ci)" :title="ci.channel?.name"></i>
+                  </template>
+                  <span class="badge bg-secondary-subtle text-secondary" x-show="cust.channel_identities && cust.channel_identities.length > 0"
+                        x-text="cust.channel_identities?.length + ' ch'"></span>
+                </td>
+                <td class="small text-muted" x-text="fmtTime(cust.last_seen_at)"></td>
+                <td class="text-end"><i class="bi bi-chevron-right text-muted"></i></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </template>
+
+  <!-- ================================================================
+     Timeline drawer (slide-over)
+  ================================================================ -->
+  <div class="position-fixed top-0 end-0 h-100 bg-white shadow-lg"
+       style="width:480px;max-width:100vw;z-index:1050;transform:translateX(100%);transition:transform .25s ease;"
+       :style="{ transform: drawerOpen ? 'translateX(0)' : 'translateX(100%)' }">
+
+    <template x-if="activeCustomer">
+      <div class="d-flex flex-column h-100">
+        {# Drawer header #}
+        <div class="p-3 border-bottom d-flex align-items-center gap-2">
+          <button class="btn btn-sm btn-ghost" @click="closeDrawer()"><i class="bi bi-arrow-right"></i></button>
+          <h6 class="mb-0 flex-grow-1">Customer Details</h6>
+          <button class="btn btn-sm btn-outline-secondary" @click="showMerge = !showMerge">
+            <i class="bi bi-union me-1"></i>Merge
+          </button>
+        </div>
+
+        {# Customer summary #}
+        <div class="p-3 border-bottom text-center">
+          <div class="conv-avatar mx-auto mb-2" style="width:64px;height:64px;font-size:1.25rem;"
+               x-text="initials(activeCustomer.display_name || activeCustomer.first_name)"></div>
+          <h6 class="mb-0 fw-bold" x-text="activeCustomer.display_name || (activeCustomer.first_name + ' ' + activeCustomer.last_name) || 'Unknown'"></h6>
+          <div class="small text-muted" x-text="activeCustomer.email || activeCustomer.phone || ''"></div>
+          <div class="mt-2">
+            <template x-for="ci in (activeCustomer.channel_identities || [])" :key="ci.id">
+              <span class="badge bg-light text-dark me-1 mb-1">
+                <i class="bi me-1" :class="channelIcon(ci)"></i>
+                <span x-text="ci.display_name || ci.channel?.name"></span>
+              </span>
+            </template>
+          </div>
+        </div>
+
+        {# Merge panel (collapsible) #}
+        <div class="p-3 border-bottom bg-body-secondary" x-show="showMerge" x-transition style="display:none;">
+          <p class="small text-muted mb-2">Search for a duplicate profile to merge into this customer.</p>
+          <div class="input-group input-group-sm mb-2">
+            <input type="text" class="form-control" placeholder="Search duplicate…"
+                   x-model="mergeSearch" @input.debounce.400ms="searchMergeCandidates()">
+            <button class="btn btn-outline-secondary" @click="mergeSearch=''; mergeCandidates=[];"><i class="bi bi-x"></i></button>
+          </div>
+          <template x-for="cand in mergeCandidates" :key="cand.id">
+            <div class="d-flex align-items-center justify-content-between py-1">
+              <span class="small"><i class="bi bi-person me-1"></i><span x-text="cand.display_name || cand.first_name || 'Unknown'"></span></span>
+              <button class="btn btn-sm btn-primary py-0" @click="mergeWith(cand.id)" :disabled="merging">
+                <i class="bi bi-union"></i>
+              </button>
+            </div>
+          </template>
+        </div>
+
+        {# Timeline #}
+        <div class="flex-grow-1 overflow-auto p-3">
+          <h6 class="text-muted text-uppercase small mb-3">Timeline</h6>
+          <template x-if="loadingTimeline">
+            <div class="text-center py-4"><div class="spinner-border spinner-border-sm text-muted"></div></div>
+          </template>
+          <template x-if="!loadingTimeline && timeline.length === 0">
+            <p class="text-muted small">No activity yet.</p>
+          </template>
+          <div class="activity-feed">
+            <template x-for="(item, idx) in timeline" :key="idx">
+              <div class="activity-item">
+                <div class="activity-icon activity-icon--info">
+                  <i class="bi" :class="timelineIcon(item)"></i>
+                </div>
+                <div class="activity-content">
+                  <div class="activity-title" x-text="item.data.text || item.data.body || item.data.description || item.data.action_type || ''"></div>
+                  <div class="activity-time" x-text="fmtDateTime(item.timestamp)"></div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  {# Backdrop #}
+  <div class="position-fixed top-0 start-0 w-100 h-100"
+       :style="{ display: drawerOpen ? 'block' : 'none', background: 'rgba(0,0,0,0.3)', zIndex: 1040 }"
+       @click="closeDrawer()" x-show="drawerOpen"></div>
+
+  {# Toasts #}
+  <div class="inbox-toasts">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="inbox-toast" :class="t.type">
+        <i class="bi" :class="t.type === 'success' ? 'bi-check-circle' : t.type === 'danger' ? 'bi-exclamation-triangle' : 'bi-info-circle'"></i>
+        <span x-text="t.message"></span>
+      </div>
+    </template>
+  </div>
+</div>
+
+<form style="display:none">{% csrf_token %}</form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/customers.js' %}"></script>
+{% endblock %}

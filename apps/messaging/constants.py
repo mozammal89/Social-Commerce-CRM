@@ -205,26 +205,137 @@ DEFAULT_CAPABILITIES = {
         ChannelCapability.LOCATION, ChannelCapability.TEMPLATES, ChannelCapability.BUTTONS,
         ChannelCapability.READ_RECEIPTS, ChannelCapability.DELIVERY_STATUS,
     ],
+    "instagram": [
+        ChannelCapability.TEXT, ChannelCapability.IMAGES, ChannelCapability.AUDIO,
+        ChannelCapability.VIDEO, ChannelCapability.STICKERS, ChannelCapability.QUICK_REPLIES,
+        ChannelCapability.TYPING_INDICATOR, ChannelCapability.READ_RECEIPTS,
+    ],
+    "telegram": [
+        ChannelCapability.TEXT, ChannelCapability.IMAGES, ChannelCapability.AUDIO,
+        ChannelCapability.VIDEO, ChannelCapability.DOCUMENTS, ChannelCapability.STICKERS,
+        ChannelCapability.LOCATION, ChannelCapability.BUTTONS, ChannelCapability.TEMPLATES,
+        ChannelCapability.READ_RECEIPTS, ChannelCapability.DELIVERY_STATUS,
+    ],
+    "email": [
+        ChannelCapability.TEXT, ChannelCapability.IMAGES, ChannelCapability.DOCUMENTS,
+        ChannelCapability.FILE_UPLOADS, ChannelCapability.TEMPLATES,
+    ],
+    "sms": [
+        ChannelCapability.TEXT, ChannelCapability.DELIVERY_STATUS,
+    ],
+    "tiktok": [
+        ChannelCapability.TEXT, ChannelCapability.IMAGES, ChannelCapability.VIDEO,
+        ChannelCapability.QUICK_REPLIES,
+    ],
+    "live-chat": [
+        ChannelCapability.TEXT, ChannelCapability.IMAGES, ChannelCapability.FILE_UPLOADS,
+        ChannelCapability.TYPING_INDICATOR, ChannelCapability.READ_RECEIPTS,
+        ChannelCapability.DELIVERY_STATUS,
+    ],
 }
 
 
 # ---------------------------------------------------------------------------
-# Default catalog channels seeded by data migrations / ``sync_channels``.
-# Keep these in sync with the adapter classes in ``apps/messaging/adapters``.
+# Default catalog channels seeded by ``sync_channels`` (auto-run on migrate).
+#
+# This is the single source of truth for which channels the platform
+# supports. ``is_enabled`` controls whether a channel is *available* for
+# stores to connect:
+#
+#   * ``is_enabled=True``  — the adapter is implemented and the channel
+#     shows up in the connect UI.
+#   * ``is_enabled=False`` — the channel is seeded (so the catalog is
+#     complete and future-proof) but hidden from stores until its adapter
+#     ships. A super-admin can flip it on once the adapter is built —
+#     no code change needed beyond ``is_enabled=True`` here + re-sync.
+#
+# ``adapter_class`` is empty for channels whose adapter doesn't exist yet;
+# ``sync_channels`` keeps it in sync as adapters are added. A channel with
+# an empty ``adapter_class`` cannot actually send/receive even if force-
+# enabled — the registry lookup will fail with a clear error.
 # ---------------------------------------------------------------------------
 DEFAULT_CHANNELS = [
+    # --- Implemented (adapters exist) ---
     {
         "slug": "facebook-messenger",
         "channel_type": ChannelType.FACEBOOK_MESSENGER.value,
         "name": "Facebook Messenger",
+        "description": "Connect Facebook Pages and chat with customers via Messenger.",
         "adapter_class": "apps.messaging.adapters.facebook.adapter.FacebookAdapter",
+        "icon": "bi-messenger",
         "sort_order": 10,
+        "is_enabled": True,
     },
     {
         "slug": "whatsapp",
         "channel_type": ChannelType.WHATSAPP.value,
         "name": "WhatsApp Business",
+        "description": "Connect WhatsApp Business numbers via the Cloud API.",
         "adapter_class": "apps.messaging.adapters.whatsapp.adapter.WhatsAppAdapter",
+        "icon": "bi-whatsapp",
         "sort_order": 20,
+        "is_enabled": True,
+    },
+    # --- Planned (seeded, adapter not yet built — super-admin can enable later) ---
+    {
+        "slug": "instagram",
+        "channel_type": ChannelType.INSTAGRAM.value,
+        "name": "Instagram Direct",
+        "description": "Instagram DMs via the Messenger Platform (same Graph API).",
+        "adapter_class": "",
+        "icon": "bi-instagram",
+        "sort_order": 30,
+        "is_enabled": False,
+    },
+    {
+        "slug": "telegram",
+        "channel_type": ChannelType.TELEGRAM.value,
+        "name": "Telegram",
+        "description": "Telegram Bot API for business messaging.",
+        "adapter_class": "",
+        "icon": "bi-telegram",
+        "sort_order": 40,
+        "is_enabled": False,
+    },
+    {
+        "slug": "email",
+        "channel_type": ChannelType.EMAIL.value,
+        "name": "Email",
+        "description": "IMAP/SMTP-based email channel.",
+        "adapter_class": "",
+        "icon": "bi-envelope",
+        "sort_order": 50,
+        "is_enabled": False,
+    },
+    {
+        "slug": "sms",
+        "channel_type": ChannelType.SMS.value,
+        "name": "SMS",
+        "description": "SMS via Twilio or similar gateway.",
+        "adapter_class": "",
+        "icon": "bi-chat-square-text",
+        "sort_order": 60,
+        "is_enabled": False,
+    },
+    {
+        "slug": "tiktok",
+        "channel_type": ChannelType.TIKTOK.value,
+        "name": "TikTok",
+        "description": "TikTok business messaging.",
+        "adapter_class": "",
+        "icon": "bi-tiktok",
+        "sort_order": 70,
+        "is_enabled": False,
+    },
+    {
+        "slug": "live-chat",
+        "channel_type": ChannelType.LIVE_CHAT.value,
+        "name": "Live Chat",
+        "description": "On-site live chat widget for your store.",
+        "adapter_class": "",
+        "icon": "bi-chat-left-text",
+        "sort_order": 80,
+        "is_enabled": False,
     },
 ]
+

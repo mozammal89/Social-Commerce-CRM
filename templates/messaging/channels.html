@@ -1,0 +1,224 @@
+{% extends 'layouts/dashboard.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - {{ APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container" x-data="channelsApp()" data-store-id="{{ store_id }}" x-cloak>
+
+  {# Page header #}
+  <div class="section-header mb-4">
+    <div>
+      <h1 class="section-title"><i class="bi bi-broadcast me-2"></i>Connected Channels</h1>
+      <p class="section-subtitle">Connect Facebook Pages and WhatsApp numbers, then manage them here.</p>
+    </div>
+  </div>
+
+  {# Connected accounts #}
+  <div class="mb-5">
+    <h5 class="fw-bold mb-3">Connected</h5>
+
+    {# Loading #}
+    <template x-if="loading">
+      <div class="row g-3">
+        <template x-for="i in 2" :key="i">
+          <div class="col-md-6">
+            <div class="card border-0 shadow-sm"><div class="card-body">
+              <div class="skeleton" style="height:60px;border-radius:8px;"></div>
+            </div></div>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    {# Error #}
+    <template x-if="error">
+      <div class="alert alert-danger d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-triangle"></i>
+        <span x-text="error"></span>
+        <button class="btn btn-sm btn-outline-danger ms-auto" @click="loadAccounts()">Retry</button>
+      </div>
+    </template>
+
+    {# Empty #}
+    <template x-if="!loading && accounts.length === 0 && !error">
+      <div class="empty-state text-center py-5">
+        <div class="empty-state-icon"><i class="bi bi-plug"></i></div>
+        <h5 class="empty-state-title">No channels connected yet</h5>
+        <p class="empty-state-description">Connect Facebook Messenger or WhatsApp to start receiving messages.</p>
+      </div>
+    </template>
+
+    {# Account cards #}
+    <div class="row g-3">
+      <template x-for="acct in accounts" :key="acct.id">
+        <div class="col-md-6">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+              <div class="d-flex align-items-start gap-3 mb-3">
+                <div class="rounded-3 d-flex align-items-center justify-content-center"
+                     style="width:48px;height:48px;background:var(--brand-50);color:var(--brand-600);">
+                  <i class="bi fs-4" :class="channelIcon(acct)"></i>
+                </div>
+                <div class="flex-grow-1 min-w-0">
+                  <h6 class="mb-0 fw-bold text-truncate" x-text="acct.name"></h6>
+                  <div class="d-flex align-items-center gap-2 mt-1">
+                    <span class="status-badge" :class="statusMeta(acct.status).cls" x-text="statusMeta(acct.status).label"></span>
+                    <small class="text-muted" x-text="acct.channel?.name || ''"></small>
+                  </div>
+                </div>
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-ghost" data-bs-toggle="dropdown"><i class="bi bi-three-dots"></i></button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" @click="toggleStatus(acct)">
+                      <i class="bi me-2" :class="acct.status === 'connected' ? 'bi-pause-circle' : 'bi-play-circle'"></i>
+                      <span x-text="acct.status === 'connected' ? 'Disable' : 'Enable'"></span>
+                    </a></li>
+                    <li><a class="dropdown-item text-danger" @click="disconnect(acct)"><i class="bi bi-x-circle me-2"></i>Disconnect</a></li>
+                  </ul>
+                </div>
+              </div>
+
+              {# Webhook URL #}
+              <div class="bg-body-secondary rounded p-2 small">
+                <div class="d-flex align-items-center gap-2">
+                  <i class="bi bi-link-45deg text-muted"></i>
+                  <code class="flex-grow-1 text-truncate" x-text="webhookUrl(acct)"></code>
+                  <button class="btn btn-sm btn-ghost py-0 px-1" @click="copyWebhook(acct)" title="Copy"><i class="bi bi-clipboard"></i></button>
+                </div>
+                <div class="text-muted mt-1" style="font-size:.7rem;">Register this URL in your Meta App dashboard under Webhooks.</div>
+              </div>
+
+              {# Verify token #}
+              <div class="mt-2 small text-muted">
+                <strong>Verify Token:</strong> <code x-text="acct.metadata?.webhook_verify_token || '(in account settings)'"></code>
+              </div>
+
+              {# Enable/disable quick toggle #}
+              <div class="form-check form-switch mt-3">
+                <input class="form-check-input" type="checkbox" :checked="acct.status === 'connected'" @change="toggleStatus(acct)">
+                <label class="form-check-label small">Enabled</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  {# Available channels #}
+  <div>
+    <h5 class="fw-bold mb-3">Available Channels</h5>
+    <div class="row g-3">
+      <template x-for="ch in catalog" :key="ch.slug">
+        <div class="col-md-4">
+          <div class="card border h-100" style="border-style:dashed !important;">
+            <div class="card-body text-center py-4">
+              <i class="bi fs-1 text-muted" :class="ch.icon || 'bi-chat'"></i>
+              <h6 class="fw-bold mt-2" x-text="ch.name"></h6>
+              <p class="small text-muted mb-2" x-text="ch.description || ''"></p>
+              <button class="btn btn-primary btn-sm mt-1" @click="openConnect(ch.slug)"
+                      :disabled="!ch.adapter_available"
+                      :title="ch.adapter_available ? '' : 'Adapter not yet available'">
+                <i class="bi bi-plus-lg me-1"></i>Connect
+              </button>
+              <div x-show="!ch.adapter_available" class="badge bg-warning-subtle text-warning mt-2 small">Coming soon</div>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template x-if="catalog.length === 0">
+        <div class="col-12"><p class="text-muted small mb-0">All available channels are already connected.</p></div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ================================================================
+     Connect modal
+  ================================================================ -->
+  <div class="modal fade" :class="{ show: showConnect }"
+       :style="{ display: showConnect ? 'block' : 'none' }"
+       tabindex="-1" @keydown.escape.window="showConnect = false">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi me-2" :class="connectChannel?.icon || 'bi-chat'"></i>
+            Connect <span x-text="connectChannel?.name || ''"></span>
+          </h5>
+          <button type="button" class="btn-close" @click="showConnect = false"></button>
+        </div>
+        <div class="modal-body">
+          {# Account name + external id #}
+          <div class="mb-3">
+            <label class="form-label">Account Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" x-model="connectName"
+                   :placeholder="connectChannel?.channel_type === 'whatsapp' ? 'e.g. Sales WhatsApp' : 'e.g. Main Facebook Page'">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">
+              <span x-text="connectChannel?.channel_type === 'whatsapp' ? 'Phone Number ID' : 'Page ID'"></span>
+              <span class="text-danger">*</span>
+            </label>
+            <input type="text" class="form-control" x-model="connectExternalId"
+                   placeholder="The platform-side account ID">
+          </div>
+
+          {# Platform-specific credentials #}
+          <hr>
+          <p class="text-muted small mb-3"><i class="bi bi-shield-lock me-1"></i>Credentials are encrypted at rest and never shown again after saving.</p>
+          <template x-for="field in credentialFields()" :key="field.key">
+            <div class="mb-3">
+              <label class="form-label">
+                <span x-text="field.label"></span>
+                <span x-show="!field.optional" class="text-danger">*</span>
+                <span x-show="field.optional" class="text-muted small">(optional)</span>
+              </label>
+              <input :type="field.secret ? 'password' : 'text'"
+                     class="form-control"
+                     :placeholder="field.placeholder"
+                     x-model="connectCreds[field.key]"
+                     @input="connectCreds[field.key] = $event.target.value">
+              <div class="form-hint" x-text="field.help"></div>
+            </div>
+          </template>
+
+          {# Webhook verify token #}
+          <hr>
+          <div class="mb-3">
+            <label class="form-label">Webhook Verify Token</label>
+            <input type="text" class="form-control" x-model="connectVerifyToken">
+            <div class="form-hint">Use this token when subscribing the webhook URL in your Meta App dashboard.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" @click="showConnect = false" :disabled="connecting">Cancel</button>
+          <button class="btn btn-primary" @click="submitConnect()" :disabled="connecting">
+            <span x-show="!connecting"><i class="bi bi-check-lg me-1"></i>Connect</span>
+            <span x-show="connecting"><span class="spinner-border spinner-border-sm me-1"></span>Connecting…</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade" :class="{ show: showConnect }"
+       :style="{ display: showConnect ? 'block' : 'none' }"
+       x-show="showConnect" style="display:none;" @click="showConnect=false"></div>
+
+  {# Toasts #}
+  <div class="inbox-toasts">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="inbox-toast" :class="t.type">
+        <i class="bi" :class="t.type === 'success' ? 'bi-check-circle' : t.type === 'danger' ? 'bi-exclamation-triangle' : 'bi-info-circle'"></i>
+        <span x-text="t.message"></span>
+      </div>
+    </template>
+  </div>
+</div>
+
+<form style="display:none">{% csrf_token %}</form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/channels.js' %}"></script>
+{% endblock %}

@@ -32,6 +32,7 @@ from apps.permissions.resolver import PermissionResolver
 
 from . import services
 from .models import (
+    Channel,
     ConnectedAccount,
     Conversation,
     Customer,
@@ -41,6 +42,7 @@ from .models import (
 )
 from .serializers import (
     AssignConversationSerializer,
+    ChannelCatalogSerializer,
     ConnectedAccountSerializer,
     ConnectChannelSerializer,
     ConversationDetailSerializer,
@@ -400,7 +402,81 @@ class ConnectedAccountDetailView(StoreContextMixin, generics.RetrieveUpdateDestr
             return ConnectedAccount.objects.none()
         return ConnectedAccount.objects.filter(store=store)
 
+    def perform_update(self, serializer):
+        """Apply status changes via the service so Activity rows fire.
+
+        The read serializer can't write, so we handle the only mutable
+        field (``status``) explicitly via ``request.data`` (DRF has
+        already parsed the body).
+        """
+        instance = serializer.instance
+        new_status = self.request.data.get("status")
+        allowed = {"connected", "disconnected"}
+        if new_status in allowed:
+            services.ChannelService.set_status(
+                account=instance, status=new_status, actor=self.request.user,
+            )
+        instance.refresh_from_db()
+
     def perform_destroy(self, instance):
         # Soft-disable rather than hard-delete so history survives. A real
         # delete (dropping credentials) is an admin-only future action.
         services.ChannelService.disconnect(account=instance, actor=self.request.user)
+
+
+# ===========================================================================
+# Channel catalog — dynamic source for the connect UI + admin toggle
+# ===========================================================================
+class CatalogListView(StoreContextMixin, generics.ListAPIView):
+    """List the channels a store can connect to.
+
+    Returns the global catalog filtered to ``is_enabled=True`` channels
+    (the super-admin's gate). Each row includes ``adapter_available`` so
+    the UI can tell "enabled but adapter missing" from "ready to connect".
+    Requires store membership (any role) — the catalog is the same for
+    every store; per-store gating happens when an account is connected.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, IsStoreMember]
+    serializer_class = ChannelCatalogSerializer
+
+    def get_queryset(self):
+        return Channel.objects.filter(is_enabled=True).order_by("sort_order", "name")
+
+
+class CatalogAdminListView(generics.ListAPIView):
+    """Super-admin only: the FULL catalog (enabled + disabled).
+
+    Used by the admin "manage channels" UI to toggle channels on/off
+    platform-wide. Not store-scoped (the catalog is global).
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ChannelCatalogSerializer
+
+    def get_queryset(self):
+        if not self.request.user.is_superuser:
+            return Channel.objects.none()
+        return Channel.objects.order_by("sort_order", "name")
+
+
+@api_view(["PATCH"])
+@permission_classes([permissions.IsAuthenticated])
+def toggle_channel(request, channel_id):
+    """Super-admin only: enable/disable a channel platform-wide.
+
+    Flips ``Channel.is_enabled``. This is the gate that controls whether
+    the channel appears in any store's connect UI. Only superusers may
+    call it — it's a deployment-wide setting, not a per-store one.
+    """
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only super-admins can toggle channels.")
+    channel = Channel.objects.filter(id=channel_id).first()
+    if channel is None:
+        raise NotFound("Channel not found.")
+    new_enabled = request.data.get("is_enabled")
+    if not isinstance(new_enabled, bool):
+        return Response({"detail": "is_enabled (boolean) is required."}, status=status.HTTP_400_BAD_REQUEST)
+    channel.is_enabled = new_enabled
+    channel.save(update_fields=["is_enabled", "updated_at"])
+    return Response(ChannelCatalogSerializer(channel).data)
