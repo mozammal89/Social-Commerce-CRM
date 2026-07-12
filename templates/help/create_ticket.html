@@ -100,11 +100,11 @@
 
                         <!-- Attachment -->
                         <div class="mb-4">
-                            <label class="form-label support-form-label">
+                            <label class="form-label support-form-label" for="{{ form.attachment.id_for_label }}">
                                 Attachment <span class="text-muted">(Optional)</span>
                             </label>
-                            <div class="support-file-upload" id="fileUploadArea">
-                                <input type="file" name="{{ form.attachment.html_name }}" id="{{ form.attachment.id_for_label }}" class="d-none" accept="image/png,image/jpeg,application/pdf,.doc,.docx">
+                            <div class="support-file-upload" id="fileUploadArea" role="button" tabindex="0" aria-label="Click to upload a file or drag and drop">
+                                <input type="file" name="{{ form.attachment.html_name }}" id="{{ form.attachment.id_for_label }}" class="d-none" accept="image/png,image/jpeg,application/pdf,.doc,.docx" aria-hidden="true">
                                 <div class="support-file-upload-content" id="fileUploadContent">
                                     <div class="upload-placeholder">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -123,7 +123,7 @@
                                             <span id="previewFileName" class="fw-medium"></span>
                                             <span class="text-muted small" id="previewFileSize"></span>
                                         </div>
-                                        <button type="button" class="btn btn-sm btn-outline-danger" id="removeFile">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" id="removeFile" aria-label="Remove uploaded file">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </div>
@@ -138,12 +138,12 @@
 
                         <!-- Submit Buttons -->
                         <div class="d-flex gap-3 pt-3">
-                            <button type="submit" class="btn btn-primary btn-lg px-5">
+                            <button type="submit" class="btn btn-primary btn-lg px-5" id="submitTicketBtn" data-loading-text="Submitting...">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="d-inline-block align-text-bottom me-2">
                                     <path d="M22 2L11 13"></path>
                                     <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                                 </svg>
-                                Submit Ticket
+                                <span class="btn-text">Submit Ticket</span>
                             </button>
                             <a href="{% url 'help:support' %}" class="btn btn-outline-secondary btn-lg px-5">
                                 Cancel
@@ -218,12 +218,24 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('ticketForm');
+    const submitBtn = document.getElementById('submitTicketBtn');
+
     if (form) {
         form.addEventListener('submit', function(e) {
             if (!form.checkValidity()) {
                 e.preventDefault();
                 e.stopPropagation();
                 form.classList.add('was-validated');
+                return;
+            }
+
+            // Show loading state
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                const btnText = submitBtn.querySelector('.btn-text');
+                if (btnText) {
+                    btnText.textContent = submitBtn.dataset.loadingText || 'Submitting...';
+                }
             }
         });
     }

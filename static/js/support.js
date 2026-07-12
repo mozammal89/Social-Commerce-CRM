@@ -163,19 +163,16 @@
             // Drag and drop
             uploadArea.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                uploadArea.style.borderColor = 'var(--support-primary)';
-                uploadArea.style.background = 'rgba(99, 102, 241, 0.05)';
+                uploadArea.classList.add('drag-over');
             });
 
             uploadArea.addEventListener('dragleave', () => {
-                uploadArea.style.borderColor = '';
-                uploadArea.style.background = '';
+                uploadArea.classList.remove('drag-over');
             });
 
             uploadArea.addEventListener('drop', (e) => {
                 e.preventDefault();
-                uploadArea.style.borderColor = '';
-                uploadArea.style.background = '';
+                uploadArea.classList.remove('drag-over');
 
                 const file = e.dataTransfer.files[0];
                 if (file) {
@@ -240,9 +237,11 @@
             preview.classList.remove('d-none');
 
             const fileName = document.getElementById('previewFileName');
+            const fileSize = document.getElementById('previewFileSize');
             const icon = document.getElementById('previewIcon');
 
             if (fileName) fileName.textContent = file.name;
+            if (fileSize) fileSize.textContent = this.formatFileSize(file.size);
 
             if (icon) {
                 icon.className = 'bi ' + this.getFileIcon(file.type);
@@ -258,6 +257,12 @@
                     preview.classList.add('d-none');
                 };
             }
+        },
+
+        formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         },
 
         getFileIcon(mimeType) {
@@ -283,26 +288,33 @@
         initTicketFormValidation(form) {
             const subjectInput = form.querySelector('[name="subject"]');
             const descriptionInput = form.querySelector('[name="description"]');
+            let subjectTimeout, descriptionTimeout;
 
             if (subjectInput) {
                 subjectInput.addEventListener('input', () => {
-                    const value = subjectInput.value.trim();
-                    if (value.length > 0 && value.length < 10) {
-                        this.showFieldError(subjectInput, 'Subject must be at least 10 characters long.');
-                    } else {
-                        this.clearFieldError(subjectInput);
-                    }
+                    clearTimeout(subjectTimeout);
+                    subjectTimeout = setTimeout(() => {
+                        const value = subjectInput.value.trim();
+                        if (value.length > 0 && value.length < 10) {
+                            this.showFieldError(subjectInput, 'Subject must be at least 10 characters long.');
+                        } else {
+                            this.clearFieldError(subjectInput);
+                        }
+                    }, 300);
                 });
             }
 
             if (descriptionInput) {
                 descriptionInput.addEventListener('input', () => {
-                    const value = descriptionInput.value.trim();
-                    if (value.length > 0 && value.length < 50) {
-                        this.showFieldError(descriptionInput, 'Description must be at least 50 characters long.');
-                    } else {
-                        this.clearFieldError(descriptionInput);
-                    }
+                    clearTimeout(descriptionTimeout);
+                    descriptionTimeout = setTimeout(() => {
+                        const value = descriptionInput.value.trim();
+                        if (value.length > 0 && value.length < 50) {
+                            this.showFieldError(descriptionInput, 'Description must be at least 50 characters long.');
+                        } else {
+                            this.clearFieldError(descriptionInput);
+                        }
+                    }, 300);
                 });
             }
         },

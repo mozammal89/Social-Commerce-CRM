@@ -49,7 +49,30 @@
     <div class="row">
         <div class="col-lg-8">
             <!-- Conversation Thread -->
-            <div class="support-conversation">
+            <div class="support-conversation" role="log" aria-live="polite" aria-label="Ticket conversation">
+                <!-- Original Ticket Description -->
+                <div class="support-comment support-comment--user">
+                    <div class="support-comment-header">
+                        <div class="support-comment-avatar">
+                            <div class="support-comment-avatar-user">
+                                {{ ticket.user.first_name|first }}{{ ticket.user.last_name|first }}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="support-comment-author">You</div>
+                            <div class="support-comment-time">{{ ticket.created_at|date:"M d, Y · g:i A" }}</div>
+                        </div>
+                    </div>
+                    <div class="support-comment-content">{{ ticket.description|linebreaks }}</div>
+                    {% if ticket.attachment %}
+                    <div class="support-comment-attachment">
+                        <i class="bi bi-paperclip"></i>
+                        <a href="{{ ticket.attachment.url }}" target="_blank">View attachment</a>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Comments Thread -->
                 {% for comment in comments %}
                 <div class="support-comment {% if comment.is_staff_response %}support-comment--staff{% else %}support-comment--user{% endif %}">
                     <div class="support-comment-header">
@@ -86,41 +109,41 @@
                     {% endif %}
                 </div>
                 {% endfor %}
-
-                <!-- Reply Form -->
-                {% if ticket.status != 'closed' %}
-                <form method="post" enctype="multipart/form-data" class="support-reply-form">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <textarea
-                            name="content"
-                            class="form-control"
-                            rows="4"
-                            placeholder="Type your response here..."
-                            required
-                            id="replyContent"
-                        ></textarea>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="support-attachment-upload">
-                            <input type="file" name="attachment" class="d-none" id="replyAttachment">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('replyAttachment').click()">
-                                <i class="bi bi-paperclip"></i>
-                                Attach file
-                            </button>
-                            <span class="text-muted small ms-2" id="replyFileName"></span>
-                        </div>
-                        <button type="submit" class="btn btn-primary">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="d-inline-block align-text-bottom me-1">
-                                <line x1="22" y1="2" x2="11" y2="13"></line>
-                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                            </svg>
-                            Send Response
-                        </button>
-                    </div>
-                </form>
-                {% endif %}
             </div>
+
+            <!-- Reply Form -->
+            {% if ticket.status != 'closed' %}
+            <form method="post" enctype="multipart/form-data" class="support-reply-form" id="replyForm">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <textarea
+                        name="content"
+                        class="form-control"
+                        rows="4"
+                        placeholder="Type your response here..."
+                        required
+                        id="replyContent"
+                    ></textarea>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="support-attachment-upload">
+                        <input type="file" name="attachment" class="d-none" id="replyAttachment">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('replyAttachment').click()">
+                            <i class="bi bi-paperclip"></i>
+                            Attach file
+                        </button>
+                        <span class="text-muted small ms-2" id="replyFileName"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="submitReplyBtn" data-loading-text="Sending...">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="d-inline-block align-text-bottom me-1">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                        <span class="btn-text">Send Response</span>
+                    </button>
+                </div>
+            </form>
+            {% endif %}
         </div>
 
         <!-- Sidebar -->
@@ -217,6 +240,8 @@
 document.addEventListener('DOMContentLoaded', function() {
     const fileInput = document.getElementById('replyAttachment');
     const fileNameDisplay = document.getElementById('replyFileName');
+    const replyForm = document.getElementById('replyForm');
+    const submitReplyBtn = document.getElementById('submitReplyBtn');
 
     if (fileInput) {
         fileInput.addEventListener('change', function() {
@@ -224,6 +249,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 fileNameDisplay.textContent = this.files[0].name;
             } else {
                 fileNameDisplay.textContent = '';
+            }
+        });
+    }
+
+    // Handle reply form submission with loading state
+    if (replyForm && submitReplyBtn) {
+        replyForm.addEventListener('submit', function() {
+            submitReplyBtn.disabled = true;
+            const btnText = submitReplyBtn.querySelector('.btn-text');
+            if (btnText) {
+                btnText.textContent = submitReplyBtn.dataset.loadingText || 'Sending...';
             }
         });
     }

@@ -752,6 +752,13 @@
     gap: var(--support-spacing-md);
 }
 
+/* Support for UL-based conversation (staff view) */
+.support-conversation[role="log"] {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
 .support-comment {
     display: flex;
     gap: var(--support-spacing-md);
@@ -800,6 +807,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
+}
+
+.support-comment-avatar-staff svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
 }
 
 .support-comment-author {

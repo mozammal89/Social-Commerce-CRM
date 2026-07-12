@@ -55,7 +55,8 @@
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-body">
                     <!-- Original Ticket Description -->
-                    <div class="support-comment support-comment--user mb-4">
+                    <ul class="support-conversation" role="log" aria-live="polite" aria-label="Ticket conversation">
+                    <li class="support-comment support-comment--user mb-4">
                         <div class="support-comment-header">
                             <div class="support-comment-avatar">
                                 <div class="support-comment-avatar-user">
@@ -74,11 +75,11 @@
                             <a href="{{ ticket.attachment.url }}" target="_blank">View attachment</a>
                         </div>
                         {% endif %}
-                    </div>
+                    </li>
 
                     <!-- Comments Thread -->
                     {% for comment in comments %}
-                    <div class="support-comment {% if comment.is_staff_response %}support-comment--staff{% else %}support-comment--user{% endif %} mb-3">
+                    <li class="support-comment {% if comment.is_staff_response %}support-comment--staff{% else %}support-comment--user{% endif %} mb-3">
                         <div class="support-comment-header">
                             <div class="support-comment-avatar">
                                 {% if comment.is_staff_response %}
@@ -111,8 +112,9 @@
                             <a href="{{ comment.attachment.url }}" target="_blank">View attachment</a>
                         </div>
                         {% endif %}
-                    </div>
+                    </li>
                     {% endfor %}
+                    </ul>
 
                     <!-- Staff Response Form -->
                     {% if ticket.status != 'closed' %}
@@ -142,12 +144,12 @@
                                             {% endif %}
                                         {% endfor %}
                                     </select>
-                                    <button type="submit" class="btn btn-primary btn-sm">
+                                    <button type="submit" class="btn btn-primary btn-sm" id="staffReplyBtn" data-loading-text="Sending...">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="d-inline-block align-text-bottom me-1">
                                             <line x1="22" y1="2" x2="11" y2="13"></line>
                                             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                                         </svg>
-                                        Send Response
+                                        <span class="btn-text">Send Response</span>
                                     </button>
                                 </div>
                             </div>
@@ -181,6 +183,15 @@
 
                         <dt class="col-sm-5 text-muted">Category</dt>
                         <dd class="col-sm-7">{{ ticket.get_category_display }}</dd>
+
+                        <dt class="col-sm-5 text-muted">Assigned To</dt>
+                        <dd class="col-sm-7">
+                            {% if ticket.assigned_to %}
+                                {{ ticket.assigned_to.get_full_name|default:ticket.assigned_to.email }}
+                            {% else %}
+                                <span class="text-muted">Unassigned</span>
+                            {% endif %}
+                        </dd>
 
                         <dt class="col-sm-5 text-muted">User</dt>
                         <dd class="col-sm-7">
@@ -247,4 +258,23 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const staffReplyForm = document.querySelector('form[method="post"]');
+    const staffReplyBtn = document.getElementById('staffReplyBtn');
+
+    if (staffReplyForm && staffReplyBtn) {
+        staffReplyForm.addEventListener('submit', function() {
+            staffReplyBtn.disabled = true;
+            const btnText = staffReplyBtn.querySelector('.btn-text');
+            if (btnText) {
+                btnText.textContent = staffReplyBtn.dataset.loadingText || 'Sending...';
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

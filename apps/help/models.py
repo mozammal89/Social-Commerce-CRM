@@ -40,7 +40,7 @@ class SupportTicket(models.Model):
 
     # Ticket Information
     ticket_id = models.CharField(
-        max_length=20,
+        max_length=30,
         unique=True,
         editable=False,
         db_index=True
@@ -49,6 +49,14 @@ class SupportTicket(models.Model):
         User,
         on_delete=models.CASCADE,
         related_name='support_tickets'
+    )
+    assigned_to = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_tickets',
+        help_text="Staff member assigned to this ticket"
     )
     store = models.ForeignKey(
         'stores.Store',
@@ -119,21 +127,28 @@ class SupportTicket(models.Model):
     def save(self, *args, **kwargs):
         """Generate ticket ID on creation if not exists."""
         if not self.ticket_id:
-            # Generate ticket ID like SUP-20240709-0001
-            date_str = timezone.now().strftime('%Y%m%d')
-            last_ticket = SupportTicket.objects.filter(
-                ticket_id__contains=date_str
-            ).order_by('-ticket_id').first()
+            # Use transaction and select_for_update to prevent race conditions
+            from django.db import transaction
 
-            if last_ticket:
-                # Extract sequence number and increment
-                last_seq = int(last_ticket.ticket_id.split('-')[-1])
-                new_seq = last_seq + 1
-            else:
-                new_seq = 1
+            with transaction.atomic():
+                # Lock the table to prevent concurrent ticket creation conflicts
+                last_ticket = SupportTicket.objects.select_for_update().order_by('-ticket_id').first()
 
-            self.ticket_id = f"SUP-{date_str}-{new_seq:04d}"
-        super().save(*args, **kwargs)
+                # Generate ticket ID like SUP-202507-XXXXX (more scalable format)
+                # Format: SUP-YYYYMM-XXXXX (max 19 chars, well under 30 limit)
+                date_str = timezone.now().strftime('%Y%m')
+
+                if last_ticket and last_ticket.ticket_id.startswith(f'SUP-{date_str}-'):
+                    # Extract sequence number and increment
+                    last_seq = int(last_ticket.ticket_id.split('-')[-1])
+                    new_seq = last_seq + 1
+                else:
+                    new_seq = 1
+
+                self.ticket_id = f"SUP-{date_str}-{new_seq:05d}"
+                super().save(*args, **kwargs)
+        else:
+            super().save(*args, **kwargs)
 
     @property
     def is_open(self):

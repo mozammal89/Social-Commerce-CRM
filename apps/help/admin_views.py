@@ -192,9 +192,10 @@ def staff_assign_ticket(request, ticket_id):
     ticket = get_object_or_404(SupportTicket, ticket_id=ticket_id)
 
     if request.method == 'POST':
+        ticket.assigned_to = request.user
         ticket.status = 'in_progress'
-        ticket.save(update_fields=['status'])
-        messages.success(request, f'Ticket {ticket.ticket_id} is now in progress.')
+        ticket.save(update_fields=['assigned_to', 'status'])
+        messages.success(request, f'Ticket {ticket.ticket_id} has been assigned to you.')
 
     return redirect('help:staff_ticket_detail', ticket_id=ticket_id)
 

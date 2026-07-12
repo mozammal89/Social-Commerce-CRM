@@ -18,6 +18,7 @@ class SupportTicketAdmin(admin.ModelAdmin):
         'ticket_id_display',
         'subject',
         'user_email',
+        'assigned_to_display',
         'category_display',
         'priority_display',
         'status_display',
@@ -31,7 +32,7 @@ class SupportTicketAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Ticket Information', {
-            'fields': ('ticket_id', 'user', 'store', 'subject')
+            'fields': ('ticket_id', 'user', 'assigned_to', 'store', 'subject')
         }),
         ('Classification', {
             'fields': ('category', 'priority', 'status')
@@ -51,6 +52,12 @@ class SupportTicketAdmin(admin.ModelAdmin):
     def user_email(self, obj):
         return obj.user.email
     user_email.short_description = 'User'
+
+    def assigned_to_display(self, obj):
+        if obj.assigned_to:
+            return format_html('<span class="badge bg-info">{}</span>', obj.assigned_to.get_full_name() or obj.assigned_to.email)
+        return format_html('<span class="text-muted">Unassigned</span>')
+    assigned_to_display.short_description = 'Assigned To'
 
     def category_display(self, obj):
         colors = {
