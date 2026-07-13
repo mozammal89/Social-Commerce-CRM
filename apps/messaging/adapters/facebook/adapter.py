@@ -16,7 +16,12 @@ Credentials shape (stored encrypted on ConnectedAccount.credentials):
 
 from __future__ import annotations
 
+import ast
+import json
+import logging
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger(__name__)
 
 from ..base import BaseChannelAdapter
 from ..dto import (
@@ -27,6 +32,7 @@ from ..dto import (
     VerifyResult,
 )
 from ..exceptions import AuthenticationError, ConfigurationError, SendMessageError
+from ...fields import decrypt_value
 from ..registry import register
 from . import client, webhook
 from ...constants import DeliveryStatus, MessageType
@@ -46,6 +52,13 @@ class FacebookAdapter(BaseChannelAdapter):
     # ------------------------------------------------------------------
     def verify_webhook(self, *, method, headers, query_params, body, account) -> tuple[bool, Any]:
         app_secret = self._cred(account, "app_secret")
+        if not app_secret:
+            logger.error(
+                "Facebook webhook verification failed for account %s (%s): app_secret is empty or missing. "
+                "Credentials keys available: %s",
+                account.id, account.name,
+                list((account.credentials or {}).keys()) if isinstance(account.credentials, dict) else "not_a_dict"
+            )
         # The verify token lives on the account (or in credentials as a
         # fallback); it is distinct from the app secret used for HMAC.
         verify_token = account.webhook_verify_token or self._cred(account, "verify_token")
@@ -198,4 +211,51 @@ class FacebookAdapter(BaseChannelAdapter):
     # Helpers
     # ------------------------------------------------------------------
     def _cred(self, account: "ConnectedAccount", key: str, default: str = "") -> str:
-        return (account.credentials or {}).get(key, default) or default
+        """Safely extract a credential value from the account's credentials.
+
+        The credentials field is an EncryptedJSONField that stores encrypted JSON.
+        If the field returns a string (encrypted ciphertext or plaintext JSON),
+        we decrypt/parse it to get the dict.
+        """
+        creds = account.credentials or {}
+
+        # If credentials is a string, it might be:
+        # 1. Encrypted ciphertext (starts with 'gAAAAA' for Fernet)
+        # 2. Plaintext JSON string (double-quoted)
+        # 3. Python dict string (single-quoted, from str(dict))
+        if isinstance(creds, str):
+            # Try to decrypt (returns original if not encrypted)
+            try:
+                decrypted = decrypt_value(creds)
+                # decrypt_value may return a string (plaintext or failed decryption)
+                # or a dict (if encrypted content was successfully parsed)
+                if isinstance(decrypted, dict):
+                    creds = decrypted
+                elif isinstance(decrypted, str):
+                    # Try to parse as JSON (double-quoted)
+                    try:
+                        creds = json.loads(decrypted)
+                    except (json.JSONDecodeError, ValueError):
+                        # Try to parse as Python dict literal (single-quoted)
+                        try:
+                            creds = ast.literal_eval(decrypted)
+                            if not isinstance(creds, dict):
+                                logger.warning("Parsed credentials is not a dict for account %s", account.id)
+                                return default
+                        except (ValueError, SyntaxError):
+                            logger.warning("Could not parse credentials as JSON or Python dict for account %s", account.id)
+                            return default
+                else:
+                    creds = decrypted
+            except Exception as e:
+                logger.error("Failed to decrypt/parse credentials for account %s: %s", account.id, e)
+                return default
+
+        # At this point, creds should be a dict (or None)
+        if isinstance(creds, dict):
+            value = creds.get(key, default)
+            logger.debug("Retrieved credential '%s' for account %s: %s", key, account.id, "✓" if value else "empty")
+            return value or default
+
+        logger.warning("Credentials for account %s is not a dict: %s", account.id, type(creds).__name__)
+        return default

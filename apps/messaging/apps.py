@@ -11,6 +11,8 @@ class MessagingConfig(AppConfig):
     verbose_name = "Messaging"
 
     def ready(self):
+        # Import the Celery app early so @shared_task uses the configured broker
+        from config import celery  # noqa: F401  (side-effect: ensures Celery app is loaded)
         # Importing the adapter registry here ensures every bundled
         # adapter self-registers its channel type on startup. Adapters
         # use the ``@register("facebook")`` decorator, so simply

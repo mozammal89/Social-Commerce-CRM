@@ -61,8 +61,25 @@ def verify(*, query_params: dict[str, str], body: bytes, headers: dict[str, str]
     else:
         provided = signature_header
         algo = "sha1"
-    expected = hmac.new(app_secret.encode("utf-8"), body, getattr(hashlib, algo, hashlib.sha1)).hexdigest()
+
+    # Get the hash function - handle sha256, sha1, etc.
+    algo_lower = algo.lower() if algo else "sha1"
+    try:
+        hash_func = getattr(hashlib, algo_lower)
+    except AttributeError:
+        logger.error("Facebook webhook verification failed: unsupported algorithm '%s'", algo)
+        raise WebhookVerificationError(f"Facebook webhook signature verification failed: unsupported algorithm '{algo}'")
+
+    expected = hmac.new(app_secret.encode("utf-8"), body, hash_func).hexdigest()
+    logger.debug(
+        "Facebook webhook signature verification: algorithm=%s, body_length=%d",
+        algo, len(body)
+    )
     if not provided or not hmac.compare_digest(provided, expected):
+        logger.warning(
+            "Facebook webhook signature mismatch: algorithm=%s, provided_prefix=%s, expected_prefix=%s",
+            algo, provided[:10] if provided else "None", expected[:10]
+        )
         raise WebhookVerificationError("Facebook webhook signature mismatch.")
     return True, ""
 
