@@ -120,12 +120,9 @@ def verify_token(*, account: "ConnectedAccount") -> dict[str, Any]:
     """
     url = f"{GRAPH_API_BASE}/me"
     params = {"fields": "id,name", "access_token": _page_token(account)}
-    print('-------------- facegook params --------------', params)
     try:
         resp = requests.get(url, params=params, timeout=DEFAULT_TIMEOUT)
-        print('-------------- facegook verify resp --------------', resp.text)
     except requests.RequestException as exc:
-        print('-------------- facegook error --------------', exc)
         raise AuthenticationError(f"Facebook verify request failed: {exc}") from exc
     return _handle_response(resp, action="verify")
 
