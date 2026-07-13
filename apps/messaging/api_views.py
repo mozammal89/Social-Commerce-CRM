@@ -424,6 +424,28 @@ class ConnectedAccountDetailView(StoreContextMixin, generics.RetrieveUpdateDestr
         services.ChannelService.disconnect(account=instance, actor=self.request.user)
 
 
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+@current_store
+def verify_channel(request, channel_id):
+    """Test a connected account's credentials against the platform.
+
+    Calls the adapter's ``verify_credentials`` (a lightweight live GET)
+    and returns the updated account with its new status (``connected`` /
+    ``error``) and any error message. Used by the "Test connection"
+    button in the channel card. Requires ``connected_channels.update``.
+    """
+    from apps.permissions.resolver import PermissionResolver
+    store = request.store
+    if not PermissionResolver().check(request.user, store, "connected_channels.update"):
+        raise PermissionDenied("You cannot verify channels.")
+    account = ConnectedAccount.objects.filter(store=store, id=channel_id).first()
+    if account is None:
+        raise NotFound("Channel not found.")
+    account = services.ChannelService.verify_account(account=account, actor=request.user)
+    return Response(ConnectedAccountSerializer(account).data)
+
+
 # ===========================================================================
 # Channel catalog — dynamic source for the connect UI + admin toggle
 # ===========================================================================

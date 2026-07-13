@@ -1403,6 +1403,7 @@ textarea.form-control {
 .dropdown-menu.show {
     display: block;
     animation: dropdownFadeIn 0.15s ease-out;
+    cursor: pointer;
 }
 
 .dropdown-menu-end {

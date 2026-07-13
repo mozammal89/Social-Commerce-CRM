@@ -65,15 +65,32 @@
                   <div class="d-flex align-items-center gap-2 mt-1">
                     <span class="status-badge" :class="statusMeta(acct.status).cls" x-text="statusMeta(acct.status).label"></span>
                     <small class="text-muted" x-text="acct.channel?.name || ''"></small>
+                    <i x-show="acct.status === 'connected' && acct.metadata?.verified_at"
+                       class="bi bi-patch-check-fill text-success" title="Verified"></i>
+                  </div>
+                  <div x-show="acct.status === 'connected' && acct.metadata?.verified_name"
+                       class="small text-success mt-1">
+                    <i class="bi bi-check-circle me-1"></i>
+                    <span x-text="'Verified as ' + acct.metadata.verified_name"></span>
+                  </div>
+                  <div x-show="acct.status === 'error' && acct.error_message"
+                       class="small text-danger mt-1">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    <span x-text="acct.error_message"></span>
                   </div>
                 </div>
                 <div class="dropdown">
                   <button class="btn btn-sm btn-ghost" data-bs-toggle="dropdown"><i class="bi bi-three-dots"></i></button>
                   <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" @click="verifyChannel(acct)" :class="{ disabled: verifyingId === acct.id }">
+                      <i class="bi me-2" :class="verifyingId === acct.id ? 'bi-arrow-repeat spin' : 'bi-wifi'"></i>
+                      <span x-text="verifyingId === acct.id ? 'Testing…' : 'Test connection'"></span>
+                    </a></li>
                     <li><a class="dropdown-item" @click="toggleStatus(acct)">
                       <i class="bi me-2" :class="acct.status === 'connected' ? 'bi-pause-circle' : 'bi-play-circle'"></i>
                       <span x-text="acct.status === 'connected' ? 'Disable' : 'Enable'"></span>
                     </a></li>
+                    <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item text-danger" @click="disconnect(acct)"><i class="bi bi-x-circle me-2"></i>Disconnect</a></li>
                   </ul>
                 </div>

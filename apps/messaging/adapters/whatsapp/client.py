@@ -80,6 +80,22 @@ def fetch_contacts(
     return resp.json()
 
 
+def verify_phone_number(*, account: "ConnectedAccount") -> dict[str, Any]:
+    """Verify the access token + phone number by calling ``GET /{phone_number_id}``.
+
+    The canonical Cloud API credential check. Returns the phone number's
+    ``{display_phone_number, verified_name, quality_rating}`` on success;
+    raises ``AuthenticationError`` on any non-2xx (invalid token, wrong
+    number, etc.).
+    """
+    url = f"{GRAPH_API_BASE}/{account.external_id}"
+    try:
+        resp = requests.get(url, headers=_headers(account), timeout=DEFAULT_TIMEOUT)
+    except requests.RequestException as exc:
+        raise AuthenticationError(f"WhatsApp verify request failed: {exc}") from exc
+    return _handle_response(resp, action="verify")
+
+
 def _handle_response(resp: requests.Response, *, action: str) -> dict[str, Any]:
     """Parse a Cloud API response, raising SendMessageError on failure."""
     try:
@@ -91,7 +107,7 @@ def _handle_response(resp: requests.Response, *, action: str) -> dict[str, Any]:
         err = (data or {}).get("error", {}) if isinstance(data, dict) else {}
         code = str(err.get("code", resp.status_code))
         message = err.get("message", resp.text[:300])
-        if action == "authenticate":
-            raise AuthenticationError(f"WhatsApp authentication failed: {message}")
+        if action in ("authenticate", "verify"):
+            raise AuthenticationError(f"WhatsApp {action} failed: {message}")
         raise SendMessageError(f"WhatsApp {action} failed: {message}", code=code)
     return data

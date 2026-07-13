@@ -174,3 +174,31 @@ class SendResult:
     error_message: str = ""
     # The platform's raw response, for debugging.
     raw: dict[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Credential verification result
+# ---------------------------------------------------------------------------
+@dataclass
+class VerifyResult:
+    """Outcome of a credential check against the platform.
+
+    Returned by ``adapter.verify_credentials(account)``. The service layer
+    uses it to set the connected-account's status (``connected`` vs
+    ``error``) and surface a friendly error message to the UI.
+
+    * ``valid`` — whether the credentials work against the platform.
+    * ``account_name`` — the page/number name reported back by the
+      platform (used to auto-fill the display name when valid).
+    * ``external_id`` — the platform-confirmed account id (may differ from
+      what the user entered; the service keeps the user-entered value but
+      records the discrepancy in ``raw``).
+    * ``error_code`` / ``error_message`` — populated on failure.
+    """
+
+    valid: bool
+    account_name: str = ""
+    external_id: str = ""
+    error_message: str = ""
+    error_code: str = ""
+    raw: dict[str, Any] = field(default_factory=dict)

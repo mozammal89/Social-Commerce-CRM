@@ -84,6 +84,7 @@ function channelsApp() {
         isSuperuser: false,
         adminCatalog: [],           // ALL channels (enabled + disabled)
         togglingId: null,           // id of the channel currently being toggled
+        verifyingId: null,          // id of the account being verified
 
         // Connect modal state
         showConnect: false,
@@ -249,6 +250,25 @@ function channelsApp() {
                 await this.loadCatalog();
                 this.notify(`"${account.name}" disconnected.`, 'success');
             } catch (err) { this.notify(err.message, 'error'); }
+        },
+
+        async verifyChannel(account) {
+            // Live-check the credentials against the platform. Sets the
+            // account status to connected/error and shows the result.
+            this.verifyingId = account.id;
+            try {
+                const updated = await api(`${this.apiBase}/channels/${account.id}/verify/`, {
+                    method: 'POST', storeId: this.storeId,
+                });
+                // Patch the in-memory account so the card updates live.
+                Object.assign(account, updated);
+                if (updated.status === 'connected') {
+                    this.notify(`Connection verified${updated.metadata?.verified_name ? ' as ' + updated.metadata.verified_name : ''}.`, 'success');
+                } else {
+                    this.notify(`Verification failed: ${updated.error_message || 'invalid credentials'}.`, 'error');
+                }
+            } catch (err) { this.notify(err.message, 'error'); }
+            finally { this.verifyingId = null; }
         },
 
         /* ---- helpers ---- */

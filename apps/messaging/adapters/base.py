@@ -33,6 +33,7 @@ from .dto import (
     NormalizedIncomingEvent,
     OutboundMessage,
     SendResult,
+    VerifyResult,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - type-only imports
@@ -150,6 +151,21 @@ class BaseChannelAdapter(abc.ABC):
         **normalized** credentials dict to store (encrypted) on the
         account. Raise ``AuthenticationError`` on failure.
         """
+
+    def verify_credentials(self, *, account: "ConnectedAccount") -> "VerifyResult":
+        """Check the stored credentials against the platform.
+
+        Makes a lightweight authenticated API call (e.g. FB ``GET /me``,
+        WA ``GET /{phone_number_id}``) to confirm the token works and the
+        page/number is reachable. Returns a ``VerifyResult`` with the
+        platform-confirmed name and id. The default implementation skips
+        gracefully (returns ``valid=True``) so channels without a real
+        adapter don't block connection — concrete adapters override this.
+
+        Called by the service layer after ``connect_account`` (to validate
+        on connect) and on demand via the "Test connection" UI button.
+        """
+        return VerifyResult(valid=True, raw={"note": "verify_credentials not implemented for this channel"})
 
     def refresh_credentials(self, *, account: "ConnectedAccount") -> None:
         """Refresh expiring credentials (e.g. FB long-lived tokens).

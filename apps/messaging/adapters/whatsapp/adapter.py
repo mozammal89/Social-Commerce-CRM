@@ -24,6 +24,7 @@ from ..dto import (
     NormalizedIncomingEvent,
     OutboundMessage,
     SendResult,
+    VerifyResult,
 )
 from ..exceptions import AuthenticationError, ConfigurationError, SendMessageError
 from ..registry import register
@@ -166,6 +167,25 @@ class WhatsAppAdapter(BaseChannelAdapter):
             "app_secret": app_secret,
             "verify_token": verify_token,
         }
+
+    def verify_credentials(self, *, account) -> VerifyResult:
+        """Check the access token + phone number via ``GET /{phone_number_id}``.
+
+        Confirms the token is valid and the number is registered, and
+        returns the platform-confirmed display name.
+        """
+        try:
+            data = client.verify_phone_number(account=account)
+        except AuthenticationError as exc:
+            return VerifyResult(valid=False, error_code="auth_failed", error_message=str(exc))
+        except Exception as exc:  # pragma: no cover - defensive
+            return VerifyResult(valid=False, error_code="error", error_message=str(exc))
+        return VerifyResult(
+            valid=True,
+            account_name=data.get("verified_name", "") or data.get("display_phone_number", ""),
+            external_id=data.get("id", ""),
+            raw=data,
+        )
 
     # ------------------------------------------------------------------
     # Helpers

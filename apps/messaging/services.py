@@ -826,13 +826,18 @@ class ChannelService:
         credentials: dict[str, Any],
         webhook_verify_token: str = "",
         actor: User | None = None,
+        verify: bool = True,
     ) -> ConnectedAccount:
         """Create (or reconnect) a connected account for a channel.
 
         Delegates credential validation/normalization to the channel's
         adapter, so platform-specific token exchange lives in the adapter.
-        Enforces the plan feature gate (e.g. ``facebook_integration``)
-        when one is configured for the channel.
+        When ``verify=True`` (default), it then calls the adapter's
+        ``verify_credentials`` to check the credentials against the
+        platform live, setting the account status to ``connected`` on
+        success or ``error`` (with a message) on failure. Verification
+        failure does NOT roll back the connect — the account is saved
+        so the user can fix their credentials and re-verify.
         """
         from .models import Channel
         channel = Channel.objects.get(slug=channel_slug)
@@ -845,6 +850,8 @@ class ChannelService:
         )
 
         with transaction.atomic():
+            # Persist first as PENDING so the row exists even if verification
+            # fails. Verification below flips it to connected/error.
             account, created = ConnectedAccount.objects.update_or_create(
                 store=store,
                 channel=channel,
@@ -853,7 +860,7 @@ class ChannelService:
                     "name": name,
                     "credentials": normalized,
                     "webhook_verify_token": webhook_verify_token,
-                    "status": ConnectedAccountStatus.CONNECTED.value,
+                    "status": ConnectedAccountStatus.PENDING.value,
                     "connected_by": actor,
                     "error_message": "",
                 },
@@ -864,6 +871,56 @@ class ChannelService:
                 description=f"Connected {channel.name}: {name}",
                 metadata={"channel": channel.slug, "external_id": external_id, "account_id": str(account.id)},
             )
+
+        # Live credential check. The account is already persisted, so a
+        # failure here just marks it ``error`` rather than blocking the
+        # connect — the user can fix creds and re-verify via the UI.
+        if verify:
+            ChannelService.verify_account(account=account, actor=actor)
+        else:
+            account.status = ConnectedAccountStatus.CONNECTED.value
+            account.save(update_fields=["status", "updated_at"])
+        account.refresh_from_db()
+        return account
+
+    @staticmethod
+    def verify_account(
+        *, account: ConnectedAccount, actor: User | None = None,
+    ) -> ConnectedAccount:
+        """Live-check the account's credentials against the platform.
+
+        Calls the adapter's ``verify_credentials`` (a lightweight GET, e.g.
+        FB ``GET /me`` / WA ``GET /{phone_number_id}``) and sets the
+        account status + error_message from the result. On success the
+        platform-confirmed name is recorded in metadata. Returns the
+        account (refreshed). Never raises — failures are recorded as
+        status=error with the message.
+        """
+        adapter = get_adapter_for_account(account)
+        try:
+            result = adapter.verify_credentials(account=account)
+        except Exception as exc:  # pragma: no cover - defensive
+            result = type("R", (), {"valid": False, "error_message": str(exc),
+                                    "error_code": "error", "account_name": "",
+                                    "external_id": "", "raw": {}})()
+        with transaction.atomic():
+            if result.valid:
+                account.status = ConnectedAccountStatus.CONNECTED.value
+                account.error_message = ""
+                md = dict(account.metadata or {})
+                if result.account_name:
+                    md["verified_name"] = result.account_name
+                if result.external_id:
+                    md["verified_external_id"] = result.external_id
+                md["verified_at"] = timezone.now().isoformat()
+                account.metadata = md
+            else:
+                account.status = ConnectedAccountStatus.ERROR.value
+                account.error_message = result.error_message or "Verification failed"
+            account.last_synced_at = timezone.now()
+            account.save(update_fields=[
+                "status", "error_message", "metadata", "last_synced_at", "updated_at",
+            ])
         return account
 
     @staticmethod

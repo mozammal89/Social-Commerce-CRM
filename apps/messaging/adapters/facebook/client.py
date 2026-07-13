@@ -111,6 +111,25 @@ def exchange_long_lived_token(*, app_id: str, app_secret: str, short_lived_token
     return data
 
 
+def verify_token(*, account: "ConnectedAccount") -> dict[str, Any]:
+    """Verify the page access token by calling ``GET /me``.
+
+    The canonical "is this token valid?" check. Returns the page's
+    ``{id, name}`` on success; raises ``AuthenticationError`` on any
+    non-2xx response (invalid/expired token, wrong permissions, ...).
+    """
+    url = f"{GRAPH_API_BASE}/me"
+    params = {"fields": "id,name", "access_token": _page_token(account)}
+    print('-------------- facegook params --------------', params)
+    try:
+        resp = requests.get(url, params=params, timeout=DEFAULT_TIMEOUT)
+        print('-------------- facegook verify resp --------------', resp.text)
+    except requests.RequestException as exc:
+        print('-------------- facegook error --------------', exc)
+        raise AuthenticationError(f"Facebook verify request failed: {exc}") from exc
+    return _handle_response(resp, action="verify")
+
+
 def _handle_response(resp: requests.Response, *, action: str) -> dict[str, Any]:
     """Parse a Graph API response, raising SendMessageError on failure."""
     try:
@@ -123,7 +142,7 @@ def _handle_response(resp: requests.Response, *, action: str) -> dict[str, Any]:
         err = (data or {}).get("error", {}) if isinstance(data, dict) else {}
         code = str(err.get("code", resp.status_code))
         message = err.get("message", resp.text[:300])
-        if action == "token_exchange":
-            raise AuthenticationError(f"Facebook token exchange failed: {message}")
+        if action in ("token_exchange", "verify"):
+            raise AuthenticationError(f"Facebook {action} failed: {message}")
         raise SendMessageError(f"Facebook {action} failed: {message}", code=code)
     return data
