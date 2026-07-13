@@ -17,12 +17,15 @@ to keep webhook ingestion responsive.
 
 from __future__ import annotations
 
+import ast
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
 import requests
 
 from ..exceptions import AuthenticationError, SendMessageError
+from ...fields import decrypt_value
 
 if TYPE_CHECKING:  # pragma: no cover - type-only imports
     from ...models import ConnectedAccount
@@ -35,7 +38,31 @@ DEFAULT_TIMEOUT = 20  # seconds
 
 def _page_token(account: "ConnectedAccount") -> str:
     """Read the page access token from the (decrypted) credentials."""
-    token = (account.credentials or {}).get("page_access_token", "")
+    creds = account.credentials or {}
+
+    # If credentials is a string, it might be encrypted or a JSON string
+    if isinstance(creds, str):
+        try:
+            decrypted = decrypt_value(creds)
+            if isinstance(decrypted, dict):
+                creds = decrypted
+            elif isinstance(decrypted, str):
+                try:
+                    creds = json.loads(decrypted)
+                except (json.JSONDecodeError, ValueError):
+                    try:
+                        creds = ast.literal_eval(decrypted)
+                        if not isinstance(creds, dict):
+                            logger.warning("Parsed credentials is not a dict for account %s", account.id)
+                            creds = {}
+                    except (ValueError, SyntaxError):
+                        logger.warning("Could not parse credentials as JSON or Python dict for account %s", account.id)
+                        creds = {}
+        except Exception as e:
+            logger.error("Failed to decrypt/parse credentials for account %s: %s", account.id, e)
+            creds = {}
+
+    token = creds.get("page_access_token", "") if isinstance(creds, dict) else ""
     if not token:
         raise SendMessageError("Connected Facebook account has no page_access_token.", code="missing_token")
     return token

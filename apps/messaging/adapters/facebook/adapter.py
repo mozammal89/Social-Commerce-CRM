@@ -111,8 +111,6 @@ class FacebookAdapter(BaseChannelAdapter):
             attachment = self._build_attachment(att.attachment_type, att.url or "", att.file)
             if attachment:
                 msg.setdefault("attachment", attachment)
-        if message.quick_replies:
-            msg["quick_replies"] = message.quick_replies
 
         return {
             "recipient": {"id": psid},

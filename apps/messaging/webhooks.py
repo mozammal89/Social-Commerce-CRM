@@ -49,6 +49,9 @@ from .adapters.exceptions import AdapterError
 from .models import ConnectedAccount
 from .tasks import process_webhook_payload
 
+# Ensure Celery app is initialized for task queuing
+from config import celery  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 # Methods both supported platforms use. ``require_http_methods`` +

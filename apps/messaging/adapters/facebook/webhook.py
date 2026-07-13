@@ -132,8 +132,10 @@ def _parse_messaging(messaging: dict) -> list[NormalizedIncomingEvent | Delivery
         # message_echo = the bot's own outbound echoed back; skip to avoid
         # duplicates (our outbound is recorded on send).
         if msg.get("is_echo"):
+            logger.debug("Skipping echo message from Facebook: mid=%s, text=%s", external_id, text[:50])
             return out
 
+        logger.info("Processing incoming Facebook message: mid=%s, sender=%s, text=%s", external_id, sender_id, text[:50])
         out.append(
             NormalizedIncomingEvent(
                 external_message_id=external_id,

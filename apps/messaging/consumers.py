@@ -105,6 +105,10 @@ class InboxConsumer(AsyncJsonWebsocketConsumer):
         """A new message arrived in any conversation in this store."""
         await self.send_json(event["payload"])
 
+    async def message_updated(self, event):
+        """A message's delivery status changed (sent/delivered/read/failed)."""
+        await self.send_json(event["payload"])
+
     async def conversation_updated(self, event):
         """A conversation's metadata changed (status, assignment, preview)."""
         await self.send_json(event["payload"])
