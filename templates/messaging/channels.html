@@ -3,6 +3,13 @@
 
 {% block title %}{{ title }} - {{ APP_NAME }}{% endblock %}
 
+{% block extra_css %}
+<style>
+  @keyframes channels-spin { to { transform: rotate(360deg); } }
+  .spin { animation: channels-spin .8s linear infinite; display: inline-block; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="dashboard-container" x-data="channelsApp()" data-store-id="{{ store_id }}" data-is-superuser="{{ is_superuser|yesno:'true,false' }}" x-cloak>
 
