@@ -81,11 +81,15 @@ def send(
     """
     url = f"{GRAPH_API_BASE}/{account.external_id}/messages"
     params = {"access_token": _page_token(account)}
+    logger.debug("Facebook send request: url=%s, recipient=%s, payload=%s", url, recipient_psid, payload)
+    print("Facebook send request: url=%s, recipient=%s, payload=%s", url, recipient_psid, payload)
     try:
         resp = requests.post(url, params=params, json=payload, timeout=DEFAULT_TIMEOUT)
     except requests.RequestException as exc:
         raise SendMessageError(f"Facebook send request failed: {exc}", code="transport_error") from exc
 
+    logger.debug("Facebook send response: status=%s, body=%s", resp.status_code, resp.text[:500])
+    print("Facebook send response: status=%s, body=%s", resp.status_code, resp.text[:500])
     return _handle_response(resp, action="send")
 
 

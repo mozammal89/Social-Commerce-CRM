@@ -765,12 +765,17 @@ class MessageService:
 
             ConversationService._apply_outbound_message(conversation, message)
 
+            # Truncate error messages to fit the 255 char limit
+            error_desc = result.error_message or "Unknown error"
+            if len(error_desc) > 200:  # Leave room for "Send failed: " prefix
+                error_desc = error_desc[:200] + "..."
+
             Activity.objects.create(
                 store=connected_account.store, conversation=conversation,
                 customer=conversation.customer, actor=sender,
                 action_type=(ActivityType.MESSAGE_SENT.value if result.success
                              else ActivityType.MESSAGE_FAILED.value),
-                description=("Reply sent" if result.success else f"Send failed: {result.error_message}"),
+                description=("Reply sent" if result.success else f"Send failed: {error_desc}"),
             )
 
         _emit_message_received(message, conversation)

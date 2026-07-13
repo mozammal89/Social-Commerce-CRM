@@ -83,9 +83,14 @@ class FacebookAdapter(BaseChannelAdapter):
             return SendResult(success=False, status=DeliveryStatus.FAILED.value, error_message="Empty message")
 
         payload = self._build_send_payload(recipient_external_id, message)
+        logger.debug("Sending Facebook message: payload=%s", payload)
+        print("Sending Facebook message: payload=%s", payload)
         try:
             data = client.send(account=account, recipient_psid=recipient_external_id, payload=payload)
+            logger.info("Facebook send successful: data=%s", data)
         except SendMessageError as exc:
+            logger.error("Facebook send failed: %s (code=%s)", exc, exc.code)
+            print("Facebook send failed: %s (code=%s)", exc, exc.code)
             return SendResult(
                 success=False,
                 status=DeliveryStatus.FAILED.value,
@@ -95,6 +100,8 @@ class FacebookAdapter(BaseChannelAdapter):
 
         # Send API returns {"recipient_id": "...", "message_id": "..."}
         external_id = (data or {}).get("message_id") or (data or {}).get("id")
+        logger.info("Creating SendResult: success=True, external_id=%s, data=%s", external_id, data)
+        print("Creating SendResult: success=True, external_id=%s, data=%s", external_id, data)
         return SendResult(success=True, external_id=external_id, status=DeliveryStatus.SENT.value, raw=data)
 
     def _build_send_payload(self, psid: str, message: OutboundMessage) -> dict[str, Any]:
