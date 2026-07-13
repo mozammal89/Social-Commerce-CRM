@@ -60,7 +60,6 @@ function customersApp() {
         mergeCandidates: [],
         merging: false,
 
-        toasts: [],
 
         init() {
             this.storeId = this.$el.dataset.storeId || '';
@@ -88,7 +87,7 @@ function customersApp() {
             try {
                 const data = await api(`${this.apiBase}/customers/${customer.id}/timeline/`, { storeId: this.storeId });
                 this.timeline = data.items || [];
-            } catch (err) { this.toast(err.message, 'danger'); }
+            } catch (err) { this.notify(err.message, 'error'); }
             finally { this.loadingTimeline = false; }
         },
 
@@ -109,20 +108,27 @@ function customersApp() {
 
         async mergeWith(duplicateId) {
             if (!this.activeCustomer || !duplicateId) return;
-            if (!confirm('Merge this customer into the selected one? The duplicate will be retired and all its history moved over.')) return;
+            // Use the project's central confirm modal (not browser confirm()).
+            const ok = await window.confirmAction({
+                title: 'Merge customers?',
+                message: 'Merge this customer into the selected one? The duplicate will be retired and all its history moved over.',
+                confirmText: 'Merge',
+                confirmClass: 'btn-warning',
+            });
+            if (!ok) return;
             this.merging = true;
             try {
                 const primary = await api(`${this.apiBase}/customers/${this.activeCustomer.id}/merge/`, {
                     method: 'POST', storeId: this.storeId, body: { duplicate_id: duplicateId },
                 });
                 this.activeCustomer = primary;
-                this.toast('Customers merged successfully.', 'success');
+                this.notify('Customers merged successfully.', 'success');
                 this.showMerge = false;
                 this.mergeCandidates = [];
                 this.mergeSearch = '';
                 await this.loadCustomers();
                 await this.openTimeline(primary);
-            } catch (err) { this.toast(err.message, 'danger'); }
+            } catch (err) { this.notify(err.message, 'error'); }
             finally { this.merging = false; }
         },
 
@@ -155,10 +161,11 @@ function customersApp() {
             return 'bi-circle';
         },
 
-        toast(message, type = 'info') {
-            const id = Date.now() + Math.random();
-            this.toasts.push({ id, message, type });
-            setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 4000);
+        /** Delegate to the project's global notification system. */
+        notify(message, type = 'info') {
+            if (typeof window.showNotification === 'function') {
+                window.showNotification(message, type);
+            }
         },
     };
 }

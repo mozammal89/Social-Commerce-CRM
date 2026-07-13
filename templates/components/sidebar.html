@@ -187,14 +187,14 @@
             {% endcan %}
 
             <!-- Store Management Section - PRIORITY 5 -->
-            <!-- {# Show Store Management whenever the user has anything to
+            <!--  Show Store Management whenever the user has anything to
                manage: a live subscription, a pending plan, or at least
                one existing store. Previously gated only on
                ``has_user_subscription or has_pending_subscription or
                pending_plan``, which hid the section entirely for users
                whose subscription was canceled but who still own stores —
                they couldn't see "My Stores" or "Manage Subscription" in
-               the sidebar even though both were still accessible. #} -->
+               the sidebar even though both were still accessible. -->
             {% if has_user_subscription or has_pending_subscription or pending_plan or not user_has_no_store %}
             <div class="sidebar-section">
                 <div class="sidebar-section-title">
@@ -212,14 +212,14 @@
                     </a>
                     {% endif %}
                 {% else %}
-                    <!-- {# User has stores. Show "My Stores" and "Manage
+                    <!--  User has stores. Show "My Stores" and "Manage
                        Subscription" regardless of subscription state so
                        a canceled user can still see their stores and
                        re-subscribe from the sidebar. "Add New Store" is
                        only shown when there's an active subscription
                        — creating stores while canceled would be
                        blocked by the plan-limit guard anyway, and
-                       hiding the link avoids a confusing dead-end. #} -->
+                       hiding the link avoids a confusing dead-end.  -->
                     <a href="{% url 'stores:store_list_html' %}" class="sidebar-nav-item {% if request.resolver_match.app_name == 'stores' and request.resolver_match.url_name != 'create' %}active{% endif %}">
                         <div class="sidebar-nav-icon">
                             <i class="bi bi-shop-window"></i>

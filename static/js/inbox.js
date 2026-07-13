@@ -119,7 +119,6 @@ function inboxApp() {
         ws: null,
         wsConnected: false,
         wsReconnectTimer: null,
-        toasts: [],
 
         /* ================================================================
          * Lifecycle
@@ -130,7 +129,7 @@ function inboxApp() {
             this.storeId = root.dataset.storeId || '';
             this.currentUserId = root.dataset.currentUserId || '';
             if (!this.storeId) {
-                this.toast('No store selected. Switch to a store to view the inbox.', 'danger');
+                this.notify('No store selected. Switch to a store to view the inbox.', 'error');
                 return;
             }
             this.loadConversations();
@@ -241,8 +240,8 @@ function inboxApp() {
                 });
                 this.activeConversation = { ...this.activeConversation, ...updated };
                 this.touchConversation({ assigned_to: updated.assigned_to });
-                this.toast('Conversation assigned to you.', 'success');
-            } catch (err) { this.toast(err.message, 'danger'); }
+                this.notify('Conversation assigned to you.', 'success');
+            } catch (err) { this.notify(err.message, 'error'); }
         },
 
         async unassign() {
@@ -253,8 +252,8 @@ function inboxApp() {
                 });
                 this.activeConversation = { ...this.activeConversation, ...updated };
                 this.touchConversation({ assigned_to: null });
-                this.toast('Conversation unassigned.', 'success');
-            } catch (err) { this.toast(err.message, 'danger'); }
+                this.notify('Conversation unassigned.', 'success');
+            } catch (err) { this.notify(err.message, 'error'); }
         },
 
         async setStatus(newStatus) {
@@ -265,8 +264,8 @@ function inboxApp() {
                 });
                 this.activeConversation = { ...this.activeConversation, status: updated.status };
                 this.touchConversation({ status: updated.status });
-                this.toast(`Status set to ${STATUS_META[newStatus]?.label || newStatus}.`, 'success');
-            } catch (err) { this.toast(err.message, 'danger'); }
+                this.notify(`Status set to ${STATUS_META[newStatus]?.label || newStatus}.`, 'success');
+            } catch (err) { this.notify(err.message, 'error'); }
         },
 
         /* ================================================================
@@ -296,7 +295,7 @@ function inboxApp() {
                 });
                 this.notes.unshift(note);
                 this.newNote = '';
-            } catch (err) { this.toast(err.message, 'danger'); }
+            } catch (err) { this.notify(err.message, 'error'); }
             finally { this.savingNote = false; }
         },
 
@@ -428,10 +427,11 @@ function inboxApp() {
             if (el) el.scrollTop = el.scrollHeight;
         },
 
-        toast(message, type = 'info') {
-            const id = Date.now() + Math.random();
-            this.toasts.push({ id, message, type });
-            setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 4000);
+        /** Delegate to the project's global notification system. */
+        notify(message, type = 'info') {
+            if (typeof window.showNotification === 'function') {
+                window.showNotification(message, type);
+            }
         },
 
         /* ---- display helpers (used in template) ---- */

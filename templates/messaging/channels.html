@@ -6,7 +6,7 @@
 {% block content %}
 <div class="dashboard-container" x-data="channelsApp()" data-store-id="{{ store_id }}" data-is-superuser="{{ is_superuser|yesno:'true,false' }}" x-cloak>
 
-  {# Page header #}
+  <!-- Page header -->
   <div class="section-header mb-4">
     <div>
       <h1 class="section-title"><i class="bi bi-broadcast me-2"></i>Connected Channels</h1>
@@ -14,11 +14,11 @@
     </div>
   </div>
 
-  {# Connected accounts #}
+  <!-- Connected accounts -->
   <div class="mb-5">
     <h5 class="fw-bold mb-3">Connected</h5>
 
-    {# Loading #}
+    <!-- Loading -->  
     <template x-if="loading">
       <div class="row g-3">
         <template x-for="i in 2" :key="i">
@@ -31,7 +31,7 @@
       </div>
     </template>
 
-    {# Error #}
+    <!-- Error -->
     <template x-if="error">
       <div class="alert alert-danger d-flex align-items-center gap-2">
         <i class="bi bi-exclamation-triangle"></i>
@@ -40,7 +40,7 @@
       </div>
     </template>
 
-    {# Empty #}
+    <!-- Empty -->
     <template x-if="!loading && accounts.length === 0 && !error">
       <div class="empty-state text-center py-5">
         <div class="empty-state-icon"><i class="bi bi-plug"></i></div>
@@ -49,11 +49,11 @@
       </div>
     </template>
 
-    {# Account cards #}
+    <!-- Account cards -->
     <div class="row g-3">
       <template x-for="acct in accounts" :key="acct.id">
         <div class="col-md-6">
-          <div class="card border-0 shadow-sm h-100">
+          <div class="card border-0 shadow-sm h-100" :style="acct.status !== 'connected' ? 'opacity:.65;' : ''">
             <div class="card-body">
               <div class="d-flex align-items-start gap-3 mb-3">
                 <div class="rounded-3 d-flex align-items-center justify-content-center"
@@ -79,7 +79,7 @@
                 </div>
               </div>
 
-              {# Webhook URL #}
+              <!-- Webhook URL -->
               <div class="bg-body-secondary rounded p-2 small">
                 <div class="d-flex align-items-center gap-2">
                   <i class="bi bi-link-45deg text-muted"></i>
@@ -89,12 +89,12 @@
                 <div class="text-muted mt-1" style="font-size:.7rem;">Register this URL in your Meta App dashboard under Webhooks.</div>
               </div>
 
-              {# Verify token #}
+              <!-- Verify token -->
               <div class="mt-2 small text-muted">
                 <strong>Verify Token:</strong> <code x-text="acct.metadata?.webhook_verify_token || '(in account settings)'"></code>
               </div>
 
-              {# Enable/disable quick toggle #}
+              <!-- Enable/disable quick toggle -->
               <div class="form-check form-switch mt-3">
                 <input class="form-check-input" type="checkbox" :checked="acct.status === 'connected'" @change="toggleStatus(acct)">
                 <label class="form-check-label small">Enabled</label>
@@ -106,7 +106,7 @@
     </div>
   </div>
 
-  {# Available channels #}
+  <!-- Available channels -->
   <div>
     <h5 class="fw-bold mb-3">Available Channels</h5>
     <div class="row g-3">
@@ -207,7 +207,7 @@
           <button type="button" class="btn-close" @click="showConnect = false"></button>
         </div>
         <div class="modal-body">
-          {# Account name + external id #}
+          <!-- Account name + external id -->
           <div class="mb-3">
             <label class="form-label">Account Name <span class="text-danger">*</span></label>
             <input type="text" class="form-control" x-model="connectName"
@@ -222,7 +222,7 @@
                    placeholder="The platform-side account ID">
           </div>
 
-          {# Platform-specific credentials #}
+          <!-- Platform-specific credentials -->
           <hr>
           <p class="text-muted small mb-3"><i class="bi bi-shield-lock me-1"></i>Credentials are encrypted at rest and never shown again after saving.</p>
           <template x-for="field in credentialFields()" :key="field.key">
@@ -241,7 +241,7 @@
             </div>
           </template>
 
-          {# Webhook verify token #}
+          <!-- Webhook verify token -->
           <hr>
           <div class="mb-3">
             <label class="form-label">Webhook Verify Token</label>
@@ -263,15 +263,8 @@
        :style="{ display: showConnect ? 'block' : 'none' }"
        x-show="showConnect" style="display:none;" @click="showConnect=false"></div>
 
-  {# Toasts #}
-  <div class="inbox-toasts">
-    <template x-for="t in toasts" :key="t.id">
-      <div class="inbox-toast" :class="t.type">
-        <i class="bi" :class="t.type === 'success' ? 'bi-check-circle' : t.type === 'danger' ? 'bi-exclamation-triangle' : 'bi-info-circle'"></i>
-        <span x-text="t.message"></span>
-      </div>
-    </template>
-  </div>
+  <!-- Notifications use the global showNotification() system (main.js);
+     no per-page toast markup needed. -->
 </div>
 
 <form style="display:none">{% csrf_token %}</form>

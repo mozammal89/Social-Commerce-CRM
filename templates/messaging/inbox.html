@@ -19,9 +19,9 @@
 
   <div class="inbox-shell">
 
-    <!-- {# ================================================================
+    <!-- ================================================================
        Pane 1 — Conversation list
-       ================================================================ #} -->
+       ================================================================ -->
     <aside class="inbox-list">
       <div class="inbox-list-header">
         <div class="inbox-list-title">
@@ -70,7 +70,7 @@
 
        <!-- List body -->
       <div class="inbox-list-body">
-        {# Loading skeletons #}
+        <!-- Loading skeletons -->
         <template x-if="loadingList">
           <div>
             <template x-for="i in 5" :key="i">
@@ -342,15 +342,7 @@
     </aside>
   </div>
 
-  <!-- Toasts -->
-  <div class="inbox-toasts">
-    <template x-for="t in toasts" :key="t.id">
-      <div class="inbox-toast" :class="t.type">
-        <i class="bi" :class="t.type === 'success' ? 'bi-check-circle' : t.type === 'danger' ? 'bi-exclamation-triangle' : 'bi-info-circle'"></i>
-        <span x-text="t.message"></span>
-      </div>
-    </template>
-  </div>
+  <!-- Notifications use the global showNotification() system (main.js). -->
 </div>
 
 <!-- Hidden CSRF form for the JS getCSRFToken() helper. -->

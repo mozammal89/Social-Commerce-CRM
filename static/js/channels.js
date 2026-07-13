@@ -94,8 +94,6 @@ function channelsApp() {
         connectCreds: {},           // {field_key: value}
         connecting: false,
 
-        toasts: [],
-
         /* ---- lifecycle ---- */
         async init() {
             const el = this.$el;
@@ -156,13 +154,13 @@ function channelsApp() {
                 });
                 const idx = this.adminCatalog.findIndex(c => c.id === channel.id);
                 if (idx !== -1) this.adminCatalog.splice(idx, 1, updated);
-                this.toast(`${channel.name} ${enable ? 'enabled' : 'disabled'} for all stores.`, 'success');
+                this.notify(`${channel.name} ${enable ? 'enabled' : 'disabled'} for all stores.`, 'success');
                 // Refresh the connectable catalog so the change is reflected.
                 await this.loadCatalog();
             } catch (err) {
                 // Revert the switch on failure.
                 channel.is_enabled = !enable;
-                this.toast(err.message, 'danger');
+                this.notify(err.message, 'error');
             } finally {
                 this.togglingId = null;
             }
@@ -188,9 +186,9 @@ function channelsApp() {
             if (!this.connectChannel || this.connecting) return;
             // Validate required fields
             const missing = this.credentialFields().filter(f => !f.optional && !this.connectCreds[f.key]);
-            if (missing.length) { this.toast('Please fill in all required fields.', 'danger'); return; }
-            if (!this.connectName.trim()) { this.toast('Please enter an account name.', 'danger'); return; }
-            if (!this.connectExternalId.trim()) { this.toast('Please enter the external ID.', 'danger'); return; }
+            if (missing.length) { this.notify('Please fill in all required fields.', 'warning'); return; }
+            if (!this.connectName.trim()) { this.notify('Please enter an account name.', 'warning'); return; }
+            if (!this.connectExternalId.trim()) { this.notify('Please enter the external ID.', 'warning'); return; }
 
             this.connecting = true;
             try {
@@ -206,11 +204,11 @@ function channelsApp() {
                     },
                 });
                 this.showConnect = false;
-                this.toast(`${this.connectChannel.name} connected successfully.`, 'success');
+                this.notify(`${this.connectChannel.name} connected successfully.`, 'success');
                 await this.loadAccounts();
                 await this.loadCatalog();
             } catch (err) {
-                this.toast(err.message, 'danger');
+                this.notify(err.message, 'error');
             } finally {
                 this.connecting = false;
             }
@@ -226,21 +224,31 @@ function channelsApp() {
                     body: { status: newStatus },
                 });
                 account.status = newStatus;
-                this.toast(`Channel ${newStatus === 'connected' ? 'enabled' : 'disabled'}.`, 'success');
-            } catch (err) { this.toast(err.message, 'danger'); }
+                this.notify(`Channel ${newStatus === 'connected' ? 'enabled' : 'disabled'}.`, 'success');
+            } catch (err) { this.notify(err.message, 'error'); }
         },
 
         async disconnect(account) {
-            if (!confirm(`Disconnect "${account.name}"? You can re-enable it later; credentials are kept.`)) return;
+            // Use the project's central confirm modal (not browser confirm()).
+            const ok = await window.confirmAction({
+                title: 'Disconnect channel?',
+                message: `Disconnect "${account.name}"? You can re-enable it later from the channel list — credentials are kept.`,
+                confirmText: 'Disconnect',
+                confirmClass: 'btn-danger',
+            });
+            if (!ok) return;
             try {
                 await api(`${this.apiBase}/channels/${account.id}/`, {
                     method: 'DELETE',
                     storeId: this.storeId,
                 });
-                this.accounts = this.accounts.filter(a => a.id !== account.id);
+                // Disconnect is a soft-disable (status -> disconnected), so the
+                // account stays in the list with a "Disabled" badge rather than
+                // vanishing. Reload to reflect the persisted status.
+                await this.loadAccounts();
                 await this.loadCatalog();
-                this.toast('Channel disconnected.', 'success');
-            } catch (err) { this.toast(err.message, 'danger'); }
+                this.notify(`"${account.name}" disconnected.`, 'success');
+            } catch (err) { this.notify(err.message, 'error'); }
         },
 
         /* ---- helpers ---- */
@@ -253,8 +261,8 @@ function channelsApp() {
         copyWebhook(account) {
             const url = this.webhookUrl(account);
             navigator.clipboard?.writeText(url).then(
-                () => this.toast('Webhook URL copied.', 'success'),
-                () => this.toast('Copy failed — select and copy manually.', 'danger'),
+                () => this.notify('Webhook URL copied.', 'success'),
+                () => this.notify('Copy failed — select and copy manually.', 'error'),
             );
         },
 
@@ -266,10 +274,13 @@ function channelsApp() {
             return STATUS_META[status] || STATUS_META.pending;
         },
 
-        toast(message, type = 'info') {
-            const id = Date.now() + Math.random();
-            this.toasts.push({ id, message, type });
-            setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 4000);
+        /** Delegate to the project's global notification system. */
+        notify(message, type = 'info') {
+            if (typeof window.showNotification === 'function') {
+                window.showNotification(message, type);
+            } else {
+                console.log(`[${type}] ${message}`);
+            }
         },
     };
 }

@@ -1212,7 +1212,7 @@ body {
 /* Ghost Button */
 .btn-ghost {
     background: transparent;
-    border-color: transparent;
+    /* border-color: transparent; */
     color: var(--text-secondary);
 }
 

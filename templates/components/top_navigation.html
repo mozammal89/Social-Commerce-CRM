@@ -57,7 +57,7 @@
                     {% if user_stores %}
                         {% for store in user_stores %}
                         <li>
-                            {# Pass ``next`` so the user lands back on the page they were viewing after the store context changes. The view validates this is a same-host URL before following it. #}
+                            <!--  Pass ``next`` so the user lands back on the page they were viewing after the store context changes. The view validates this is a same-host URL before following it.  -->
                             <a class="dropdown-item d-flex align-items-center justify-content-between" href="{% url 'dashboard:switch_store' store.id %}?next={{ request.get_full_path|urlencode }}">
                                 <div class="d-flex align-items-center gap-2">
                                     <i class="bi bi-shop-window" style="color: var(--brand-600);"></i>

@@ -1,11 +1,11 @@
-{# Auth card wrapper. Renders the standard card with optional title/subtitle.
+<!-- Auth card wrapper. Renders the standard card with optional title/subtitle.
    Usage:
      {% include 'components/auth_card.html' with title='Welcome back' subtitle='Sign in to continue' %}
      ...content...
      {% endwith %}
    Or use block style:
      {% include 'components/auth_card.html' with title='Welcome back' %}
-#}
+-->
 <section class="auth-card {% if state %}auth-card--state{% endif %} {% if narrow %}auth-card--narrow{% endif %}" aria-labelledby="auth-card-title">
     <header class="auth-card__header">
         {% if title %}<h1 id="auth-card-title" class="auth-card__title">{{ title }}</h1>{% endif %}

@@ -55,8 +55,8 @@
                             <div class="col-md-12">
                                 <label class="form-label" for="storeStatus">Status</label>
                                 {% if store.status == 'archived' %}
-                                {# Archived is not editable from this form — show the current value
-                                   and send it back unchanged on save so it doesn't revert to active. #}
+                                  <!-- Archived is not editable from this form — show the current value
+                                   and send it back unchanged on save so it doesn't revert to active.  -->
                                 <input type="text" class="form-control" value="Archived" disabled>
                                 <input type="hidden" name="status" value="archived">
                                 <small class="form-text text-muted">

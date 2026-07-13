@@ -1,4 +1,4 @@
-<!-- {# ---------------------------------------------------------------------------
+<!--  ---------------------------------------------------------------------------
    Centralized confirmation & prompt modal.
 
    This partial is included once in templates/layouts/base.html, so every
@@ -40,7 +40,7 @@
    The helper uses Bootstrap 5's ``bootstrap.Modal`` (loaded in base.html).
    It re-uses a single DOM node for every dialog so the document only ever
    has one confirm modal in it, regardless of how many times it's opened.
-   --------------------------------------------------------------------------- #} -->
+   --------------------------------------------------------------------------- -->
 <div class="modal fade" id="appConfirmModal" tabindex="-1" aria-labelledby="appConfirmModalLabel" aria-hidden="true" aria-modal="true" role="dialog" data-app-confirm-modal>
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -49,9 +49,9 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                {# Warning alert slot — hidden until ``options.warning`` is set. #}
+                <!--  Warning alert slot — hidden until ``options.warning`` is set.  -->
                 <div class="alert alert-warning small d-none" id="appConfirmModalWarning" role="alert"></div>
-                {# Body container — replaced on each call so previous content (input/textarea/text) never leaks. #}
+                <!--  Body container — replaced on each call so previous content (input/textarea/text) never leaks.  -->
                 <div id="appConfirmModalBody"></div>
             </div>
             <div class="modal-footer">
