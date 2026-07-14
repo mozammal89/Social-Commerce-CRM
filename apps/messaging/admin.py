@@ -318,7 +318,7 @@ class ConversationAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (_("Basic Information"), {
-            "fields": ("store", "customer", "channel", "id")
+            "fields": ("store", "customer", "channel")
         }),
         (_("Status & Assignment"), {
             "fields": ("status", "priority", "assigned_to")
@@ -508,13 +508,10 @@ class ActivityAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (_("Basic Information"), {
-            "fields": ("store", "customer", "conversation", "activity_type")
+            "fields": ("store", "customer", "conversation", "action_type")
         }),
         (_("Activity Data"), {
-            "fields": ("actor_type", "actor_name", "description", "extra_data")
-        }),
-        (_("Related Objects"), {
-            "fields": ("related_message", "related_note")
+            "fields": ("actor", "description", "metadata")
         }),
         (_("Metadata"), {
             "fields": ("created_at",),

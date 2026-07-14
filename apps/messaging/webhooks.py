@@ -75,6 +75,7 @@ def channel_webhook(
     """
     # Resolve the connected account. A bad/unknown account_id must never
     # reveal whether the account exists, so all lookup failures return 404.
+    print('------- request.headers:', request.headers, request.body)
     account = (
         ConnectedAccount.objects
         .select_related("store", "channel")
