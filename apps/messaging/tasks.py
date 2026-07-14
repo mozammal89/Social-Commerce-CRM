@@ -103,12 +103,13 @@ def process_webhook_payload(
                     continue
                 if event.attachments:
                     for att in event.attachments:
-                        print(f"[CELERY] Event attachment: type={att.attachment_type}, url={att.external_url}")
+                        # print(f"[CELERY] Event attachment: type={att.attachment_type}, url={att.external_url}")
+                        pass
                 message = MessageService.ingest_normalized(connected_account=account, event=event)
                 if message:
                     # Direct database check for attachments
                     att_count = Attachment.objects.filter(message_id=message.id).count()
-                    print(f"[CELERY] Direct DB check: message {message.id} has {att_count} attachments")
+                    # print(f"[CELERY] Direct DB check: message {message.id} has {att_count} attachments")
                 # ingest_normalized returns None for duplicate/empty events.
                 if message is not None:
                     summary["ingested"] += 1

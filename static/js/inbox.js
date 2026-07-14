@@ -117,7 +117,7 @@ function inboxApp() {
         showNotes: false,
         savingNote: false,
 
-        customer: null,
+        customer: {},              // Always an object to prevent null reference errors
         loadingCustomer: false,
 
         channels: [],               // connected accounts (for the channel filter)
@@ -220,7 +220,7 @@ function inboxApp() {
             this.activeConversation = conv;
             this.messages = [];
             this.threadError = '';
-            this.customer = null;
+            this.customer = {};
             this.notes = [];
             this.showNotes = false;
             this.isMobileView = true;  // Enter mobile detail view
@@ -236,7 +236,7 @@ function inboxApp() {
             this.activeConversationId = null;
             this.activeConversation = null;
             this.messages = [];
-            this.customer = null;
+            this.customer = {};
             this.notes = [];
             this.showNotes = false;
         },
@@ -304,15 +304,21 @@ function inboxApp() {
         },
 
         _checkAndFillThread() {
-            // Check if thread needs more messages to be scrollable
+            // Check if thread needs more messages to be properly scrollable
             const threadEl = document.getElementById('thread-messages');
             if (!threadEl) return;
 
-            const isScrollable = threadEl.scrollHeight > threadEl.clientHeight;
+            // Require a scroll buffer: content should be 1.5x the viewport height
+            // This ensures there's meaningful scrollable content above
+            const scrollBuffer = threadEl.clientHeight * 0.5;
+            const hasEnoughContent = threadEl.scrollHeight >= (threadEl.clientHeight + scrollBuffer);
 
-            if (isScrollable || !this.hasMoreMessages || this._autoFillAttempts >= 5) {
+            if (hasEnoughContent || !this.hasMoreMessages || this._autoFillAttempts >= 5) {
                 console.log('[Inbox] Auto-fill check complete', {
-                    isScrollable,
+                    hasEnoughContent,
+                    scrollHeight: threadEl.scrollHeight,
+                    clientHeight: threadEl.clientHeight,
+                    required: threadEl.clientHeight + scrollBuffer,
                     hasMoreMessages: this.hasMoreMessages,
                     attempts: this._autoFillAttempts
                 });
@@ -516,7 +522,7 @@ function inboxApp() {
             this.loadingCustomer = true;
             try {
                 this.customer = await api(`${this.apiBase}/customers/${customerId}/`, { storeId: this.storeId });
-            } catch { this.customer = null; } finally { this.loadingCustomer = false; }
+            } catch { this.customer = {}; } finally { this.loadingCustomer = false; }
         },
 
         /* ================================================================

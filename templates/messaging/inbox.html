@@ -415,13 +415,13 @@
         </div>
       </template>
 
-      <template x-if="activeConversation">
+      <template x-if="activeConversation && Object.keys(customer).length > 0">
         <div>
           <template x-if="loadingCustomer">
             <div class="text-center py-4"><div class="spinner-border spinner-border-sm text-muted"></div></div>
           </template>
 
-          <template x-if="customer">
+          <template x-if="!loadingCustomer">
             <div>
               <div class="customer-avatar-lg"
                    :style="customer.avatar ? `background-image: url('${customer.avatar}')` : ''"
