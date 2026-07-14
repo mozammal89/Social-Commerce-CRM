@@ -201,7 +201,28 @@
             <template x-for="msg in messages" :key="msg.id">
               <div class="msg-row" :class="msg.direction">
                 <div>
+                  {# Quoted reply block (when this message is a reply) #}
+                  <template x-if="msg.reply_to && msg.reply_to.text">
+                    <div class="msg-reply-quote" :class="msg.direction">
+                      <i class="bi bi-reply-fill me-1" style="font-size:.7rem;"></i>
+                      <span x-text="msg.reply_to.text"></span>
+                    </div>
+                  </template>
+                  <template x-if="!msg.reply_to && msg.reply_to_text">
+                    <div class="msg-reply-quote" :class="msg.direction">
+                      <i class="bi bi-reply-fill me-1" style="font-size:.7rem;"></i>
+                      <span x-text="msg.reply_to_text"></span>
+                    </div>
+                  </template>
                   <div class="msg-bubble" x-text="msg.text || '[' + msg.message_type + ']'"></div>
+                  {# Reactions row #}
+                  <template x-if="msg.reactions && msg.reactions.length > 0">
+                    <div class="msg-reactions">
+                      <template x-for="r in msg.reactions" :key="r.id">
+                        <span class="msg-reaction" x-text="r.emoji"></span>
+                      </template>
+                    </div>
+                  </template>
                   <div class="msg-meta">
                     <span x-text="fmtTime(msg.created_at)"></span>
                     <template x-if="msg.direction === 'outbound'">

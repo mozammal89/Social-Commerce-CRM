@@ -300,6 +300,43 @@
     justify-content: flex-end;
 }
 
+/* Reply quote (shown above a reply message) */
+.msg-reply-quote {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    background: var(--surface-secondary);
+    border-left: 3px solid var(--border-default);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    margin-bottom: 2px;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.msg-row.outbound .msg-reply-quote {
+    border-left: none;
+    border-right: 3px solid var(--border-default);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+/* Reactions row (emoji below the bubble) */
+.msg-reactions {
+    display: flex;
+    gap: 2px;
+    margin-top: 2px;
+    flex-wrap: wrap;
+}
+.msg-reaction {
+    background: var(--surface-primary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-full);
+    padding: 0 5px;
+    font-size: .85rem;
+    line-height: 1.5;
+    box-shadow: var(--shadow-xs);
+}
+
 /* Composer */
 .inbox-composer {
     padding: var(--space-3) var(--space-4);

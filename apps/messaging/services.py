@@ -598,6 +598,21 @@ class MessageService:
                 return None
 
             # 5. Persist the message.
+            # Resolve the reply target: if the event references another
+            # message by its external id (FB ``reply_to.mid``), link it
+            # so the UI can render it as a reply. The referenced message
+            # may belong to a different conversation (rare) but must be on
+            # the same connected account.
+            reply_to_msg = None
+            if event.reply_to_external_id:
+                reply_to_msg = (
+                    Message.objects
+                    .filter(
+                        connected_account=connected_account,
+                        external_id=event.reply_to_external_id,
+                    )
+                    .first()
+                )
             message = Message.objects.create(
                 store=connected_account.store,
                 conversation=conversation,
@@ -613,6 +628,7 @@ class MessageService:
                 delivery_status=DeliveryStatus.DELIVERED.value,
                 external_timestamp=event.external_timestamp,
                 delivered_at=timezone.now(),
+                reply_to=reply_to_msg,
                 raw_payload=event.raw,
                 metadata={"location": event.location} if event.location else {},
             )
@@ -813,6 +829,65 @@ class MessageService:
                 m.save(update_fields=[ts_field, "updated_at"])
         _emit_delivery_updated(connected_account, ids, update.status)
         return count
+
+    # ------------------------------------------------------------------
+    # Reactions (from webhook)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def apply_reaction(
+        *,
+        connected_account: ConnectedAccount,
+        event,  # NormalizedReactionEvent
+    ) -> bool:
+        """Apply a reaction event (react/unreact) to a message.
+
+        Looks up the referenced message by its external id on this account,
+        resolves the reactor to a Customer (best-effort), and upserts or
+        removes a ``Reaction`` row. Returns True if applied, False if the
+        referenced message wasn't found (e.g. it's older than retention).
+        Idempotent on ``external_reaction_id``.
+        """
+        from .models import Reaction
+
+        msg = Message.objects.filter(
+            connected_account=connected_account,
+            external_id=event.external_message_id,
+        ).first()
+        if msg is None:
+            return False
+
+        # Resolve the reactor to a Customer (best-effort; a reaction may
+        # arrive before the sender profile is known).
+        customer = None
+        if event.reactor_external_id:
+            identity = CustomerChannelIdentity.objects.filter(
+                connected_account=connected_account,
+                external_id=event.reactor_external_id,
+            ).first()
+            if identity:
+                customer = identity.customer
+
+        with transaction.atomic():
+            if event.action == "unreact":
+                Reaction.objects.filter(
+                    message=msg,
+                    external_id=event.external_reaction_id,
+                ).delete()
+            else:
+                Reaction.objects.update_or_create(
+                    message=msg,
+                    external_id=event.external_reaction_id,
+                    defaults={
+                        "store": connected_account.store,
+                        "reactor_type": "customer",
+                        "customer": customer,
+                        "emoji": event.emoji,
+                    },
+                )
+
+        # Broadcast the reaction change so the inbox updates live.
+        _emit_reaction_updated(connected_account, str(msg.id), str(msg.conversation_id), event.action, event.emoji)
+        return True
 
 
 # ===========================================================================
@@ -1051,6 +1126,7 @@ def _serialize_message_brief(message: Message) -> dict:
         "message_type": message.message_type,
         "text": message.text,
         "delivery_status": message.delivery_status,
+        "reply_to_text": message.reply_to.text if message.reply_to_id and message.reply_to else None,
         "created_at": message.created_at.isoformat() if message.created_at else None,
     }
 
@@ -1115,6 +1191,21 @@ def _emit_delivery_updated(account: ConnectedAccount, message_ids: list[str], st
         "message.updated",
         {"message_ids": message_ids, "status": status},
     )
+
+
+def _emit_reaction_updated(
+    account: ConnectedAccount, message_id: str, conversation_id: str,
+    action: str, emoji: str,
+) -> None:
+    """Broadcast a reaction add/remove so the inbox updates live."""
+    payload = {
+        "message_id": message_id,
+        "conversation_id": conversation_id,
+        "reaction": action,  # "react" | "unreact"
+        "emoji": emoji,
+    }
+    _broadcast(f"inbox.{str(account.store_id)}", "message.reaction", payload)
+    _broadcast(f"conversation.{conversation_id}", "message.reaction", payload)
 
 
 class _TransientAccount:

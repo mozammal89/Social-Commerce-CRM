@@ -33,7 +33,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .adapters import get_adapter_for_account
-from .adapters.dto import DeliveryUpdate, NormalizedIncomingEvent
+from .adapters.dto import DeliveryUpdate, NormalizedIncomingEvent, NormalizedReactionEvent
 from .constants import DeliveryStatus
 from .models import ConnectedAccount, Message
 from .services import MessageService
@@ -70,7 +70,7 @@ def process_webhook_payload(
     Returns a small ``{ingested, deliveries, skipped, failed}`` summary
     for monitoring/logging.
     """
-    summary = {"ingested": 0, "deliveries": 0, "skipped": 0, "failed": 0}
+    summary = {"ingested": 0, "deliveries": 0, "reactions": 0, "skipped": 0, "failed": 0}
 
     try:
         account = ConnectedAccount.objects.select_related("store", "channel").get(pk=account_id)
@@ -114,6 +114,11 @@ def process_webhook_payload(
                 summary["deliveries"] += 1 if updated else 0
                 if not updated:
                     summary["skipped"] += 1
+            elif isinstance(event, NormalizedReactionEvent):
+                applied = MessageService.apply_reaction(connected_account=account, event=event)
+                summary["reactions"] = summary.get("reactions", 0) + (1 if applied else 0)
+                if not applied:
+                    summary["skipped"] += 1
             else:
                 summary["skipped"] += 1
         except Exception:
@@ -133,16 +138,20 @@ def process_webhook_payload(
 # 2. Retention
 # ===========================================================================
 def _effective_retention_days(plan_retention_days: int | None) -> int:
-    """Resolve a plan's retention against the global cap.
+    """Resolve a plan's retention into the number of days to keep.
 
-    * ``None`` plan retention → unlimited in principle, but still capped
-      by ``MESSAGING_MAX_RETENTION_DAYS`` so a misconfigured plan can't
-      cause unbounded growth.
-    * A specific plan value is clipped to the cap.
+    Semantics:
+    * ``None`` → **unlimited** (the store keeps its full message history).
+      Returns ``0``, which the purge task treats as "do not purge".
+    * A specific value (30/60/90) → clipped to the global
+      ``MESSAGING_MAX_RETENTION_DAYS`` safety cap.
+
+    A store with no active subscription also returns ``0`` (unlimited) —
+    there's no plan to derive a retention from, so we don't purge.
     """
-    cap = getattr(settings, "MESSAGING_MAX_RETENTION_DAYS", 90)
     if plan_retention_days is None:
-        return cap
+        return 0  # unlimited — purge task skips stores with 0
+    cap = getattr(settings, "MESSAGING_MAX_RETENTION_DAYS", 90)
     return min(int(plan_retention_days), cap)
 
 
@@ -175,12 +184,13 @@ def purge_expired_messages() -> dict[str, Any]:
         stores_checked += 1
         sub = get_active_subscription(store)
         if sub is None or sub.plan is None:
-            # No active subscription → fall back to the global cap so an
-            # unmanaged store still doesn't grow forever.
-            retention_days = _effective_retention_days(None)
+            # No active subscription → unlimited (no plan to derive
+            # retention from). Don't purge.
+            continue
         else:
             retention_days = _effective_retention_days(sub.plan.message_retention_days)
 
+        # 0 = unlimited (plan has message_retention_days=None).
         if not retention_days or retention_days <= 0:
             continue
 

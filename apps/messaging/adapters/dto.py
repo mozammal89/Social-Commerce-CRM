@@ -91,6 +91,25 @@ class NormalizedIncomingEvent:
 
 
 @dataclass
+class NormalizedReactionEvent:
+    """A reaction (emoji) added/removed to a message.
+
+    Adapters parse reaction webhooks (FB ``reaction``; WA future) into
+    this shape. ``action`` is ``"react"`` or ``"unreact"``. The service
+    layer upserts/deletes a ``Reaction`` row for the referenced message.
+    """
+
+    external_message_id: str        # The message being reacted to
+    action: str = "react"           # "react" | "unreact"
+    emoji: str = ""
+    # Who reacted — the customer's channel id (PSID/phone). The service
+    # resolves it to a Customer.
+    reactor_external_id: str = ""
+    external_reaction_id: str = ""  # Platform reaction id (idempotency)
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class DeliveryUpdate:
     """A delivery/read receipt for an earlier-sent or received message.
 

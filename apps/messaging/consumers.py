@@ -109,6 +109,10 @@ class InboxConsumer(AsyncJsonWebsocketConsumer):
         """A message's delivery status changed (sent/delivered/read/failed)."""
         await self.send_json(event["payload"])
 
+    async def message_reaction(self, event):
+        """A reaction was added/removed on a message."""
+        await self.send_json(event["payload"])
+
     async def conversation_updated(self, event):
         """A conversation's metadata changed (status, assignment, preview)."""
         await self.send_json(event["payload"])
@@ -172,6 +176,10 @@ class ConversationConsumer(AsyncJsonWebsocketConsumer):
 
     async def message_updated(self, event):
         """Delivery status change (sent/delivered/read/failed)."""
+        await self.send_json(event["payload"])
+
+    async def message_reaction(self, event):
+        """A reaction was added/removed on a message in this conversation."""
         await self.send_json(event["payload"])
 
     async def typing(self, event):

@@ -98,12 +98,23 @@ class AttachmentSerializer(serializers.ModelSerializer):
 # ===========================================================================
 # Message
 # ===========================================================================
+class ReplyToBriefSerializer(serializers.ModelSerializer):
+    """Minimal representation of a replied-to message (for the reply quote)."""
+
+    class Meta:
+        model = Message
+        fields = ["id", "text", "direction", "sender_type", "created_at"]
+        read_only_fields = fields
+
+
 class MessageSerializer(serializers.ModelSerializer):
     """Full message read serializer (used in conversation detail)."""
 
     sender = UserBriefSerializer(read_only=True)
     attachments = AttachmentSerializer(many=True, read_only=True)
     channel = ChannelBriefSerializer(read_only=True)
+    reply_to = ReplyToBriefSerializer(read_only=True)
+    reactions = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -112,9 +123,15 @@ class MessageSerializer(serializers.ModelSerializer):
             "sender_type", "sender", "message_type", "text", "quick_replies",
             "delivery_status", "external_timestamp", "sent_at", "delivered_at",
             "read_at", "failed_at", "error_code", "error_message",
-            "attachments", "reply_to", "created_at",
+            "attachments", "reply_to", "reactions", "created_at",
         ]
         read_only_fields = fields
+
+    def get_reactions(self, obj: Message) -> list:
+        return [
+            {"id": str(r.id), "emoji": r.emoji, "reactor_type": r.reactor_type}
+            for r in obj.reactions.all()
+        ]
 
 
 class SendMessageSerializer(serializers.Serializer):

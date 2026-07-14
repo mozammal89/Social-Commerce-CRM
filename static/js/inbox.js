@@ -153,12 +153,13 @@ function inboxApp() {
                 const qs = params.toString();
                 const data = await api(`${this.apiBase}/conversations/${qs ? '?' + qs : ''}`, { storeId: this.storeId });
                 this.conversations = data.results || data || [];
-                // Keep the active conversation selected if it still exists.
-                if (this.activeConversationId && !this.conversations.find(c => c.id === this.activeConversationId)) {
-                    this.activeConversationId = null;
-                    this.activeConversation = null;
-                    this.messages = [];
-                }
+                // NOTE: do NOT clear the active conversation here. A list
+                // reload (e.g. triggered by a WS event for a *new* convo,
+                // or a filter change) may not include the currently-open
+                // conversation in the result set — but the user is still
+                // viewing it. Clearing it would wipe the thread they're
+                // reading ("messages go away" bug). The active selection
+                // is only changed by an explicit user click.
             } catch (err) {
                 this.listError = err.message;
             } finally {
@@ -357,12 +358,28 @@ function inboxApp() {
             // Inbox broadcasts carry a flat message/conversation payload.
             // The service layer sends {id, conversation_id, direction, text, ...}
             // for message.new and the conversation brief for conversation.updated.
-            if (payload.conversation_id) {
+            if (payload.reaction && payload.message_id) {
+                this.onReaction(payload);
+            } else if (payload.conversation_id) {
                 this.onMessageNew(payload);
             } else if (payload.id && payload.status !== undefined) {
                 this.onConversationUpdated(payload);
             } else if (payload.message_ids && payload.status) {
                 this.onDeliveryUpdated(payload);
+            }
+        },
+
+        onReaction(payload) {
+            // Update the message's reactions array in place (live).
+            const msg = this.messages.find(m => m.id === payload.message_id);
+            if (!msg) return;
+            if (!msg.reactions) msg.reactions = [];
+            if (payload.reaction === 'unreact') {
+                msg.reactions = msg.reactions.filter(r => r.emoji !== payload.emoji);
+            } else {
+                if (!msg.reactions.find(r => r.emoji === payload.emoji)) {
+                    msg.reactions.push({ emoji: payload.emoji, reactor_type: 'customer' });
+                }
             }
         },
 

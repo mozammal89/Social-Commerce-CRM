@@ -25,7 +25,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from ..dto import DeliveryUpdate, NormalizedAttachment, NormalizedIncomingEvent
+from ..dto import DeliveryUpdate, NormalizedAttachment, NormalizedIncomingEvent, NormalizedReactionEvent
 from ..exceptions import WebhookParseError, WebhookVerificationError
 from ...constants import AttachmentType, DeliveryStatus, MessageType
 
@@ -177,6 +177,22 @@ def _parse_messaging(messaging: dict) -> list[NormalizedIncomingEvent | Delivery
                 external_message_id="",
                 status=DeliveryStatus.READ.value,
                 timestamp=_from_ms(watermark),
+                raw=messaging,
+            )
+        )
+        return out
+
+    # 4) Reaction (react / unreact)
+    if "reaction" in messaging:
+        reaction = messaging["reaction"]
+        action = (reaction.get("action") or "").lower()  # "react" | "unreact"
+        out.append(
+            NormalizedReactionEvent(
+                external_message_id=reaction.get("mid", ""),
+                action=action if action in ("react", "unreact") else "react",
+                emoji=reaction.get("emoji", ""),
+                reactor_external_id=sender_id,
+                external_reaction_id=f"{reaction.get('mid', '')}:{sender_id}",
                 raw=messaging,
             )
         )
