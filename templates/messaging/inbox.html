@@ -287,7 +287,7 @@
                     <div class="msg-attachments">
                       <template x-for="att in msg.attachments" :key="att.id">
                         {# Image attachment #}
-                        <template x-if="att.attachment_type === 'image' || att.mime_type?.startsWith('image/')">
+                        <template x-if="isImageAttachment(att)">
                           <div class="msg-attachment-image">
                             <img :src="att.external_url" :alt="att.file_name || 'Image'" @click="window.open(att.external_url, '_blank')">
                             <template x-if="att.width && att.height">
@@ -296,21 +296,21 @@
                           </div>
                         </template>
                         {# Video attachment #}
-                        <template x-if="att.attachment_type === 'video' || att.mime_type?.startsWith('video/')">
+                        <template x-if="getAttachmentType(att) === 'video'">
                           <div class="msg-attachment-video">
                             <video :src="att.external_url" controls preload="metadata"></video>
                             <span class="msg-attachment-name" x-text="att.file_name || 'Video'"></span>
                           </div>
                         </template>
                         {# Audio attachment #}
-                        <template x-if="att.attachment_type === 'audio' || att.mime_type?.startsWith('audio/')">
+                        <template x-if="getAttachmentType(att) === 'audio'">
                           <div class="msg-attachment-audio">
                             <audio :src="att.external_url" controls></audio>
                             <span class="msg-attachment-name" x-text="att.file_name || 'Audio'"></span>
                           </div>
                         </template>
-                        {# File attachment #}
-                        <template x-if="!att.attachment_type?.match(/image|video|audio/) && !att.mime_type?.match(/image|video|audio/)">
+                        {# File attachment - fallback for everything else #}
+                        <template x-if="getAttachmentType(att) === 'file' || getAttachmentType(att) === 'unknown'">
                           <div class="msg-attachment-file">
                             <i class="bi bi-file-earmark"></i>
                             <a :href="att.external_url" target="_blank" rel="noopener" x-text="att.file_name || 'File'"></a>

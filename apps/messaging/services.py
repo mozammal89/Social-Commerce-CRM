@@ -598,6 +598,12 @@ class MessageService:
                 return None
 
             # 5. Persist the message.
+            logger.info(f"[Webhook] Ingesting message: external_id={event.external_message_id}, attachments_count={len(event.attachments)}")
+            print(f"[DEBUG] Ingesting message: attachments_count={len(event.attachments)}")
+            if event.attachments:
+                for att in event.attachments:
+                    logger.info(f"[Webhook] Event attachment: type={att.attachment_type}, url={att.external_url}")
+                    print(f"[DEBUG] Event attachment: type={att.attachment_type}, url={att.external_url}")
             # Resolve the reply target: if the event references another
             # message by its external id (FB ``reply_to.mid``), link it
             # so the UI can render it as a reply. The referenced message
@@ -634,8 +640,12 @@ class MessageService:
             )
 
             # Attachments
+            logger.info(f"[Webhook] Creating {len(event.attachments)} attachments for message {message.id}")
+            print(f"[DEBUG] Creating {len(event.attachments)} attachments for message {message.id}")
             for att in event.attachments:
-                Attachment.objects.create(
+                logger.info(f"[Webhook] Creating attachment: type={att.attachment_type}, url={att.external_url}")
+                print(f"[DEBUG] Creating attachment: type={att.attachment_type}, url={att.external_url}")
+                created_att = Attachment.objects.create(
                     store=connected_account.store,
                     message=message,
                     attachment_type=att.attachment_type,
@@ -650,6 +660,8 @@ class MessageService:
                     thumbnail_url=att.thumbnail_url,
                     metadata=att.extra,
                 )
+                logger.info(f"[Webhook] Created attachment with ID: {created_att.id}")
+                print(f"[DEBUG] Created attachment with ID: {created_att.id}")
                 # NOTE: media download is scheduled as a Celery task in
                 # the webhook phase (Phase 3) — Facebook/WhatsApp media
                 # URLs are fetched via a separate API call and expire.
@@ -665,6 +677,12 @@ class MessageService:
             )
 
         # 7. Side-effects (outside the transaction for speed).
+        # Refresh from DB to ensure attachments are accessible via relationship
+        message.refresh_from_db()
+        # Log attachment count after refresh
+        att_count_after_refresh = Attachment.objects.filter(message_id=message.id).count()
+        logger.info(f"[Webhook] After refresh: message {message.id} has {att_count_after_refresh} attachments")
+        print(f"[DEBUG] After refresh: message {message.id} has {att_count_after_refresh} attachments")
         _emit_message_received(message, conversation)
         _emit_conversation_updated(conversation)
         return message
@@ -794,6 +812,8 @@ class MessageService:
                 description=("Reply sent" if result.success else f"Send failed: {error_desc}"),
             )
 
+        # Refresh from DB to ensure attachments are accessible via relationship
+        message.refresh_from_db()
         _emit_message_received(message, conversation)
         _emit_conversation_updated(conversation)
         return message
@@ -1103,8 +1123,11 @@ def _channel_layer():
 def _broadcast(group_name: str, event_type: str, payload: dict) -> None:
     """Send an event to a channel-layer group. Swallows errors so a
     realtime outage never breaks message ingestion."""
+    print(f"[DEBUG] Broadcasting to {group_name}, event_type={event_type}")
+    print(f"[DEBUG] Broadcast payload: {payload}")
     layer = _channel_layer()
     if layer is None:
+        print(f"[DEBUG] Channel layer is None, skipping broadcast")
         return
     try:
         from asgiref.sync import async_to_sync
@@ -1112,61 +1135,93 @@ def _broadcast(group_name: str, event_type: str, payload: dict) -> None:
             group_name,
             {"type": event_type, "payload": payload},
         )
+        print(f"[DEBUG] Broadcast sent successfully")
     except Exception:  # pragma: no cover - Redis down / serialization
         logger.warning("Realtime broadcast to %s failed", group_name, exc_info=True)
+        print(f"[DEBUG] Broadcast failed: {exc_info}")
 
 
 def _serialize_message_brief(message: Message) -> dict:
     """Minimal message representation for realtime (no FK joins)."""
+    logger.info(f"[WebSocket] Serializing message {message.id}, message.pk={message.pk}")
+    print(f"[DEBUG] Serializing message {message.id}, message.pk={message.pk}")
     # Include attachments in the payload so images render correctly in real-time
     attachments_data = []
-    if message.pk:  # Only fetch attachments if message is saved
-        attachments_data = [
-            {
-                "id": str(att.id),
-                "attachment_type": att.attachment_type,
-                "external_url": att.external_url,
-                "mime_type": att.mime_type,
-                "file_name": att.file_name,
-                "file_size": att.file_size,
-                "width": att.width,
-                "height": att.height,
-                "thumbnail_url": att.thumbnail_url,
-            }
-            for att in message.attachments.all().only(
-                "id", "attachment_type", "external_url", "mime_type",
-                "file_name", "file_size", "width", "height", "thumbnail_url"
-            )
-        ]
+    if message.pk and message.id:  # Only fetch attachments if message is saved
+        try:
+            # Explicitly query by message_id to avoid Django ORM relationship caching issues
+            # Use raw SQL to bypass any potential ORM issues in Celery context
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM messaging_attachment WHERE message_id = %s", [message.id])
+                raw_count = cursor.fetchone()[0]
+                print(f"[DEBUG] RAW SQL COUNT: {raw_count} attachments for message {message.id}")
+
+            attachments_qs = Attachment.objects.filter(message_id=message.id)
+            count = attachments_qs.count()
+            logger.info(f"[WebSocket] Query returned {count} attachments for message {message.id}")
+            print(f"[DEBUG] ORM Query returned {count} attachments for message {message.id}")
+
+            # Also try to get the actual attachment objects
+            attachments_list = list(attachments_qs)
+            print(f"[DEBUG] Materialized {len(attachments_list)} attachment objects")
+
+            for att in attachments_list:
+                print(f"[DEBUG] Attachment: id={att.id}, type={att.attachment_type}, url={att.external_url}")
+                attachments_data.append({
+                    "id": str(att.id),
+                    "attachment_type": att.attachment_type or "",
+                    "external_url": att.external_url or "",
+                    "mime_type": att.mime_type or "",
+                    "file_name": att.file_name or "",
+                    "file_size": att.file_size or 0,
+                    "width": att.width or 0,
+                    "height": att.height or 0,
+                    "thumbnail_url": att.thumbnail_url or "",
+                })
+
+            logger.info(f"[WebSocket] Serialized {len(attachments_data)} attachments for message {message.id}")
+            print(f"[DEBUG] Serialized {len(attachments_data)} attachments for message {message.id}")
+        except Exception as e:
+            logger.warning(f"Failed to fetch attachments for message {message.id}: {e}")
+            print(f"[DEBUG] Failed to fetch attachments: {e}")
+            import traceback
+            traceback.print_exc()
 
     # Include first attachment of replied-to message for image preview in reply quotes
     reply_to_first_attachment = None
-    if message.reply_to_id and message.reply_to:
-        first_att = message.reply_to.attachments.first()
-        if first_att:
-            reply_to_first_attachment = {
-                "id": str(first_att.id),
-                "attachment_type": first_att.attachment_type,
-                "external_url": first_att.external_url,
-                "thumbnail_url": first_att.thumbnail_url,
-                "mime_type": first_att.mime_type,
-            }
+    if message.reply_to_id:
+        try:
+            # Explicitly query by message_id to avoid Django ORM relationship caching issues
+            first_att = Attachment.objects.filter(message_id=message.reply_to_id).first()
+            if first_att:
+                reply_to_first_attachment = {
+                    "id": str(first_att.id),
+                    "attachment_type": first_att.attachment_type,
+                    "external_url": first_att.external_url,
+                    "thumbnail_url": first_att.thumbnail_url,
+                    "mime_type": first_att.mime_type,
+                }
+        except Exception as e:
+            logger.warning(f"Failed to fetch reply_to attachment for message {message.id}: {e}")
 
-    return {
+    payload = {
         "id": str(message.id),
         "conversation_id": str(message.conversation_id),
         "direction": message.direction,
         "sender_type": message.sender_type,
         "message_type": message.message_type,
-        "text": message.text,
+        "text": message.text or "",
         "delivery_status": message.delivery_status,
         "reply_to_text": message.reply_to.text if message.reply_to_id and message.reply_to else None,
         "reply_to_message_type": message.reply_to.message_type if message.reply_to_id and message.reply_to else None,
-        "reply_to_has_attachments": message.reply_to.attachments.exists() if message.reply_to_id and message.reply_to else False,
+        "reply_to_has_attachments": Attachment.objects.filter(message_id=message.reply_to_id).exists() if message.reply_to_id else False,
         "reply_to_first_attachment": reply_to_first_attachment,
         "attachments": attachments_data,
         "created_at": message.created_at.isoformat() if message.created_at else None,
     }
+    logger.info(f"[WebSocket] Serialized message {message.id} with {len(attachments_data)} attachments for WebSocket broadcast")
+    return payload
 
 
 def _serialize_conversation_brief(conversation: Conversation) -> dict:

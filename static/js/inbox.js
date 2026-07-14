@@ -586,6 +586,14 @@ function inboxApp() {
         },
 
         onMessageNew(msg) {
+            console.log('[Inbox] WebSocket message received:', {
+                id: msg.id,
+                message_type: msg.message_type,
+                has_text: !!msg.text,
+                has_attachments: !!msg.attachments,
+                attachments_count: msg.attachments?.length || 0,
+                attachments: msg.attachments
+            });
             if (msg.conversation_id === this.activeConversationId) {
                 if (!this.messages.find(m => m.id === msg.id)) {
                     this.messages.push(msg);
@@ -681,6 +689,26 @@ function inboxApp() {
                 unitIndex++;
             }
             return `${size.toFixed(1)} ${units[unitIndex]}`;
+        },
+        getAttachmentType(att) {
+            // Helper to determine attachment type safely
+            if (!att) return 'unknown';
+            if (att.attachment_type === 'image') return 'image';
+            if (att.attachment_type === 'video') return 'video';
+            if (att.attachment_type === 'audio') return 'audio';
+            if (att.attachment_type === 'sticker') return 'image';  // Treat stickers as images
+
+            // Check mime_type if available
+            if (att.mime_type && typeof att.mime_type === 'string') {
+                if (att.mime_type.indexOf('image/') === 0) return 'image';
+                if (att.mime_type.indexOf('video/') === 0) return 'video';
+                if (att.mime_type.indexOf('audio/') === 0) return 'audio';
+            }
+
+            return 'file';
+        },
+        isImageAttachment(att) {
+            return this.getAttachmentType(att) === 'image';
         },
         get unreadTotal() {
             return this.conversations.reduce((n, c) => n + (c.unread_count || 0), 0);

@@ -35,7 +35,7 @@ from django.utils import timezone
 from .adapters import get_adapter_for_account
 from .adapters.dto import DeliveryUpdate, NormalizedIncomingEvent, NormalizedReactionEvent
 from .constants import DeliveryStatus
-from .models import ConnectedAccount, Message
+from .models import ConnectedAccount, Message, Attachment
 from .services import MessageService
 
 logger = logging.getLogger(__name__)
@@ -101,7 +101,18 @@ def process_webhook_payload(
                 if not event.has_content and not event.external_message_id:
                     summary["skipped"] += 1
                     continue
+                print(f"[CELERY] Processing event: external_id={event.external_message_id}, attachments_count={len(event.attachments)}")
+                if event.attachments:
+                    for att in event.attachments:
+                        print(f"[CELERY] Event attachment: type={att.attachment_type}, url={att.external_url}")
+                print(f"[CELERY] About to call ingest_normalized...")
                 message = MessageService.ingest_normalized(connected_account=account, event=event)
+                print(f"[CELERY] Ingest returned message: {message.id if message else 'None'}")
+                print(f"[CELERY] Ingest returned message: {message.id if message else 'None'}")
+                if message:
+                    # Direct database check for attachments
+                    att_count = Attachment.objects.filter(message_id=message.id).count()
+                    print(f"[CELERY] Direct DB check: message {message.id} has {att_count} attachments")
                 # ingest_normalized returns None for duplicate/empty events.
                 if message is not None:
                     summary["ingested"] += 1
@@ -121,9 +132,12 @@ def process_webhook_payload(
                     summary["skipped"] += 1
             else:
                 summary["skipped"] += 1
-        except Exception:
+        except Exception as e:
             # One event failing must not abort the batch.
             summary["failed"] += 1
+            print(f"[CELERY] ERROR processing event: {e}")
+            import traceback
+            traceback.print_exc()
             logger.exception(
                 "Failed to process webhook event for account %s: %r", account_id, event
             )
