@@ -97,6 +97,7 @@ function inboxApp() {
         channelFilter: '',
         assigneeFilter: '',         // '' | 'me' | 'unassigned'
 
+        isMobileView: false,        // Mobile: true when detail view is active
         activeConversationId: null,
         activeConversation: null,
         messages: [],
@@ -222,11 +223,22 @@ function inboxApp() {
             this.customer = null;
             this.notes = [];
             this.showNotes = false;
+            this.isMobileView = true;  // Enter mobile detail view
             this.loadMessages();
             // Re-setup scroll handler for the new conversation
             this.$nextTick(() => this.setupScrollHandler());
             // Mark as read when opened (best-effort; ignore failures).
             if (conv.unread_count > 0) this.markRead(conv.id);
+        },
+
+        backToList() {
+            this.isMobileView = false;  // Return to list on mobile
+            this.activeConversationId = null;
+            this.activeConversation = null;
+            this.messages = [];
+            this.customer = null;
+            this.notes = [];
+            this.showNotes = false;
         },
 
         /* ================================================================

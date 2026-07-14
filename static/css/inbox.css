@@ -655,12 +655,147 @@
     box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
 }
 
-/* Responsive: hide customer pane on narrow screens */
+/* ================================================================
+ * Mobile Responsive Design
+ * ================================================================ */
+
+/* Large tablets: hide customer panel */
 @media (max-width: 1100px) {
-    #inbox-root { --inbox-customer-width: 0px; }
+    #inbox-root { --inbox-customer-width: 0px;  height: calc(100vh - var(--navbar-height) - 54px - 50px);
+ }
     .inbox-customer { display: none; }
 }
+
+/* Mobile: Single pane view with navigation */
 @media (max-width: 768px) {
-    #inbox-root { --inbox-list-width: 0px; }
-    .inbox-list { display: none; }
+    #inbox-root {
+        --inbox-list-width: 100%;
+        --inbox-detail-width: 100%;
+        --inbox-customer-width: 0px;
+    }
+
+    .inbox-shell {
+        position: relative;
+    }
+
+    /* Both panes take full width, we control visibility via classes */
+    .inbox-list,
+    .inbox-detail {
+        width: 100%;
+        flex: 1 0 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        transition: transform 0.3s ease;
+    }
+
+    /* By default, list is visible, detail is off-screen */
+    .inbox-list {
+        z-index: 1;
+        transform: translateX(0);
+    }
+
+    .inbox-detail {
+        z-index: 2;
+        transform: translateX(100%);
+    }
+
+    .inbox-customer {
+        display: none;
+    }
+
+    /* When a conversation is selected (mobile-view-active class), slide in detail */
+    .inbox-shell.mobile-view-active .inbox-list {
+        transform: translateX(-30%);
+        opacity: 0.5;
+    }
+
+    .inbox-shell.mobile-view-active .inbox-detail {
+        transform: translateX(0);
+    }
+
+    /* Back button - only visible on mobile */
+    .mobile-back-btn {
+        display: inline-flex !important;
+        align-items: center;
+        gap: var(--space-1);
+        margin-right: var(--space-2);
+        padding: var(--space-1) var(--space-2);
+        background: var(--surface-secondary);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-sm);
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: background var(--transition-fast);
+    }
+
+    .mobile-back-btn:hover {
+        background: var(--surface-tertiary);
+    }
+
+    .mobile-back-btn .bi {
+        font-size: var(--font-size-base);
+    }
+
+    /* Adjust header for mobile */
+    .inbox-detail-header {
+        padding: var(--space-2) var(--space-3);
+    }
+
+    .inbox-detail-header .customer-info .meta .name {
+        font-size: var(--font-size-sm);
+    }
+
+    /* Make messages area full width on mobile */
+    #thread-messages {
+        padding: var(--space-3);
+    }
+
+    .msg-row {
+        max-width: 85%;
+    }
+
+    /* Hide empty state on mobile when in list view */
+    .inbox-shell:not(.mobile-view-active) .inbox-detail .inbox-empty {
+        display: none;
+    }
+
+    /* Adjust composer for mobile */
+    .inbox-composer {
+        padding: var(--space-2) var(--space-3);
+    }
+
+    /* Compact filters on mobile */
+    .inbox-filters {
+        gap: 0.5px;
+    }
+
+    .inbox-filters select {
+        font-size: var(--font-size-xs);
+        padding: var(--space-1) var(--space-1-5);
+        min-width: calc(33.33% - 2px);
+    }
+
+    /* Make search input more touch-friendly */
+    .inbox-search input {
+        padding: var(--space-2) var(--space-2) var(--space-2) calc(var(--space-5) + var(--space-2));
+        font-size: var(--font-size-sm);
+    }
+
+    /* Larger touch targets for conversation items */
+    .conv-item {
+        padding: var(--space-3) var(--space-3);
+    }
+
+    .conv-avatar {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+/* Desktop: hide mobile back button */
+.mobile-back-btn {
+    display: none;
 }

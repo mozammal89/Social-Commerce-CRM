@@ -17,7 +17,8 @@
      data-current-user-id="{{ current_user_id }}"
      x-cloak>
 
-  <div class="inbox-shell">
+  <div class="inbox-shell"
+       :class="{ 'mobile-view-active': isMobileView }">
 
     <!-- ================================================================
        Pane 1 — Conversation list
@@ -144,6 +145,11 @@
         <div style="display:flex; flex-direction:column; height:100%;">
           <!-- Thread header -->
           <div class="inbox-detail-header">
+            <!-- Mobile back button -->
+            <button class="mobile-back-btn" @click="backToList()">
+              <i class="bi bi-arrow-left"></i>
+              <span>Back</span>
+            </button>
             <div class="customer-info">
               <div class="conv-avatar"
                    :style="activeConversation.customer_avatar ? `background-image: url('${activeConversation.customer_avatar}')` : ''"
@@ -381,9 +387,9 @@
            <!-- Composer -->
           <div class="inbox-composer">
             <form @submit.prevent="sendReply()">
-              <textarea placeholder="Type a reply… (Enter to send, Shift+Enter for newline)"
+              <textarea placeholder="Type a reply… (Enter to send)"
                         x-model="replyText"
-                        @keydown.enter.prevent="sendReply()"
+                        @keydown.enter.prevent="!$event.shiftKey && sendReply()"
                         :disabled="sending"
                         rows="1"></textarea>
               <button type="submit" class="btn btn-primary" :disabled="sending || !replyText.trim()">

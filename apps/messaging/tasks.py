@@ -101,14 +101,10 @@ def process_webhook_payload(
                 if not event.has_content and not event.external_message_id:
                     summary["skipped"] += 1
                     continue
-                print(f"[CELERY] Processing event: external_id={event.external_message_id}, attachments_count={len(event.attachments)}")
                 if event.attachments:
                     for att in event.attachments:
                         print(f"[CELERY] Event attachment: type={att.attachment_type}, url={att.external_url}")
-                print(f"[CELERY] About to call ingest_normalized...")
                 message = MessageService.ingest_normalized(connected_account=account, event=event)
-                print(f"[CELERY] Ingest returned message: {message.id if message else 'None'}")
-                print(f"[CELERY] Ingest returned message: {message.id if message else 'None'}")
                 if message:
                     # Direct database check for attachments
                     att_count = Attachment.objects.filter(message_id=message.id).count()
@@ -135,7 +131,6 @@ def process_webhook_payload(
         except Exception as e:
             # One event failing must not abort the batch.
             summary["failed"] += 1
-            print(f"[CELERY] ERROR processing event: {e}")
             import traceback
             traceback.print_exc()
             logger.exception(
