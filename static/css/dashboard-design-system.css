@@ -6,6 +6,10 @@
  * =====================================================================
  */
 
+/* Hide Alpine.js-managed elements until the framework initializes them
+   to avoid template flashes (e.g. the sidebar unread badge). */
+[x-cloak] { display: none !important; }
+
 /* =====================================================================
    DESIGN TOKENS - CSS Custom Properties
    ===================================================================== */

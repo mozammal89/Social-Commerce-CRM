@@ -216,6 +216,7 @@ def current_store(request):
     context = {
         "current_store": None,
         "user_stores": [],
+        "unread_inbox_count": 0,
     }
 
     if not getattr(request.user, "is_authenticated", False):
@@ -259,4 +260,26 @@ def current_store(request):
     # Add user_has_no_store flag for templates
     context["user_has_no_store"] = len(context["user_stores"]) == 0
 
+    # Unread inbox counter for the sidebar badge: the store-wide total
+    # of unread messages across all (non-deleted) conversations. Lazily
+    # imported so a missing/early messaging app never breaks the render.
+    context["unread_inbox_count"] = _get_unread_inbox_count(context.get("current_store"))
+
     return context
+
+
+def _get_unread_inbox_count(store):
+    """Return the total unread-message count for ``store`` (0 if none)."""
+    if not store:
+        return 0
+    try:
+        from apps.messaging.models import Conversation
+
+        total = Conversation.objects.filter(
+            store=store,
+            is_deleted=False,
+            unread_count__gt=0,
+        ).aggregate(total=models.Sum("unread_count"))["total"]
+        return total or 0
+    except Exception:
+        return 0

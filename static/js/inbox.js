@@ -200,6 +200,7 @@ function inboxApp() {
                 const qs = params.toString();
                 const data = await api(`${this.apiBase}/conversations/${qs ? '?' + qs : ''}`, { storeId: this.storeId });
                 this.conversations = data.results || data || [];
+                this.syncBadge();
                 // NOTE: do NOT clear the active conversation here. A list
                 // reload (e.g. triggered by a WS event for a *new* convo,
                 // or a filter change) may not include the currently-open
@@ -665,6 +666,7 @@ function inboxApp() {
             this.conversations.splice(idx, 1, conv);
             // Re-sort by last_message_at descending.
             this.conversations.sort((a, b) => (b.last_message_at || '').localeCompare(a.last_message_at || ''));
+            this.syncBadge();
         },
 
         scrollToBottom() {
@@ -730,6 +732,13 @@ function inboxApp() {
         },
         get unreadTotal() {
             return this.conversations.reduce((n, c) => n + (c.unread_count || 0), 0);
+        },
+        /** Push the authoritative unread total into the global sidebar
+         *  badge store so the nav counter stays correct while the inbox
+         *  is open (reads, assignments, status changes all flow through). */
+        syncBadge() {
+            const store = window.Alpine && Alpine.store('inboxBadge');
+            if (store) store.set(this.unreadTotal);
         },
     };
 }
