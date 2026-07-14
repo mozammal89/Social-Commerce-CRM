@@ -1118,6 +1118,40 @@ def _broadcast(group_name: str, event_type: str, payload: dict) -> None:
 
 def _serialize_message_brief(message: Message) -> dict:
     """Minimal message representation for realtime (no FK joins)."""
+    # Include attachments in the payload so images render correctly in real-time
+    attachments_data = []
+    if message.pk:  # Only fetch attachments if message is saved
+        attachments_data = [
+            {
+                "id": str(att.id),
+                "attachment_type": att.attachment_type,
+                "external_url": att.external_url,
+                "mime_type": att.mime_type,
+                "file_name": att.file_name,
+                "file_size": att.file_size,
+                "width": att.width,
+                "height": att.height,
+                "thumbnail_url": att.thumbnail_url,
+            }
+            for att in message.attachments.all().only(
+                "id", "attachment_type", "external_url", "mime_type",
+                "file_name", "file_size", "width", "height", "thumbnail_url"
+            )
+        ]
+
+    # Include first attachment of replied-to message for image preview in reply quotes
+    reply_to_first_attachment = None
+    if message.reply_to_id and message.reply_to:
+        first_att = message.reply_to.attachments.first()
+        if first_att:
+            reply_to_first_attachment = {
+                "id": str(first_att.id),
+                "attachment_type": first_att.attachment_type,
+                "external_url": first_att.external_url,
+                "thumbnail_url": first_att.thumbnail_url,
+                "mime_type": first_att.mime_type,
+            }
+
     return {
         "id": str(message.id),
         "conversation_id": str(message.conversation_id),
@@ -1127,6 +1161,10 @@ def _serialize_message_brief(message: Message) -> dict:
         "text": message.text,
         "delivery_status": message.delivery_status,
         "reply_to_text": message.reply_to.text if message.reply_to_id and message.reply_to else None,
+        "reply_to_message_type": message.reply_to.message_type if message.reply_to_id and message.reply_to else None,
+        "reply_to_has_attachments": message.reply_to.attachments.exists() if message.reply_to_id and message.reply_to else False,
+        "reply_to_first_attachment": reply_to_first_attachment,
+        "attachments": attachments_data,
         "created_at": message.created_at.isoformat() if message.created_at else None,
     }
 

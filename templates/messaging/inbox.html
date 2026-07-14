@@ -186,6 +186,14 @@
 
           <!-- Messages -->
           <div id="thread-messages">
+            <!-- Loading more indicator (at the top) -->
+            <template x-if="loadingMoreMessages">
+              <div class="text-center py-2">
+                <div class="spinner-border spinner-border-sm text-muted"></div>
+                <p class="text-muted small mb-0">Loading older messages…</p>
+              </div>
+            </template>
+
             <template x-if="loadingMessages">
               <div class="inbox-empty">
                 <div class="spinner-border spinner-border-sm text-muted"></div>
@@ -202,19 +210,127 @@
               <div class="msg-row" :class="msg.direction">
                 <div>
                   {# Quoted reply block (when this message is a reply) #}
-                  <template x-if="msg.reply_to && msg.reply_to.text">
+                  <template x-if="msg.reply_to">
                     <div class="msg-reply-quote" :class="msg.direction">
                       <i class="bi bi-reply-fill me-1" style="font-size:.7rem;"></i>
-                      <span x-text="msg.reply_to.text"></span>
+                      <template x-if="msg.reply_to.text">
+                        <span x-text="msg.reply_to.text"></span>
+                      </template>
+                      <template x-if="!msg.reply_to.text && msg.reply_to.first_attachment && (msg.reply_to.first_attachment.attachment_type === 'image' || msg.reply_to.message_type === 'image')">
+                        <div class="reply-image-preview">
+                          <img :src="msg.reply_to.first_attachment.thumbnail_url || msg.reply_to.first_attachment.external_url"
+                               :alt="msg.reply_to.message_type === 'image' ? 'Image' : 'Attachment'"
+                               @click="window.open(msg.reply_to.first_attachment.external_url, '_blank')">
+                          <span class="reply-image-indicator">
+                            <i class="bi bi-image"></i> Image
+                          </span>
+                        </div>
+                      </template>
+                      <template x-if="!msg.reply_to.text && !msg.reply_to.first_attachment && msg.reply_to.message_type">
+                        <template x-if="msg.reply_to.message_type === 'image' || msg.reply_to.message_type === 'sticker'">
+                          <span class="reply-attachment-indicator">
+                            <i class="bi bi-image"></i> <span x-text="msg.reply_to.message_type === 'image' ? 'Image' : 'Sticker'"></span>
+                          </span>
+                        </template>
+                        <template x-if="msg.reply_to.message_type !== 'image' && msg.reply_to.message_type !== 'sticker'">
+                          <span class="reply-attachment-indicator">
+                            <i class="bi bi-file-earmark"></i> <span x-text="msg.reply_to.message_type"></span>
+                          </span>
+                        </template>
+                      </template>
+                      <template x-if="!msg.reply_to.text && !msg.reply_to.message_type && msg.reply_to.has_attachments">
+                        <span class="reply-attachment-indicator">
+                          <i class="bi bi-paperclip"></i> Attachment
+                        </span>
+                      </template>
                     </div>
                   </template>
-                  <template x-if="!msg.reply_to && msg.reply_to_text">
+                  {# Handle reply_to from WebSocket (separate fields) #}
+                  <template x-if="!msg.reply_to && (msg.reply_to_text || msg.reply_to_message_type || msg.reply_to_has_attachments)">
                     <div class="msg-reply-quote" :class="msg.direction">
                       <i class="bi bi-reply-fill me-1" style="font-size:.7rem;"></i>
-                      <span x-text="msg.reply_to_text"></span>
+                      <template x-if="msg.reply_to_text">
+                        <span x-text="msg.reply_to_text"></span>
+                      </template>
+                      <template x-if="!msg.reply_to_text && msg.reply_to_first_attachment && (msg.reply_to_first_attachment.attachment_type === 'image' || msg.reply_to_message_type === 'image')">
+                        <div class="reply-image-preview">
+                          <img :src="msg.reply_to_first_attachment.thumbnail_url || msg.reply_to_first_attachment.external_url"
+                               :alt="msg.reply_to_message_type === 'image' ? 'Image' : 'Attachment'"
+                               @click="window.open(msg.reply_to_first_attachment.external_url, '_blank')">
+                          <span class="reply-image-indicator">
+                            <i class="bi bi-image"></i> Image
+                          </span>
+                        </div>
+                      </template>
+                      <template x-if="!msg.reply_to_text && !msg.reply_to_first_attachment && msg.reply_to_message_type">
+                        <template x-if="msg.reply_to_message_type === 'image' || msg.reply_to_message_type === 'sticker'">
+                          <span class="reply-attachment-indicator">
+                            <i class="bi bi-image"></i> <span x-text="msg.reply_to_message_type === 'image' ? 'Image' : 'Sticker'"></span>
+                          </span>
+                        </template>
+                        <template x-if="msg.reply_to_message_type !== 'image' && msg.reply_to_message_type !== 'sticker'">
+                          <span class="reply-attachment-indicator">
+                            <i class="bi bi-file-earmark"></i> <span x-text="msg.reply_to_message_type"></span>
+                          </span>
+                        </template>
+                      </template>
+                      <template x-if="!msg.reply_to_text && !msg.reply_to_message_type && msg.reply_to_has_attachments">
+                        <span class="reply-attachment-indicator">
+                          <i class="bi bi-paperclip"></i> Attachment
+                        </span>
+                      </template>
                     </div>
                   </template>
-                  <div class="msg-bubble" x-text="msg.text || '[' + msg.message_type + ']'"></div>
+
+                  {# Attachments - render images first, then other attachments #}
+                  <template x-if="msg.attachments && msg.attachments.length > 0">
+                    <div class="msg-attachments">
+                      <template x-for="att in msg.attachments" :key="att.id">
+                        {# Image attachment #}
+                        <template x-if="att.attachment_type === 'image' || att.mime_type?.startsWith('image/')">
+                          <div class="msg-attachment-image">
+                            <img :src="att.external_url" :alt="att.file_name || 'Image'" @click="window.open(att.external_url, '_blank')">
+                            <template x-if="att.width && att.height">
+                              <span class="msg-attachment-size" x-text="att.width + '×' + att.height"></span>
+                            </template>
+                          </div>
+                        </template>
+                        {# Video attachment #}
+                        <template x-if="att.attachment_type === 'video' || att.mime_type?.startsWith('video/')">
+                          <div class="msg-attachment-video">
+                            <video :src="att.external_url" controls preload="metadata"></video>
+                            <span class="msg-attachment-name" x-text="att.file_name || 'Video'"></span>
+                          </div>
+                        </template>
+                        {# Audio attachment #}
+                        <template x-if="att.attachment_type === 'audio' || att.mime_type?.startsWith('audio/')">
+                          <div class="msg-attachment-audio">
+                            <audio :src="att.external_url" controls></audio>
+                            <span class="msg-attachment-name" x-text="att.file_name || 'Audio'"></span>
+                          </div>
+                        </template>
+                        {# File attachment #}
+                        <template x-if="!att.attachment_type?.match(/image|video|audio/) && !att.mime_type?.match(/image|video|audio/)">
+                          <div class="msg-attachment-file">
+                            <i class="bi bi-file-earmark"></i>
+                            <a :href="att.external_url" target="_blank" rel="noopener" x-text="att.file_name || 'File'"></a>
+                            <template x-if="att.file_size">
+                              <span class="msg-attachment-size" x-text="formatFileSize(att.file_size)"></span>
+                            </template>
+                          </div>
+                        </template>
+                      </template>
+                    </div>
+                  </template>
+
+                  {# Message text (if any) #}
+                  <template x-if="msg.text">
+                    <div class="msg-bubble" x-text="msg.text"></div>
+                  </template>
+                  <template x-if="!msg.text && (!msg.attachments || msg.attachments.length === 0)">
+                    <div class="msg-bubble" x-text="'[' + msg.message_type + ']'"></div>
+                  </template>
+
                   {# Reactions row #}
                   <template x-if="msg.reactions && msg.reactions.length > 0">
                     <div class="msg-reactions">

@@ -100,11 +100,30 @@ class AttachmentSerializer(serializers.ModelSerializer):
 # ===========================================================================
 class ReplyToBriefSerializer(serializers.ModelSerializer):
     """Minimal representation of a replied-to message (for the reply quote)."""
+    message_type = serializers.CharField(read_only=True)
+    has_attachments = serializers.SerializerMethodField()
+    first_attachment = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ["id", "text", "direction", "sender_type", "created_at"]
+        fields = ["id", "text", "direction", "sender_type", "created_at", "message_type", "has_attachments", "first_attachment"]
         read_only_fields = fields
+
+    def get_has_attachments(self, obj: Message) -> bool:
+        return obj.attachments.exists()
+
+    def get_first_attachment(self, obj: Message) -> dict | None:
+        """Return the first attachment (if any) for preview in reply quotes."""
+        first = obj.attachments.first()
+        if first:
+            return {
+                "id": str(first.id),
+                "attachment_type": first.attachment_type,
+                "external_url": first.external_url,
+                "thumbnail_url": first.thumbnail_url,
+                "mime_type": first.mime_type,
+            }
+        return None
 
 
 class MessageSerializer(serializers.ModelSerializer):

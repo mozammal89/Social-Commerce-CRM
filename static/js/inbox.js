@@ -101,6 +101,11 @@ function inboxApp() {
         activeConversation: null,
         messages: [],
         loadingMessages: false,
+        loadingMoreMessages: false,
+        hasMoreMessages: true,
+        currentPage: 1,            // Current page number (for reverse pagination)
+        totalPages: 1,             // Total pages available
+        _autoFillAttempts: 0,      // Counter for auto-fill attempts
         replyText: '',
         sending: false,
         threadError: '',
@@ -135,6 +140,47 @@ function inboxApp() {
             this.loadConversations();
             this.loadChannels();
             this.connectWebSocket();
+            this.setupScrollHandler();
+        },
+
+        setupScrollHandler() {
+            // Remove existing listener if any
+            if (this._scrollHandler && this._scrollElement) {
+                this._scrollElement.removeEventListener('scroll', this._scrollHandler);
+            }
+
+            // Debounced scroll handler for loading more messages
+            let scrollTimeout;
+            this._scrollHandler = () => {
+                const threadEl = document.getElementById('thread-messages');
+                if (!threadEl || this.loadingMessages || this.loadingMoreMessages || !this.hasMoreMessages) return;
+                if (this.currentPage <= 1) return;  // Already on first page
+
+                // When near the top (within 100px), load more messages
+                const scrollTop = threadEl.scrollTop;
+                if (scrollTop < 100) {
+                    if (scrollTimeout) clearTimeout(scrollTimeout);
+                    scrollTimeout = setTimeout(() => {
+                        this.loadMoreMessages();
+                    }, 300);  // Increased debounce to prevent rapid-fire requests
+                }
+            };
+
+            // Set up the scroll observer after DOM is ready
+            this.$nextTick(() => {
+                const threadEl = document.getElementById('thread-messages');
+                if (threadEl) {
+                    this._scrollElement = threadEl;
+                    threadEl.addEventListener('scroll', this._scrollHandler, { passive: true });
+                    console.log('[Inbox] Scroll handler attached to thread-messages', {
+                        hasMoreMessages: this.hasMoreMessages,
+                        currentPage: this.currentPage,
+                        scrollTop: threadEl.scrollTop
+                    });
+                } else {
+                    console.warn('[Inbox] thread-messages element not found');
+                }
+            });
         },
 
         /* ================================================================
@@ -177,6 +223,8 @@ function inboxApp() {
             this.notes = [];
             this.showNotes = false;
             this.loadMessages();
+            // Re-setup scroll handler for the new conversation
+            this.$nextTick(() => this.setupScrollHandler());
             // Mark as read when opened (best-effort; ignore failures).
             if (conv.unread_count > 0) this.markRead(conv.id);
         },
@@ -187,9 +235,50 @@ function inboxApp() {
         async loadMessages() {
             if (!this.activeConversationId) return;
             this.loadingMessages = true;
+            this.messages = [];
+            this.currentPage = 1;
+            this.hasMoreMessages = false;  // Will update based on pagination
+            this._autoFillAttempts = 0;  // Reset auto-fill attempts
             try {
-                const data = await api(`${this.apiBase}/conversations/${this.activeConversationId}/messages/`, { storeId: this.storeId });
-                this.messages = (data.results || data || []).slice().reverse();
+                // First, fetch to get total count and determine the last page
+                const data = await api(`${this.apiBase}/conversations/${this.activeConversationId}/messages/`, {
+                    storeId: this.storeId
+                });
+
+                // Calculate total pages from count
+                const totalCount = data.count || 0;
+                const pageSize = data.results?.length || 20;
+                this.totalPages = Math.ceil(totalCount / pageSize);
+
+                if (this.totalPages > 1) {
+                    // Load the last page first (most recent messages)
+                    this.currentPage = this.totalPages;
+                    const lastPageData = await api(`${this.apiBase}/conversations/${this.activeConversationId}/messages/?page=${this.currentPage}`, {
+                        storeId: this.storeId
+                    });
+                    // Don't reverse - API returns ascending order (oldest first), which is correct for chat
+                    this.messages = lastPageData.results || [];
+                    // There are more pages if current page > 1
+                    this.hasMoreMessages = this.currentPage > 1;
+
+                    // Schedule auto-fill check after DOM updates (using $nextTick)
+                    this.$nextTick(() => {
+                        setTimeout(() => this._checkAndFillThread(), 100);
+                    });
+                } else {
+                    // Single page - API returns ascending order, which is correct
+                    this.messages = data.results || data || [];
+                    // No more pages available
+                    this.hasMoreMessages = false;
+                }
+
+                console.log('[Inbox] Loaded messages', {
+                    totalPages: this.totalPages,
+                    currentPage: this.currentPage,
+                    hasMoreMessages: this.hasMoreMessages,
+                    messageCount: this.messages.length
+                });
+
                 // Conversation carries the customer id — load the profile once.
                 if (this.activeConversation && this.activeConversation.customer_id) {
                     this.loadCustomer(this.activeConversation.customer_id);
@@ -199,6 +288,114 @@ function inboxApp() {
                 this.threadError = err.message;
             } finally {
                 this.loadingMessages = false;
+            }
+        },
+
+        _checkAndFillThread() {
+            // Check if thread needs more messages to be scrollable
+            const threadEl = document.getElementById('thread-messages');
+            if (!threadEl) return;
+
+            const isScrollable = threadEl.scrollHeight > threadEl.clientHeight;
+
+            if (isScrollable || !this.hasMoreMessages || this._autoFillAttempts >= 5) {
+                console.log('[Inbox] Auto-fill check complete', {
+                    isScrollable,
+                    hasMoreMessages: this.hasMoreMessages,
+                    attempts: this._autoFillAttempts
+                });
+                return;
+            }
+
+            // Load previous page
+            this._autoFillAttempts++;
+            console.log('[Inbox] Thread not filled, auto-loading previous page', this.currentPage - 1);
+            this._loadPreviousPageSilent();
+        },
+
+        _loadPreviousPageSilent() {
+            // Load previous page without updating loading state (used internally)
+            const prevPage = this.currentPage - 1;
+            if (prevPage < 1) {
+                this.hasMoreMessages = false;
+                return;
+            }
+
+            api(`${this.apiBase}/conversations/${this.activeConversationId}/messages/?page=${prevPage}`, {
+                storeId: this.storeId
+            }).then(data => {
+                if (data.results && data.results.length > 0) {
+                    // Prepend messages (older messages go at the beginning)
+                    this.messages = [...data.results, ...this.messages];
+                    this.currentPage = prevPage;
+                    this.hasMoreMessages = prevPage > 1;
+
+                    // Check again after loading
+                    this.$nextTick(() => {
+                        setTimeout(() => this._checkAndFillThread(), 50);
+                    });
+                }
+            }).catch(err => {
+                console.error('[Inbox] Failed to load previous page silently:', err);
+            });
+        },
+
+        async loadMoreMessages() {
+            if (!this.activeConversationId || this.loadingMoreMessages || !this.hasMoreMessages) {
+                console.log('[Inbox] loadMoreMessages skipped', {
+                    hasConversationId: !!this.activeConversationId,
+                    loadingMoreMessages: this.loadingMoreMessages,
+                    hasMoreMessages: this.hasMoreMessages
+                });
+                return;
+            }
+
+            console.log('[Inbox] Loading more messages', {
+                currentPage: this.currentPage,
+                conversationId: this.activeConversationId
+            });
+
+            this.loadingMoreMessages = true;
+            try {
+                // Load the previous page
+                const prevPage = this.currentPage - 1;
+                if (prevPage < 1) {
+                    this.hasMoreMessages = false;
+                    return;
+                }
+
+                const data = await api(`${this.apiBase}/conversations/${this.activeConversationId}/messages/?page=${prevPage}`, {
+                    storeId: this.storeId
+                });
+
+                console.log('[Inbox] Loaded page', prevPage, 'with', data.results?.length, 'messages');
+
+                if (data.results && data.results.length > 0) {
+                    // Store current scroll position
+                    const threadEl = document.getElementById('thread-messages');
+                    const oldScrollHeight = threadEl ? threadEl.scrollHeight : 0;
+
+                    // Prepend new messages (API returns ascending order, which is correct)
+                    // Previous page messages are older, so they go at the beginning
+                    this.messages = [...data.results, ...this.messages];
+                    this.currentPage = prevPage;
+
+                    // Restore scroll position to maintain user's view
+                    this.$nextTick(() => {
+                        if (threadEl) {
+                            const newScrollHeight = threadEl.scrollHeight;
+                            threadEl.scrollTop = newScrollHeight - oldScrollHeight;
+                        }
+                    });
+                }
+
+                // Update hasMoreMessages based on whether we've reached page 1
+                this.hasMoreMessages = prevPage > 1;
+                console.log('[Inbox] Updated hasMoreMessages to', this.hasMoreMessages);
+            } catch (err) {
+                console.error('[Inbox] Failed to load more messages:', err);
+            } finally {
+                this.loadingMoreMessages = false;
             }
         },
 
@@ -378,7 +575,12 @@ function inboxApp() {
                 msg.reactions = msg.reactions.filter(r => r.emoji !== payload.emoji);
             } else {
                 if (!msg.reactions.find(r => r.emoji === payload.emoji)) {
-                    msg.reactions.push({ emoji: payload.emoji, reactor_type: 'customer' });
+                    // Generate a unique ID for the reaction object (required for Alpine x-for key)
+                    msg.reactions.push({
+                        id: `reaction-${payload.message_id}-${payload.emoji}-${Date.now()}`,
+                        emoji: payload.emoji,
+                        reactor_type: 'customer'
+                    });
                 }
             }
         },
@@ -468,6 +670,17 @@ function inboxApp() {
             const sameDay = d.toDateString() === now.toDateString();
             return sameDay ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                            : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        },
+        formatFileSize(bytes) {
+            if (!bytes) return '';
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let size = bytes;
+            let unitIndex = 0;
+            while (size >= 1024 && unitIndex < units.length - 1) {
+                size /= 1024;
+                unitIndex++;
+            }
+            return `${size.toFixed(1)} ${units[unitIndex]}`;
         },
         get unreadTotal() {
             return this.conversations.reduce((n, c) => n + (c.unread_count || 0), 0);

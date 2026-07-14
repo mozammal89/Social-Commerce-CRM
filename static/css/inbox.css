@@ -13,7 +13,9 @@
     --inbox-list-width: 340px;
     --inbox-detail-width: 1fr;
     --inbox-customer-width: 320px;
-    height: calc(100vh - var(--navbar-height) - 1px);
+    /* Account for both navbar (64px) and breadcrumb (approx 54px with padding/margin) */
+    height: calc(100vh - var(--navbar-height) - 54px - 30px);
+    overflow: hidden;  /* Prevent content from growing beyond the calculated height */
 }
 
 /* The inbox fills the viewport under the navbar; no page padding. */
@@ -22,6 +24,7 @@
     height: 100%;
     background: var(--surface-secondary);
     border-top: 1px solid var(--border-light);
+    overflow: hidden;  /* Ensure children don't overflow */
 }
 
 /* ================================================================
@@ -212,9 +215,11 @@
 .inbox-detail {
     flex: 1;
     min-width: 0;
+    min-height: 0;  /* Important: allows flex child to shrink below content size */
     display: flex;
     flex-direction: column;
     background: var(--surface-secondary);
+    overflow: hidden;  /* Prevent flex item from overflowing */
 }
 
 .inbox-detail-header {
@@ -313,11 +318,54 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex-wrap: wrap;
 }
 .msg-row.outbound .msg-reply-quote {
     border-left: none;
     border-right: 3px solid var(--border-default);
     border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.reply-attachment-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-style: italic;
+}
+.reply-attachment-indicator .bi {
+    font-size: 0.8rem;
+}
+
+/* Reply image preview */
+.reply-image-preview {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    position: relative;
+}
+.reply-image-preview img {
+    max-width: 80px;
+    max-height: 60px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    cursor: pointer;
+    border: 1px solid var(--border-light);
+    transition: opacity var(--transition-fast);
+}
+.reply-image-preview img:hover {
+    opacity: 0.8;
+}
+.reply-image-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    background: var(--surface-tertiary);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
 }
 
 /* Reactions row (emoji below the bubble) */
@@ -335,6 +383,87 @@
     font-size: .85rem;
     line-height: 1.5;
     box-shadow: var(--shadow-xs);
+}
+
+/* Attachments */
+.msg-attachments {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    max-width: 100%;
+}
+.msg-attachment-image {
+    position: relative;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--surface-tertiary);
+}
+.msg-attachment-image img {
+    max-width: 100%;
+    max-height: 300px;
+    width: auto;
+    height: auto;
+    display: block;
+    cursor: pointer;
+    transition: opacity var(--transition-fast);
+}
+.msg-attachment-image img:hover {
+    opacity: 0.9;
+}
+.msg-attachment-size {
+    position: absolute;
+    bottom: var(--space-1);
+    right: var(--space-1);
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    font-size: var(--font-size-xs);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+.msg-attachment-video,
+.msg-attachment-audio {
+    background: var(--surface-tertiary);
+    border-radius: var(--radius-md);
+    padding: var(--space-2);
+}
+.msg-attachment-video video,
+.msg-attachment-audio audio {
+    max-width: 100%;
+    max-height: 300px;
+}
+.msg-attachment-name {
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    margin-top: var(--space-1);
+}
+.msg-attachment-file {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--surface-tertiary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-light);
+}
+.msg-attachment-file .bi {
+    font-size: 1.5rem;
+    color: var(--text-muted);
+}
+.msg-attachment-file a {
+    flex: 1;
+    text-decoration: none;
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    word-break: break-all;
+}
+.msg-attachment-file a:hover {
+    color: var(--brand-600);
+}
+.msg-attachment-file .msg-attachment-size {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
 }
 
 /* Composer */
