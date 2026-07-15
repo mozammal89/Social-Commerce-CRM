@@ -53,10 +53,15 @@ def _page_token(account: "ConnectedAccount") -> str:
                     try:
                         creds = ast.literal_eval(decrypted)
                         if not isinstance(creds, dict):
-                            logger.warning("Parsed credentials is not a dict for account %s", account.id)
+                            logger.warning(
+                                "Parsed credentials is not a dict for account %s", account.id
+                            )
                             creds = {}
                     except (ValueError, SyntaxError):
-                        logger.warning("Could not parse credentials as JSON or Python dict for account %s", account.id)
+                        logger.warning(
+                            "Could not parse credentials as JSON or Python dict for account %s",
+                            account.id,
+                        )
                         creds = {}
         except Exception as e:
             logger.error("Failed to decrypt/parse credentials for account %s: %s", account.id, e)
@@ -64,7 +69,9 @@ def _page_token(account: "ConnectedAccount") -> str:
 
     token = creds.get("page_access_token", "") if isinstance(creds, dict) else ""
     if not token:
-        raise SendMessageError("Connected Facebook account has no page_access_token.", code="missing_token")
+        raise SendMessageError(
+            "Connected Facebook account has no page_access_token.", code="missing_token"
+        )
     return token
 
 
@@ -81,12 +88,16 @@ def send(
     """
     url = f"{GRAPH_API_BASE}/{account.external_id}/messages"
     params = {"access_token": _page_token(account)}
-    logger.debug("Facebook send request: url=%s, recipient=%s, payload=%s", url, recipient_psid, payload)
+    logger.debug(
+        "Facebook send request: url=%s, recipient=%s, payload=%s", url, recipient_psid, payload
+    )
     print("Facebook send request: url=%s, recipient=%s, payload=%s", url, recipient_psid, payload)
     try:
         resp = requests.post(url, params=params, json=payload, timeout=DEFAULT_TIMEOUT)
     except requests.RequestException as exc:
-        raise SendMessageError(f"Facebook send request failed: {exc}", code="transport_error") from exc
+        raise SendMessageError(
+            f"Facebook send request failed: {exc}", code="transport_error"
+        ) from exc
 
     logger.debug("Facebook send response: status=%s, body=%s", resp.status_code, resp.text[:500])
     print("Facebook send response: status=%s, body=%s", resp.status_code, resp.text[:500])
@@ -120,11 +131,16 @@ def fetch_profile(
     return resp.json()
 
 
-def exchange_long_lived_token(*, app_id: str, app_secret: str, short_lived_token: str) -> dict[str, Any]:
+def exchange_long_lived_token(
+    *, app_id: str, app_secret: str, short_lived_token: str
+) -> dict[str, Any]:
     """Exchange a short-lived user token for a long-lived user token.
 
-    Returns Graph API's ``{access_token, token_type, expires_in}``.
-    Raises ``AuthenticationError`` on failure.
+    Returns Graph API's ``{access_token, token_type, expires_in}`` where
+    ``expires_in`` is seconds until expiry (~60 days). Raises
+    ``AuthenticationError`` on failure.
+
+    See: https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow
     """
     url = f"{GRAPH_API_BASE}/oauth/access_token"
     params = {
@@ -139,6 +155,58 @@ def exchange_long_lived_token(*, app_id: str, app_secret: str, short_lived_token
         raise AuthenticationError(f"Facebook token exchange request failed: {exc}") from exc
 
     data = _handle_response(resp, action="token_exchange")
+    return data
+
+
+def fetch_page_tokens(*, user_access_token: str) -> list[dict[str, Any]]:
+    """Retrieve long-lived Page access tokens via ``GET /me/accounts``.
+
+    Given a **long-lived user access token**, this returns one entry per
+    Facebook Page the user manages, each carrying a long-lived page token
+    that does **not** expire while the user token remains valid.
+
+    Returns ``[{id, name, access_token, ...}, ...]`` (empty list if the
+    user manages no pages). Raises ``AuthenticationError`` on failure.
+    """
+    url = f"{GRAPH_API_BASE}/me/accounts"
+    params = {
+        "fields": "id,name,access_token",
+        "access_token": user_access_token,
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=DEFAULT_TIMEOUT)
+    except requests.RequestException as exc:
+        raise AuthenticationError(f"Facebook /me/accounts request failed: {exc}") from exc
+
+    data = _handle_response(resp, action="token_exchange")
+    return data.get("data", [])
+
+
+def debug_token(*, input_token: str, app_id: str, app_secret: str) -> dict[str, Any]:
+    """Inspect a token's validity and expiry via ``GET /debug_token``.
+
+    Returns the Graph ``data`` object, e.g.::
+
+        {"data": {"is_valid": True, "type": "USER|PAGE",
+                  "expires_at": 1234567890, "app_id": "...", ...}}
+
+    ``expires_at`` is a Unix timestamp (``0`` means never expires — true
+    for page tokens derived from a long-lived user token). Raises
+    ``AuthenticationError`` on failure.
+    """
+    # The debug_token endpoint requires an app access token.
+    app_access_token = f"{app_id}|{app_secret}"
+    url = f"{GRAPH_API_BASE}/debug_token"
+    params = {
+        "input_token": input_token,
+        "access_token": app_access_token,
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=DEFAULT_TIMEOUT)
+    except requests.RequestException as exc:
+        raise AuthenticationError(f"Facebook debug_token request failed: {exc}") from exc
+
+    data = _handle_response(resp, action="verify")
     return data
 
 

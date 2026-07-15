@@ -155,6 +155,8 @@ class ActivityType(models.TextChoices):
     TAG_REMOVED = "tag.removed", "Tag removed"
     CHANNEL_CONNECTED = "channel.connected", "Channel connected"
     CHANNEL_DISCONNECTED = "channel.disconnected", "Channel disconnected"
+    CHANNEL_TOKEN_EXPIRED = "channel.token_expired", "Channel token expired"
+    CHANNEL_TOKEN_REFRESHED = "channel.token_refreshed", "Channel token refreshed"
 
 
 # Convenience grouping for the timeline UI.

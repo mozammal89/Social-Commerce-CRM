@@ -1049,6 +1049,81 @@ class ChannelService:
             account=account, status=ConnectedAccountStatus.DISCONNECTED.value, actor=actor,
         )
 
+    # ------------------------------------------------------------------
+    # Token lifecycle — refresh & expiry
+    # ------------------------------------------------------------------
+    @staticmethod
+    def refresh_account_tokens(*, account: ConnectedAccount) -> ConnectedAccount:
+        """Attempt to refresh the account's expiring credentials.
+
+        Delegates to the adapter's ``refresh_credentials``. On success
+        the account is re-verified and an activity entry is logged. If
+        the adapter cannot refresh (returns ``False`` — no refresh
+        mechanism), the account is left unchanged. If refresh fails
+        irreversibly (``AuthenticationError``), the account is marked
+        ``expired`` via :meth:`mark_account_expired`.
+        """
+        adapter = get_adapter_for_account(account)
+        try:
+            refreshed = adapter.refresh_credentials(account=account)
+        except Exception as exc:
+            logger.warning("Token refresh failed for account %s: %s", account.id, exc)
+            return ChannelService.mark_account_expired(
+                account=account, reason=f"Token refresh failed: {exc}",
+            )
+        if not refreshed:
+            return account
+
+        Activity.objects.create(
+            store=account.store,
+            action_type=ActivityType.CHANNEL_TOKEN_REFRESHED.value,
+            description=f"Refreshed token for {account.channel.name}: {account.name}",
+            metadata={"account_id": str(account.id), "channel": account.channel.slug},
+        )
+        account.refresh_from_db()
+        return account
+
+    @staticmethod
+    def mark_account_expired(
+        *, account: ConnectedAccount, reason: str = "",
+    ) -> ConnectedAccount:
+        """Mark a connected account as ``expired`` and record an activity.
+
+        Called when a token can no longer be refreshed or validated.
+        Sets ``status=expired``, stores the reason in ``error_message``,
+        and logs a ``channel.token_expired`` activity so the store owner
+        is notified to reconnect their Facebook account.
+        """
+        previous = account.status
+        with transaction.atomic():
+            account.status = ConnectedAccountStatus.EXPIRED.value
+            account.error_message = reason or (
+                "The Facebook access token has expired or been revoked. "
+                "Please reconnect your Facebook account."
+            )
+            account.last_synced_at = timezone.now()
+            account.save(update_fields=[
+                "status", "error_message", "last_synced_at", "updated_at",
+            ])
+            Activity.objects.create(
+                store=account.store,
+                action_type=ActivityType.CHANNEL_TOKEN_EXPIRED.value,
+                description=(
+                    f"{account.channel.name} ({account.name}) token expired — "
+                    f"reconnection required."
+                ),
+                metadata={
+                    "account_id": str(account.id),
+                    "channel": account.channel.slug,
+                    "previous_status": previous,
+                    "reason": reason,
+                },
+            )
+        logger.warning(
+            "Account %s marked expired (was %s): %s", account.id, previous, reason,
+        )
+        return account
+
 
 # ===========================================================================
 # Internal helpers — conversation denormalization & realtime hooks

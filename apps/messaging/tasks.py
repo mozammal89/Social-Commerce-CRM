@@ -34,9 +34,10 @@ from django.utils import timezone
 
 from .adapters import get_adapter_for_account
 from .adapters.dto import DeliveryUpdate, NormalizedIncomingEvent, NormalizedReactionEvent
-from .constants import DeliveryStatus
+from .adapters.exceptions import AuthenticationError
+from .constants import ConnectedAccountStatus, DeliveryStatus
 from .models import ConnectedAccount, Message, Attachment
-from .services import MessageService
+from .services import ChannelService, MessageService
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +118,8 @@ def process_webhook_payload(
                     summary["skipped"] += 1
             elif isinstance(event, DeliveryUpdate):
                 updated = MessageService.update_delivery_status(
-                    connected_account=account, update=event,
+                    connected_account=account,
+                    update=event,
                 )
                 summary["deliveries"] += 1 if updated else 0
                 if not updated:
@@ -133,13 +135,16 @@ def process_webhook_payload(
             # One event failing must not abort the batch.
             summary["failed"] += 1
             import traceback
+
             traceback.print_exc()
             logger.exception(
                 "Failed to process webhook event for account %s: %r", account_id, event
             )
 
     logger.info(
-        "Webhook processed for account %s: %r", account_id, summary,
+        "Webhook processed for account %s: %r",
+        account_id,
+        summary,
     )
     return summary
 
@@ -217,15 +222,123 @@ def purge_expired_messages() -> dict[str, Any]:
         stores_with_purge += 1
         logger.info(
             "Retention purge: store=%s retention_days=%d deleted_messages=%d",
-            store.id, retention_days, count,
+            store.id,
+            retention_days,
+            count,
         )
 
     logger.info(
         "Retention sweep done: stores_checked=%d stores_with_purge=%d messages_deleted=%d",
-        stores_checked, stores_with_purge, messages_deleted,
+        stores_checked,
+        stores_with_purge,
+        messages_deleted,
     )
     return {
         "stores_checked": stores_checked,
         "stores_with_purge": stores_with_purge,
         "messages_deleted": messages_deleted,
     }
+
+
+# ===========================================================================
+# 3. Token health & refresh
+# ===========================================================================
+@shared_task(name="apps.messaging.tasks.validate_channel_tokens")
+def validate_channel_tokens() -> dict[str, Any]:
+    """Validate token health and auto-refresh expiring channel tokens.
+
+    Runs daily via Celery beat. For every ``connected`` account:
+
+    1. **Refresh** — if the adapter supports token refresh (e.g.
+       Facebook's long-lived user → page token re-fetch), it runs first.
+       Successful refresh re-arms the page token; a refresh failure marks
+       the account ``expired`` (the user token is dead and cannot be
+       renewed without manual re-auth).
+    2. **Verify** — for accounts that could not be refreshed (no refresh
+       mechanism, e.g. a raw page token), a live ``verify_credentials``
+       health-check runs. A failed check marks the account ``expired``
+       so the store owner is notified to reconnect.
+
+    Returns ``{checked, refreshed, expired, healthy}`` for monitoring.
+    """
+    summary: dict[str, int] = {"checked": 0, "refreshed": 0, "expired": 0, "healthy": 0}
+
+    accounts = (
+        ConnectedAccount.objects.filter(status=ConnectedAccountStatus.CONNECTED.value)
+        .select_related("store", "channel")
+        .iterator()
+    )
+    for account in accounts:
+        summary["checked"] += 1
+        try:
+            _validate_single_account(account, summary)
+        except Exception:
+            summary["expired"] += 1
+            logger.exception(
+                "Unexpected error validating tokens for account %s — marking expired",
+                account.id,
+            )
+            ChannelService.mark_account_expired(
+                account=account,
+                reason="Unexpected error during token validation.",
+            )
+
+    logger.info(
+        "Token validation done: checked=%d refreshed=%d expired=%d healthy=%d",
+        summary["checked"],
+        summary["refreshed"],
+        summary["expired"],
+        summary["healthy"],
+    )
+    return summary
+
+
+def _validate_single_account(account: ConnectedAccount, summary: dict[str, int]) -> None:
+    """Validate (and refresh if possible) one connected account."""
+    adapter = get_adapter_for_account(account)
+
+    # Step 1: attempt refresh. Adapters without a refresh mechanism
+    # (``refresh_credentials`` returns False) fall through to verification.
+    try:
+        refreshed = adapter.refresh_credentials(account=account)
+    except AuthenticationError as exc:
+        # User token is dead — cannot refresh.
+        ChannelService.mark_account_expired(
+            account=account,
+            reason=f"Token could not be refreshed: {exc}",
+        )
+        summary["expired"] += 1
+        return
+    except Exception:
+        logger.exception("refresh_credentials raised for account %s", account.id)
+        # Non-auth errors are transient (network) — don't expire yet,
+        # but verify below to make a final call.
+        refreshed = False
+
+    if refreshed:
+        summary["refreshed"] += 1
+
+    # Step 2: health-check the (possibly refreshed) token via verify.
+    account.refresh_from_db()
+    result = adapter.verify_credentials(account=account)
+    if result.valid:
+        account.status = ConnectedAccountStatus.CONNECTED.value
+        account.error_message = ""
+        account.last_synced_at = timezone.now()
+        account.save(
+            update_fields=[
+                "status",
+                "error_message",
+                "last_synced_at",
+                "updated_at",
+            ]
+        )
+        summary["healthy"] += 1
+    else:
+        # Token is dead and either couldn't be refreshed or refresh
+        # wasn't available. Mark expired so the user reconnects.
+        ChannelService.mark_account_expired(
+            account=account,
+            reason=result.error_message or "Token verification failed.",
+        )
+        summary["expired"] += 1

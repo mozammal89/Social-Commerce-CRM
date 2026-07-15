@@ -165,12 +165,19 @@ class BaseChannelAdapter(abc.ABC):
         Called by the service layer after ``connect_account`` (to validate
         on connect) and on demand via the "Test connection" UI button.
         """
-        return VerifyResult(valid=True, raw={"note": "verify_credentials not implemented for this channel"})
+        return VerifyResult(
+            valid=True, raw={"note": "verify_credentials not implemented for this channel"}
+        )
 
-    def refresh_credentials(self, *, account: "ConnectedAccount") -> None:
+    def refresh_credentials(self, *, account: "ConnectedAccount") -> bool:
         """Refresh expiring credentials (e.g. FB long-lived tokens).
 
+        Returns ``True`` if the credentials were refreshed and persisted,
+        ``False`` if no refresh was needed or possible. Raises
+        ``AuthenticationError`` when refresh is attempted but fails
+        irreversibly — the caller (the periodic Celery task) treats that
+        as "mark the account expired".
+
         Default no-op; adapters with expiring tokens override this.
-        It is called by a periodic Celery task (the channel service).
         """
-        return None
+        return False
