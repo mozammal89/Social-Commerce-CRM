@@ -39,15 +39,15 @@ async function api(path, { method = 'GET', body, storeId } = {}) {
    Each entry drives a labeled input; only matching fields are shown. */
 const CREDENTIAL_FIELDS = {
     facebook_messenger: [
-        { key: 'page_id', label: 'Page ID', placeholder: 'e.g. 1029384756', help: 'The numeric Facebook Page ID.' },
+        { key: 'page_id', label: 'Page Scrape ID', placeholder: 'e.g. 1029384756', help: 'Optional: Page ID for API scraping (different from your Page Numeric ID above).', optional: true },
         { key: 'page_access_token', label: 'Page Access Token', placeholder: 'EAAG...', help: 'A long-lived Page access token (Pages → Settings → Messenger).', secret: true },
         { key: 'app_id', label: 'App ID', placeholder: 'Numeric app id', help: 'Your Facebook App ID (optional if token is self-contained).', optional: true },
         { key: 'app_secret', label: 'App Secret', placeholder: 'App secret', help: 'Used to verify webhook signatures.', secret: true },
     ],
     whatsapp: [
-        { key: 'phone_number_id', label: 'Phone Number ID', placeholder: 'e.g. 1076…', help: 'From Meta Business → WhatsApp phone number.' },
-        { key: 'access_token', label: 'Access Token', placeholder: 'EAAG…', help: 'A permanent system-user access token.', secret: true },
-        { key: 'waba_id', label: 'WABA ID', placeholder: 'WhatsApp Business Account ID', help: 'Optional but recommended.', optional: true },
+        { key: 'phone_number_id', label: 'Phone Number ID (from Phone Number list)', placeholder: 'e.g. 1076…', help: 'The Phone Number ID from your WhatsApp Phone Numbers list (different from WABA ID above).', secret: false },
+        { key: 'access_token', label: 'Permanent Access Token', placeholder: 'EAAG…', help: 'A permanent system-user access token for sending messages.', secret: true },
+        { key: 'waba_id', label: 'WABA ID (optional)', placeholder: 'WhatsApp Business Account ID', help: 'Optional but recommended for advanced features.', optional: true },
         { key: 'app_secret', label: 'App Secret', placeholder: 'App secret', help: 'Used to verify webhook signatures.', secret: true, optional: true },
     ],
 };
@@ -215,6 +215,16 @@ function channelsApp() {
         credentialFields() {
             if (!this.connectChannel) return [];
             return CREDENTIAL_FIELDS[this.connectChannel.channel_type] || [];
+        },
+
+        smallCredentialFieldPairs() {
+            // Group small fields (non-secret, non-token) into pairs for inline rendering
+            const fields = this.credentialFields().filter(f => !f.secret && !f.key.includes('token'));
+            const pairs = [];
+            for (let i = 0; i < fields.length; i += 2) {
+                pairs.push([fields[i], fields[i + 1] || null]);
+            }
+            return pairs;
         },
 
         async submitConnect() {

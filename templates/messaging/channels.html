@@ -224,7 +224,7 @@
   <div class="modal fade" :class="{ show: showConnect }"
        :style="{ display: showConnect ? 'block' : 'none' }"
        tabindex="-1" @keydown.escape.window="showConnect = false">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 900px;">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">
@@ -234,46 +234,108 @@
           <button type="button" class="btn-close" @click="showConnect = false"></button>
         </div>
         <div class="modal-body">
-          <!-- Account name + external id -->
-          <div class="mb-3">
-            <label class="form-label">Account Name <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" x-model="connectName"
-                   :placeholder="connectChannel?.channel_type === 'whatsapp' ? 'e.g. Sales WhatsApp' : 'e.g. Main Facebook Page'">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">
-              <span x-text="connectChannel?.channel_type === 'whatsapp' ? 'Phone Number ID' : 'Page ID'"></span>
-              <span class="text-danger">*</span>
-            </label>
-            <input type="text" class="form-control" x-model="connectExternalId"
-                   placeholder="The platform-side account ID">
+          <!-- Basic account info (inline fields) -->
+          <div class="row g-3 mb-3">
+            <div class="col-md-5">
+              <label class="form-label">Account Name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" x-model="connectName"
+                     :placeholder="connectChannel?.channel_type === 'whatsapp' ? 'e.g. Sales WhatsApp' : 'e.g. Main Facebook Page'">
+            </div>
+            <div class="col-md-7">
+              <label class="form-label">
+                <span x-text="connectChannel?.channel_type === 'whatsapp' ? 'WABA ID (WhatsApp Business Account)' : 'Facebook Page Numeric ID'"></span>
+                <span class="text-danger">*</span>
+              </label>
+              <input type="text" class="form-control" x-model="connectExternalId"
+                     :placeholder="connectChannel?.channel_type === 'whatsapp' ? 'e.g. 123456789012345' : 'e.g. 1029384756'">
+              <div class="form-text" style="font-size: 0.75rem;">
+                <span x-show="connectChannel?.channel_type === 'whatsapp'">
+                  From Meta Business Settings → Your Business Information
+                </span>
+                <span x-show="connectChannel?.channel_type === 'facebook_messenger'">
+                  From Facebook Page Settings → About section (Page ID)
+                </span>
+              </div>
+            </div>
           </div>
 
           <!-- Platform-specific credentials -->
           <hr>
           <p class="text-muted small mb-3"><i class="bi bi-shield-lock me-1"></i>Credentials are encrypted at rest and never shown again after saving.</p>
+
+          <!-- Credentials organized by size -->
           <template x-for="field in credentialFields()" :key="field.key">
-            <div class="mb-3">
-              <label class="form-label">
-                <span x-text="field.label"></span>
-                <span x-show="!field.optional" class="text-danger">*</span>
-                <span x-show="field.optional" class="text-muted small">(optional)</span>
-              </label>
-              <input :type="field.secret ? 'password' : 'text'"
-                     class="form-control"
-                     :placeholder="field.placeholder"
-                     x-model="connectCreds[field.key]"
-                     @input="connectCreds[field.key] = $event.target.value">
-              <div class="form-hint" x-text="field.help"></div>
+            <!-- Large fields (tokens and secrets) take full width -->
+            <div class="row g-3 mb-3" x-show="field.secret || field.key.includes('token')">
+              <div class="col-12">
+                <label class="form-label">
+                  <span x-text="field.label"></span>
+                  <span x-show="!field.optional" class="text-danger">*</span>
+                  <span x-show="field.optional" class="text-muted small">(optional)</span>
+                </label>
+                <input :type="field.secret ? 'password' : 'text'"
+                       class="form-control"
+                       :placeholder="field.placeholder"
+                       x-model="connectCreds[field.key]"
+                       @input="connectCreds[field.key] = $event.target.value">
+                <div class="form-text" x-text="field.help"></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Smaller fields grouped inline in rows -->
+          <template x-for="pair in smallCredentialFieldPairs()" :key="pair[0]?.key || 'empty'">
+            <div class="row g-3 mb-3">
+              <!-- First field in pair -->
+              <div class="col-md-6" x-show="pair[0]">
+                <label class="form-label">
+                  <span x-text="pair[0]?.label"></span>
+                  <span x-show="pair[0] && !pair[0].optional" class="text-danger">*</span>
+                  <span x-show="pair[0] && pair[0].optional" class="text-muted small">(optional)</span>
+                </label>
+                <input type="text" class="form-control"
+                       :placeholder="pair[0]?.placeholder"
+                       x-model="connectCreds[pair[0]?.key]"
+                       @input="connectCreds[pair[0]?.key] = $event.target.value">
+                <div class="form-text" x-text="pair[0]?.help"></div>
+              </div>
+
+              <!-- Second field in pair -->
+              <div class="col-md-6" x-show="pair[1]">
+                <label class="form-label">
+                  <span x-text="pair[1]?.label"></span>
+                  <span x-show="pair[1] && !pair[1].optional" class="text-danger">*</span>
+                  <span x-show="pair[1] && pair[1].optional" class="text-muted small">(optional)</span>
+                </label>
+                <input type="text" class="form-control"
+                       :placeholder="pair[1]?.placeholder"
+                       x-model="connectCreds[pair[1]?.key]"
+                       @input="connectCreds[pair[1]?.key] = $event.target.value">
+                <div class="form-text" x-text="pair[1]?.help"></div>
+              </div>
             </div>
           </template>
 
           <!-- Webhook verify token -->
           <hr>
-          <div class="mb-3">
-            <label class="form-label">Webhook Verify Token</label>
-            <input type="text" class="form-control" x-model="connectVerifyToken">
-            <div class="form-hint">Use this token when subscribing the webhook URL in your Meta App dashboard.</div>
+          <div class="row g-3">
+            <div class="col-md-12">
+              <label class="form-label">Webhook Verify Token <small class="text-muted small">(Token will be masked after saving)</small></label>
+              <div class="input-group">
+                <input type="text" class="form-control" x-model="connectVerifyToken"
+                       placeholder="Auto-generated or enter custom token">
+                <button class="btn btn-outline-secondary" @click="connectVerifyToken = 'crm_' + Math.random().toString(36).slice(2, 14)" title="Generate random token">
+                  <i class="bi bi-magic"></i>
+                </button>
+              </div>
+              <div class="form-text">Use this token when subscribing the webhook URL in your Meta App dashboard.</div>
+            </div>
+            <!-- <div class="col-md-4 d-flex align-items-end">
+              <div class="form-text text-muted">
+                <i class="bi bi-info-circle me-1"></i>
+                Token will be masked after saving
+              </div>
+            </div> -->
           </div>
         </div>
         <div class="modal-footer">
@@ -296,7 +358,7 @@
   <div class="modal fade" :class="{ show: showSettings }"
        :style="{ display: showSettings ? 'block' : 'none' }"
        tabindex="-1" @keydown.escape.window="showSettings = false">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 850px;">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">
