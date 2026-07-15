@@ -78,6 +78,7 @@ class ConnectedAccountAdmin(admin.ModelAdmin):
         "external_id",
         "status",
         "store",
+        "credentials_status",
         "is_active",
         "last_synced_at",
         "connected_by",
@@ -94,7 +95,7 @@ class ConnectedAccountAdmin(admin.ModelAdmin):
         "external_id",
         "error_message",
     ]
-    readonly_fields = ["created_at", "updated_at", "last_synced_at"]
+    readonly_fields = ["created_at", "updated_at", "last_synced_at", "masked_credentials", "masked_webhook_token"]
     ordering = ["-created_at"]
 
     def is_active(self, obj):
@@ -105,12 +106,65 @@ class ConnectedAccountAdmin(admin.ModelAdmin):
     is_active.short_description = _("Status")
     is_active.admin_order_field = "status"
 
+    def credentials_status(self, obj):
+        """Show if credentials are present without revealing them."""
+        if obj.credentials and isinstance(obj.credentials, dict) and obj.credentials:
+            keys = list(obj.credentials.keys())
+            return format_html(
+                '<span class="badge bg-info" title="{}">✓ {} key(s)</span>',
+                ", ".join(keys),
+                len(keys)
+            )
+        return format_html('<span class="badge bg-secondary">No credentials</span>')
+    credentials_status.short_description = _("Credentials")
+
+    def masked_credentials(self, obj):
+        """Display masked credentials in admin detail view."""
+        if not obj.credentials or not isinstance(obj.credentials, dict):
+            return "No credentials stored"
+
+        masked_items = []
+        for key, value in obj.credentials.items():
+            if value:
+                # Show first 4 chars and mask the rest for non-secret values
+                # For secret values, show last 4 chars only
+                if any(secret_word in key.lower() for secret_word in ['secret', 'token', 'password', 'key']):
+                    # For secrets, show last 4 chars only
+                    masked = f"{'*' * (len(str(value)) - 4)}{str(value)[-4:]}" if len(str(value)) > 8 else '****'
+                else:
+                    # For non-secrets, show more context
+                    str_val = str(value)
+                    if len(str_val) > 8:
+                        masked = f"{str_val[:4]}{'*' * (len(str_val) - 8)}{str_val[-4:]}"
+                    else:
+                        masked = '****'
+                masked_items.append(f"{key}: {masked}")
+            else:
+                masked_items.append(f"{key}: (empty)")
+
+        return format_html('<pre style="background: #f5f5f5; padding: 10px; border-radius: 4px;">{}</pre>', "<br>".join(masked_items))
+    masked_credentials.short_description = _("Credentials (Masked)")
+
+    def masked_webhook_token(self, obj):
+        """Display masked webhook verify token."""
+        token = obj.webhook_verify_token
+        if not token:
+            return "Not set"
+        if len(token) > 8:
+            masked = f"{token[:4]}{'*' * (len(token) - 8)}{token[-4:]}"
+        elif len(token) > 4:
+            masked = f"{token[:2]}{'*' * (len(token) - 4)}{token[-2:]}"
+        else:
+            masked = '****'
+        return format_html('<code style="background: #f5f5f5; padding: 4px 8px; border-radius: 3px;">{}</code>', masked)
+    masked_webhook_token.short_description = _("Webhook Verify Token (Masked)")
+
     fieldsets = (
         (_("Account Information"), {
             "fields": ("store", "channel", "name", "external_id")
         }),
         (_("Status & Credentials"), {
-            "fields": ("status", "credentials", "webhook_verify_token", "metadata", "error_message")
+            "fields": ("status", "masked_credentials", "masked_webhook_token", "metadata", "error_message")
         }),
         (_("Metadata"), {
             "fields": ("last_synced_at", "connected_by", "created_at", "updated_at"),

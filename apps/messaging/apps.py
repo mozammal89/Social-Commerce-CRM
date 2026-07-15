@@ -13,6 +13,7 @@ class MessagingConfig(AppConfig):
     def ready(self):
         # Import the Celery app early so @shared_task uses the configured broker
         from config import celery  # noqa: F401  (side-effect: ensures Celery app is loaded)
+
         # Importing the adapter registry here ensures every bundled
         # adapter self-registers its channel type on startup. Adapters
         # use the ``@register("facebook")`` decorator, so simply
@@ -21,7 +22,14 @@ class MessagingConfig(AppConfig):
         # apps registry (and thus the model references inside adapters)
         # is fully populated first.
         from . import adapters  # noqa: F401  (side-effect import)
+
         # Wire ``sync_channels`` to ``post_migrate`` so the global channel
         # catalog auto-reconciles on every migrate/deploy, mirroring how
         # ``sync_permissions`` is wired in apps.permissions.
         from . import signals  # noqa: F401  (side-effect: connects signal)
+
+        # Register the encryption-key validity system check so a
+        # misconfigured ``MESSAGING_ENCRYPTION_KEY`` is caught at startup
+        # (``manage.py check`` / runserver) rather than causing silent
+        # plaintext storage or runtime crashes.
+        from . import checks  # noqa: F401  (side-effect: registers check)
