@@ -323,15 +323,27 @@ class ConnectedAccountSerializer(serializers.ModelSerializer):
     channel = ChannelBriefSerializer(read_only=True)
     connected_by = UserBriefSerializer(read_only=True)
     is_active = serializers.BooleanField(read_only=True)
+    webhook_verify_token_masked = serializers.SerializerMethodField()
 
     class Meta:
         model = ConnectedAccount
         fields = [
             "id", "channel", "name", "external_id", "status", "is_active",
-            "metadata", "connected_by", "last_synced_at", "error_message",
-            "created_at", "updated_at",
+            "webhook_verify_token_masked", "metadata", "connected_by",
+            "last_synced_at", "error_message", "created_at", "updated_at",
         ]
         read_only_fields = fields
+
+    def get_webhook_verify_token_masked(self, obj: ConnectedAccount) -> str:
+        """Return masked webhook verify token for display."""
+        token = obj.webhook_verify_token
+        if not token:
+            return "(not set)"
+        if len(token) > 8:
+            return f"{token[:4]}{'*' * (len(token) - 8)}{token[-4:]}"
+        elif len(token) > 4:
+            return f"{token[:2]}{'*' * (len(token) - 4)}{token[-2:]}"
+        return "****"
 
 
 class ConnectChannelSerializer(serializers.Serializer):
@@ -354,6 +366,38 @@ class ConnectedAccountStatusSerializer(serializers.Serializer):
     """Input for the enable/disable action."""
 
     status = serializers.ChoiceField(choices=["connected", "disconnected"])
+
+
+class MaskedCredentialsSerializer(serializers.Serializer):
+    """Returns masked credential values for display in settings UI.
+
+    Never returns actual credential values - only masked representations.
+    Secrets (tokens, secrets, keys) show last 4 chars only.
+    Non-secrets show first 4 + last 4 chars.
+    Empty values show as (empty).
+    """
+
+    credentials = serializers.DictField(read_only=True)
+    credential_count = serializers.IntegerField(read_only=True)
+    credential_keys = serializers.ListField(read_only=True, child=serializers.CharField())
+    has_credentials = serializers.BooleanField(read_only=True)
+
+
+class UpdateCredentialsSerializer(serializers.Serializer):
+    """Input for updating specific credential fields.
+
+    Allows partial updates to credentials without requiring the full
+    credential object. Only the fields being updated need to be provided.
+    """
+
+    credentials = serializers.DictField(required=False, help_text="Partial or full credential dict to update")
+    webhook_verify_token = serializers.CharField(required=False, allow_blank=True, max_length=255)
+
+    def validate_credentials(self, value):
+        """Ensure credentials is a dict if provided."""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Credentials must be a dictionary.")
+        return value
 
 
 # ===========================================================================

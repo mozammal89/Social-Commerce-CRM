@@ -56,6 +56,7 @@ from .serializers import (
     MergeCustomerSerializer,
     MessageSerializer,
     SendMessageSerializer,
+    UpdateCredentialsSerializer,
 )
 
 User = get_user_model()
@@ -444,6 +445,140 @@ def verify_channel(request, channel_id):
         raise NotFound("Channel not found.")
     account = services.ChannelService.verify_account(account=account, actor=request.user)
     return Response(ConnectedAccountSerializer(account).data)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+@current_store
+def account_settings(request, channel_id):
+    """Get account settings including masked credentials.
+
+    Returns a detailed view of a connected account with masked credential
+    values for display in the settings UI. Credentials are never returned
+    in plain text - only masked representations. Requires
+    ``connected_channels.view``.
+    """
+    from apps.permissions.resolver import PermissionResolver
+    store = request.store
+    if not PermissionResolver().check(request.user, store, "connected_channels.view"):
+        raise PermissionDenied("You cannot view channel settings.")
+
+    account = ConnectedAccount.objects.filter(store=store, id=channel_id).first()
+    if account is None:
+        raise NotFound("Channel not found.")
+
+    # Get the channel for webhook URL
+    channel = account.channel
+
+    # Mask credentials for display
+    masked_creds = {}
+    if account.credentials and isinstance(account.credentials, dict):
+        for key, value in account.credentials.items():
+            if not value:
+                masked_creds[key] = "(empty)"
+            elif any(secret_word in key.lower() for secret_word in ['secret', 'token', 'password', 'key']):
+                # For secrets, show last 4 chars only
+                str_val = str(value)
+                if len(str_val) > 8:
+                    masked_creds[key] = f"{'*' * (len(str_val) - 4)}{str_val[-4:]}"
+                else:
+                    masked_creds[key] = "****"
+            else:
+                # For non-secrets, show first 4 + last 4
+                str_val = str(value)
+                if len(str_val) > 8:
+                    masked_creds[key] = f"{str_val[:4]}{'*' * (len(str_val) - 8)}{str_val[-4:]}"
+                else:
+                    masked_creds[key] = "****"
+
+    # Build webhook URL
+    from django.contrib.sites.shortcuts import get_current_site
+    site = get_current_site(request)
+    webhook_url = f"{request.scheme}://{site.domain}/messaging/webhooks/{channel.slug}/{account.id}/"
+
+    return Response({
+        "account": ConnectedAccountSerializer(account).data,
+        "credentials": {
+            "masked": masked_creds,
+            "keys": list(account.credentials.keys()) if account.credentials else [],
+            "count": len(account.credentials) if account.credentials else 0,
+            "has_credentials": bool(account.credentials),
+        },
+        "webhook": {
+            "url": webhook_url,
+            "verify_token": mask_token(account.webhook_verify_token),
+        },
+    })
+
+
+def mask_token(token: str) -> str:
+    """Mask a token for display."""
+    if not token:
+        return "(not set)"
+    if len(token) > 8:
+        return f"{token[:4]}{'*' * (len(token) - 8)}{token[-4:]}"
+    elif len(token) > 4:
+        return f"{token[:2]}{'*' * (len(token) - 4)}{token[-2:]}"
+    return "****"
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+@current_store
+def update_account_credentials(request, channel_id):
+    """Update credentials for a connected account.
+
+    Allows updating specific credential fields without requiring the full
+    credential object. This is useful for rotating expiring tokens or
+    updating individual fields. Requires ``connected_channels.update``.
+    """
+    from apps.permissions.resolver import PermissionResolver
+    store = request.store
+    if not PermissionResolver().check(request.user, store, "connected_channels.update"):
+        raise PermissionDenied("You cannot update channel credentials.")
+
+    account = ConnectedAccount.objects.filter(store=store, id=channel_id).first()
+    if account is None:
+        raise NotFound("Channel not found.")
+
+    serializer = UpdateCredentialsSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    # Update credentials if provided
+    new_creds = serializer.validated_data.get("credentials")
+    if new_creds:
+        # Merge with existing credentials
+        existing_creds = account.credentials or {}
+        existing_creds.update(new_creds)
+        account.credentials = existing_creds
+
+    # Update webhook verify token if provided
+    new_token = serializer.validated_data.get("webhook_verify_token")
+    if new_token is not None:
+        account.webhook_verify_token = new_token
+
+    account.save(update_fields=["credentials", "webhook_verify_token", "updated_at"])
+
+    # Log the activity
+    services.ActivityService.track(
+        store=store,
+        actor=request.user,
+        account=account,
+        action_type="credentials_updated",
+        description=f"Credentials updated for {account.name}",
+    )
+
+    # Verify the updated credentials
+    try:
+        account = services.ChannelService.verify_account(account=account, actor=request.user)
+    except Exception as e:
+        # Verification failed, but still return success for the update
+        pass
+
+    return Response({
+        "account": ConnectedAccountSerializer(account).data,
+        "message": "Credentials updated successfully",
+    })
 
 
 # ===========================================================================

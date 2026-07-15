@@ -95,6 +95,18 @@ function channelsApp() {
         connectCreds: {},           // {field_key: value}
         connecting: false,
 
+        // Settings modal state
+        showSettings: false,
+        settingsAccount: null,      // the account being edited
+        settingsData: null,         // { credentials: {...}, webhook: {...} }
+        settingsTab: 'details',
+        loadingSettings: false,
+        updateField: '',
+        updateValue: '',
+        newVerifyToken: '',
+        showVerifyToken: false,
+        updatingCredentials: false,
+
         /* ---- lifecycle ---- */
         async init() {
             const el = this.$el;
@@ -271,6 +283,106 @@ function channelsApp() {
             finally { this.verifyingId = null; }
         },
 
+        /* ---- settings modal ---- */
+        async openSettings(account) {
+            this.settingsAccount = account;
+            this.settingsData = null;
+            this.settingsTab = 'details';
+            this.loadingSettings = true;
+            this.showSettings = true;
+            this.updateField = '';
+            this.updateValue = '';
+            this.newVerifyToken = '';
+            this.showVerifyToken = false;
+
+            try {
+                const data = await api(`${this.apiBase}/channels/${account.id}/settings/`, {
+                    storeId: this.storeId,
+                });
+                this.settingsData = data;
+                // Store the verify token for the current account
+                this.currentVerifyToken = data.webhook?.verify_token || '';
+            } catch (err) {
+                this.notify(err.message, 'error');
+                this.showSettings = false;
+            } finally {
+                this.loadingSettings = false;
+            }
+        },
+
+        editCredential(key) {
+            this.updateField = key;
+            this.updateValue = '';
+            // Focus the input after Alpine updates
+            this.$nextTick(() => {
+                const input = document.querySelector(`input[placeholder*="${key}"]`);
+                if (input) input.focus();
+            });
+        },
+
+        async submitCredentialUpdate() {
+            if (!this.updateField || !this.updateValue || this.updatingCredentials) return;
+
+            this.updatingCredentials = true;
+            try {
+                const data = await api(`${this.apiBase}/channels/${this.settingsAccount.id}/credentials/`, {
+                    method: 'POST',
+                    storeId: this.storeId,
+                    body: {
+                        credentials: {
+                            [this.updateField]: this.updateValue,
+                        },
+                    },
+                });
+                this.notify('Credential updated successfully.', 'success');
+                this.updateField = '';
+                this.updateValue = '';
+                // Reload settings to show updated masked value
+                await this.openSettings(this.settingsAccount);
+                // Reload accounts to reflect any status changes
+                await this.loadAccounts();
+            } catch (err) {
+                this.notify(err.message, 'error');
+            } finally {
+                this.updatingCredentials = false;
+            }
+        },
+
+        toggleVerifyToken() {
+            this.showVerifyToken = !this.showVerifyToken;
+        },
+
+        async submitVerifyTokenUpdate() {
+            if (!this.newVerifyToken || this.updatingCredentials) return;
+
+            this.updatingCredentials = true;
+            try {
+                const data = await api(`${this.apiBase}/channels/${this.settingsAccount.id}/credentials/`, {
+                    method: 'POST',
+                    storeId: this.storeId,
+                    body: {
+                        webhook_verify_token: this.newVerifyToken,
+                    },
+                });
+                this.notify('Verify token updated successfully.', 'success');
+                this.newVerifyToken = '';
+                // Reload settings to show updated masked value
+                await this.openSettings(this.settingsAccount);
+            } catch (err) {
+                this.notify(err.message, 'error');
+            } finally {
+                this.updatingCredentials = false;
+            }
+        },
+
+        copyWebhookUrl() {
+            const url = this.settingsData?.webhook?.url || '';
+            navigator.clipboard?.writeText(url).then(
+                () => this.notify('Webhook URL copied.', 'success'),
+                () => this.notify('Copy failed — select and copy manually.', 'error'),
+            );
+        },
+
         /* ---- helpers ---- */
         webhookUrl(account) {
             if (!account.id) return '';
@@ -292,6 +404,17 @@ function channelsApp() {
 
         statusMeta(status) {
             return STATUS_META[status] || STATUS_META.pending;
+        },
+
+        maskToken(token) {
+            if (!token) return '(not set)';
+            if (token === '(in account settings)') return token;
+            if (token.length > 8) {
+                return `${token.slice(0, 4)}${'*'.repeat(token.length - 8)}${token.slice(-4)}`;
+            } else if (token.length > 4) {
+                return `${token.slice(0, 2)}${'*'.repeat(token.length - 4)}${token.slice(-2)}`;
+            }
+            return '****';
         },
 
         /** Delegate to the project's global notification system. */
