@@ -507,6 +507,7 @@ def account_settings(request, channel_id):
         "webhook": {
             "url": webhook_url,
             "verify_token": mask_token(account.webhook_verify_token),
+            "verify_token_raw": account.webhook_verify_token or None,  # For show/hide toggle
         },
     })
 
@@ -559,13 +560,18 @@ def update_account_credentials(request, channel_id):
 
     account.save(update_fields=["credentials", "webhook_verify_token", "updated_at"])
 
-    # Log the activity
-    services.ActivityService.track(
+    # Log the activity (account info stored in metadata)
+    from .models import Activity
+    Activity.objects.create(
         store=store,
         actor=request.user,
-        account=account,
         action_type="credentials_updated",
         description=f"Credentials updated for {account.name}",
+        metadata={
+            "account_id": str(account.id),
+            "account_name": account.name,
+            "channel_slug": account.channel.slug if account.channel else None,
+        },
     )
 
     # Verify the updated credentials

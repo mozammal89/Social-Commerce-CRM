@@ -381,16 +381,16 @@
                       <table class="table table-sm small">
                         <thead>
                           <tr>
-                            <th>Field</th>
-                            <th>Value (Masked)</th>
-                            <th>Action</th>
+                            <th style="width: 35%;">Field</th>
+                            <th style="width: 50%;">Value (Masked)</th>
+                            <th style="width: 15%;">Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           <template x-for="key in settingsData?.credentials?.keys || []" :key="key">
                             <tr>
-                              <td><code x-text="key"></code></td>
-                              <td><code class="text-muted" x-text="settingsData?.credentials?.masked[key]"></code></td>
+                              <td><span x-text="getCredentialLabel(key)"></span></td>
+                              <td><code class="text-muted" style="word-break: break-all; max-width: 300px; display: inline-block;" x-text="settingsData?.credentials?.masked[key]"></code></td>
                               <td>
                                 <button class="btn btn-sm btn-outline-primary" @click="editCredential(key)">Update</button>
                               </td>
@@ -414,20 +414,20 @@
                   <h6 class="fw-bold mb-3">Quick Update</h6>
                   <div class="mb-3">
                     <label class="form-label">Field to Update</label>
-                    <select class="form-select" x-model="updateField">
+                    <select class="form-select" x-model="updateFieldKey">
                       <option value="">Select a field...</option>
                       <template x-for="key in settingsData?.credentials?.keys || []" :key="key">
-                        <option :value="key" x-text="key"></option>
+                        <option :value="key" x-text="getCredentialLabel(key)"></option>
                       </template>
                     </select>
                   </div>
-                  <div class="mb-3" x-show="updateField">
+                  <div class="mb-3" x-show="updateFieldKey">
                     <label class="form-label">New Value</label>
                     <input type="password" class="form-control" x-model="updateValue"
-                           :placeholder="`Enter new ${updateField}...`">
+                           :placeholder="`Enter new value for ${getCredentialLabel(updateFieldKey)}...`">
                   </div>
                   <button class="btn btn-primary btn-sm" @click="submitCredentialUpdate()"
-                          :disabled="!updateField || !updateValue || updatingCredentials">
+                          :disabled="!updateFieldKey || !updateValue || updatingCredentials">
                     <span x-show="!updatingCredentials"><i class="bi bi-check-lg me-1"></i>Update</span>
                     <span x-show="updatingCredentials"><span class="spinner-border spinner-border-sm me-1"></span>Updating...</span>
                   </button>
@@ -448,9 +448,9 @@
                 </div>
 
                 <div class="mb-4">
-                  <label class="form-label">Verify Token (Masked)</label>
+                  <label class="form-label">Current Verify Token</label>
                   <div class="input-group">
-                    <input type="text" class="form-control" readonly :value="settingsData?.webhook?.verify_token">
+                    <input :type="showVerifyToken ? 'text' : 'password'" class="form-control" readonly :value="showVerifyToken ? (settingsData?.webhook?.verify_token_raw || '(not set)') : (settingsData?.webhook?.verify_token || '(not set)')">
                     <button class="btn btn-outline-secondary" @click="toggleVerifyToken()" :title="showVerifyToken ? 'Hide' : 'Show'">
                       <i class="bi" :class="showVerifyToken ? 'bi-eye-slash' : 'bi-eye'"></i>
                     </button>
@@ -462,8 +462,13 @@
                   <h6 class="fw-bold mb-3">Update Verify Token</h6>
                   <div class="mb-3">
                     <label class="form-label">New Verify Token</label>
-                    <input type="text" class="form-control" x-model="newVerifyToken"
-                           placeholder="Enter new verify token...">
+                    <div class="input-group">
+                      <input type="text" class="form-control" x-model="newVerifyToken"
+                             placeholder="Enter new verify token...">
+                      <button class="btn btn-outline-secondary" @click="generateVerifyToken()" title="Generate random token">
+                        <i class="bi bi-magic"></i>
+                      </button>
+                    </div>
                   </div>
                   <button class="btn btn-primary btn-sm" @click="submitVerifyTokenUpdate()"
                           :disabled="!newVerifyToken || updatingCredentials">

@@ -52,6 +52,28 @@ const CREDENTIAL_FIELDS = {
     ],
 };
 
+// User-friendly labels for credential field names
+const CREDENTIAL_LABELS = {
+    // Facebook
+    'page_id': 'Page ID',
+    'page_access_token': 'Page Access Token',
+    'app_id': 'App ID',
+    'app_secret': 'App Secret',
+    'user_access_token': 'User Access Token',
+    'user_token_expires_at': 'User Token Expires',
+    'page_token_obtained_at': 'Page Token Obtained',
+    // WhatsApp
+    'phone_number_id': 'Phone Number ID',
+    'access_token': 'Access Token',
+    'waba_id': 'WABA ID',
+    'verify_token': 'Verify Token',
+    // Generic
+    'token': 'Token',
+    'secret': 'Secret',
+    'key': 'API Key',
+    'id': 'ID',
+};
+
 const CHANNEL_ICONS = {
     facebook_messenger: 'bi-messenger',
     whatsapp: 'bi-whatsapp',
@@ -101,7 +123,7 @@ function channelsApp() {
         settingsData: null,         // { credentials: {...}, webhook: {...} }
         settingsTab: 'details',
         loadingSettings: false,
-        updateField: '',
+        updateFieldKey: '',         // stores the actual field key for API calls
         updateValue: '',
         newVerifyToken: '',
         showVerifyToken: false,
@@ -290,7 +312,7 @@ function channelsApp() {
             this.settingsTab = 'details';
             this.loadingSettings = true;
             this.showSettings = true;
-            this.updateField = '';
+            this.updateFieldKey = '';
             this.updateValue = '';
             this.newVerifyToken = '';
             this.showVerifyToken = false;
@@ -300,8 +322,6 @@ function channelsApp() {
                     storeId: this.storeId,
                 });
                 this.settingsData = data;
-                // Store the verify token for the current account
-                this.currentVerifyToken = data.webhook?.verify_token || '';
             } catch (err) {
                 this.notify(err.message, 'error');
                 this.showSettings = false;
@@ -310,18 +330,23 @@ function channelsApp() {
             }
         },
 
+        getCredentialLabel(key) {
+            return CREDENTIAL_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
+        },
+
         editCredential(key) {
-            this.updateField = key;
+            this.updateFieldKey = key;
+            this.updateField = this.getCredentialLabel(key);
             this.updateValue = '';
             // Focus the input after Alpine updates
             this.$nextTick(() => {
-                const input = document.querySelector(`input[placeholder*="${key}"]`);
+                const input = document.querySelector('input[type="password"]');
                 if (input) input.focus();
             });
         },
 
         async submitCredentialUpdate() {
-            if (!this.updateField || !this.updateValue || this.updatingCredentials) return;
+            if (!this.updateFieldKey || !this.updateValue || this.updatingCredentials) return;
 
             this.updatingCredentials = true;
             try {
@@ -330,12 +355,12 @@ function channelsApp() {
                     storeId: this.storeId,
                     body: {
                         credentials: {
-                            [this.updateField]: this.updateValue,
+                            [this.updateFieldKey]: this.updateValue,
                         },
                     },
                 });
                 this.notify('Credential updated successfully.', 'success');
-                this.updateField = '';
+                this.updateFieldKey = '';
                 this.updateValue = '';
                 // Reload settings to show updated masked value
                 await this.openSettings(this.settingsAccount);
@@ -350,6 +375,11 @@ function channelsApp() {
 
         toggleVerifyToken() {
             this.showVerifyToken = !this.showVerifyToken;
+        },
+
+        generateVerifyToken() {
+            // Generate a random token similar to the connect modal
+            this.newVerifyToken = 'crm_' + Math.random().toString(36).slice(2, 14);
         },
 
         async submitVerifyTokenUpdate() {
