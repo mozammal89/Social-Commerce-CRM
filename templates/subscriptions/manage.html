@@ -32,10 +32,10 @@
 </div>
 
 {% else %}
-<!-- {# Cancellation banner — only rendered when the user has scheduled a
+<!--  Cancellation banner — only rendered when the user has scheduled a
    cancel-at-period-end. The same flag drives the Reactivate card in
    the sidebar (below), so the banner and the sidebar CTA can never
-   disagree about whether cancellation is pending. #} -->
+   disagree about whether cancellation is pending.  -->
 {% if cancellation_scheduled %}
 <div class="alert alert-warning d-flex align-items-start mb-4" role="alert">
     <i class="bi bi-exclamation-triangle-fill me-3 fs-4"></i>
@@ -61,14 +61,14 @@
 </div>
 {% endif %}
 
-<!-- {# Trial-ending-soon banner. Shown when the user is on a trial that
+<!--  Trial-ending-soon banner. Shown when the user is on a trial that
    will expire within the next 3 days (and hasn't already ended). Trial
    subs have no ``current_period_end`` (no billing period clock), so the
    active-sub renewal banner logic above doesn't cover them — this
    banner fills that gap using ``trial_days_remaining`` which the view
    computes for exactly this purpose. ``is_trial`` guards against the
    banner firing for non-trialing statuses where the value happens to
-   be set. #} -->
+   be set.  -->
 {% if is_trial and trial_days_remaining is not None and trial_days_remaining <= 3 and trial_days_remaining >= 0 %}
 <div class="alert alert-info d-flex align-items-start mb-4" role="alert">
     <i class="bi bi-clock-history me-3 fs-4"></i>
@@ -344,7 +344,7 @@
         {% endif %}
 
         <!-- Cancel / Reactivate Subscription -->
-        <!-- {# When the user has scheduled a cancel-at-period-end, the Cancel
+        <!--  When the user has scheduled a cancel-at-period-end, the Cancel
            card is replaced with a Reactivate card (same slot, same shape,
            same `confirmCancel()`-style styling — just a different action).
            We gate on ``is_cancel_scheduled`` (the *narrower* predicate)
@@ -352,7 +352,7 @@
            sub (``status='canceled'``) can't be reversed with the simple
            ``ends_at = None`` flow — that needs a re-subscribe path. The
            ``can_cancel`` else-branch covers the default active/trial
-           state. #} -->
+           state.  -->
         {% if is_cancel_scheduled %}
         <div class="cancel-sub-card manage-sidebar-card mb-3">
             <div class="card-header">
@@ -577,12 +577,12 @@
         changePlan(slug, action);
     }
 
-    // {# The cancel handlers (``confirmCancel`` / ``performCancel``) only
+    //  The cancel handlers (``confirmCancel`` / ``performCancel``) only
     //    apply when the user can actually press Cancel. The
     //    ``reactivateSubscription`` handler is wired only when
     //    cancellation is genuinely scheduled (not for immediate-cancel
     //    subs — those need a full re-subscribe flow, not just an
-    //    ``ends_at = None``). #}
+    //    ``ends_at = None``). 
     {% if can_cancel or is_cancel_scheduled %}
     /**
      * Replaces the original ``confirmCancel()`` that used

@@ -6,6 +6,10 @@
  * =====================================================================
  */
 
+/* Hide Alpine.js-managed elements until the framework initializes them
+   to avoid template flashes (e.g. the sidebar unread badge). */
+[x-cloak] { display: none !important; }
+
 /* =====================================================================
    DESIGN TOKENS - CSS Custom Properties
    ===================================================================== */
@@ -868,7 +872,7 @@ body {
 }
 
 .content-container {
-    padding: var(--space-8);
+    padding: 0px 10px;
     max-width: 100%;
     flex: 1;
 }
@@ -1212,7 +1216,7 @@ body {
 /* Ghost Button */
 .btn-ghost {
     background: transparent;
-    border-color: transparent;
+    /* border-color: transparent; */
     color: var(--text-secondary);
 }
 
@@ -1403,6 +1407,7 @@ textarea.form-control {
 .dropdown-menu.show {
     display: block;
     animation: dropdownFadeIn 0.15s ease-out;
+    cursor: pointer;
 }
 
 .dropdown-menu-end {
@@ -1715,7 +1720,7 @@ textarea.form-control {
 
 /* Page Breadcrumb Container */
 .page-breadcrumb {
-    padding: var(--space-3) var(--space-4);
+    padding: var(--space-1) var(--space-4);
     margin-bottom: var(--space-4);
     background: var(--surface-secondary);
     border-bottom: 1px solid var(--border-light);
@@ -1874,10 +1879,10 @@ textarea.form-control {
     color: var(--warning-600);
 }
 
-.alert-info i,
+/* .alert-info i,
 .alert--info i {
-    /* color: var(--info-50); */
-}
+    color: var(--info-50);
+} */
 
 /* Alert close button styling */
 .alert .btn-close {
@@ -2388,11 +2393,6 @@ textarea.form-control {
 /* =====================================================================
    CONTENT CONTAINER RESPONSIVE PADDING
    ===================================================================== */
-
-.content-container {
-    padding: var(--space-8);
-}
-
 @media (max-width: 991.98px) {
     .content-container {
         padding: var(--space-6);

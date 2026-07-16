@@ -411,6 +411,6 @@
 {% endblock %}
 
 {% block extra_js %}
-{# ``team-management.js`` initializes itself on DOMContentLoaded — do not call ``TeamManagement.init()`` here too, or every action button will fire two API requests per click. #}
+ <!-- ``team-management.js`` initializes itself on DOMContentLoaded — do not call ``TeamManagement.init()`` here too, or every action button will fire two API requests per click. -->
 <script src="{% static 'js/team-management.js' %}"></script>
 {% endblock %}

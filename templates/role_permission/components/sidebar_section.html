@@ -1,10 +1,10 @@
 {% load rbac %}
-<!-- {# Reusable "Roles & Permissions" sidebar block.
+<!-- Reusable "Roles & Permissions" sidebar block.
 
    The Members link is rendered by the parent Settings section
    (``templates/components/sidebar.html``) as "Team Management", so this
    block only renders the other admin pages.
-#} -->
+ -->
 {% can_any "roles.view" "permissions.view" "audit.view" "permissions.override_grant" as show_rp_nav %}
 {% if show_rp_nav %}
 <div class="sidebar-section-title" style="padding-left: var(--space-3); margin-top: var(--space-3);">

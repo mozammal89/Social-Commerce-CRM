@@ -5,6 +5,7 @@ This file contains shared settings across all environments.
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from environ import Env
@@ -27,6 +28,9 @@ REDIS_URL = env.str("REDIS_URL", default="redis://localhost:6379/0")
 
 
 DJANGO_APPS = [
+    # Daphne must be listed before django.contrib.staticfiles so it
+    # replaces the runserver command with the ASGI-aware version.
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -38,6 +42,7 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
+    "channels",
     "rest_framework",
     "rest_framework_simplejwt",
     "drf_spectacular",
@@ -56,6 +61,7 @@ LOCAL_APPS = [
     "apps.permissions.ui",
     "apps.subscriptions",
     "apps.help",
+    "apps.messaging",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -106,6 +112,8 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+# Channels: the ASGI application is now a ProtocolTypeRouter that splits
+# HTTP and WebSocket traffic. See ``config/asgi.py``.
 ASGI_APPLICATION = "config.asgi.application"
 
 
@@ -116,7 +124,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
         "OPTIONS": {
-            "min_length": 8,
+            "min_length": 6,
         },
     },
     {
@@ -183,6 +191,20 @@ CACHES = {
     },
 }
 
+# Django Channels — Redis-backed channel layer for cross-process WebSocket
+# broadcast. Celery workers (webhook ingestion) call
+# ``channel_layer.group_send(...)`` and every Daphne instance subscribed
+# to that group delivers the event to its connected clients. A separate
+# Redis DB (``REDIS_URL`` is reused but Channels uses its own keyspace).
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [REDIS_URL],
+        },
+    },
+}
+
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -217,8 +239,11 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": "timedelta(hours=1)",
-    "REFRESH_TOKEN_LIFETIME": "timedelta(days=7)",
+    # SimpleJWT expects actual timedelta objects, not strings — the string
+    # form ("timedelta(hours=1)") crashes token generation with
+    # ``TypeError: unsupported operand type(s) for +: datetime and str``.
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "ALGORITHM": "HS256",
@@ -355,3 +380,30 @@ STORAGES = {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# Omnichannel messaging
+#
+# ``MESSAGING_ENCRYPTION_KEY`` is the Fernet key used by
+# ``apps.messaging.fields.EncryptedJSONField`` to encrypt connected-account
+# credentials (OAuth tokens, app secrets, webhook signing secrets) at rest.
+# Generate a production key with::
+#
+#     python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+#
+# The value below is a throwaway dev key; ALWAYS override it in production
+# via the environment so stored credentials are not decryptable with a
+# public key. Rotating the key invalidates existing ciphertext (the field
+# degrades to surfacing raw text rather than crashing), so rotate
+# deliberately and re-connect accounts afterward.
+# ---------------------------------------------------------------------------
+MESSAGING_ENCRYPTION_KEY = env.str(
+    "MESSAGING_ENCRYPTION_KEY",
+    default="uTZ5mqfZu7u_aKaPTaIrOAtJGjOE6e-Yc4AC0Y5Zcdc=",
+)
+
+# Hard cap (days) on message history regardless of plan, so a mis-set
+# ``SubscriptionPlan.message_retention_days`` can never cause unbounded
+# growth. Plans use 30/60/90 days; anything higher is clipped to this.
+MESSAGING_MAX_RETENTION_DAYS = env.int("MESSAGING_MAX_RETENTION_DAYS", default=90)

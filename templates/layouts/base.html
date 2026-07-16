@@ -48,12 +48,13 @@
     <script src="{% static 'js/dropdown-fix.js' %}"></script>
     <script src="{% static 'js/direct-table-dropdown.js' %}"></script>
     <script src="{% static 'js/plan-management.js' %}"></script>
+    <script src="{% static 'js/inbox_badge.js' %}"></script>
     
     {% block extra_js %}{% endblock %}
 
     <form style="display:none">{% csrf_token %}</form>
 
-    {# Central confirmation modal — available on every page via window.confirmAction(). #}
+    <!-- Central confirmation modal — available on every page via window.confirmAction(). -->
     {% include 'components/confirm_modal.html' %}
 
 </body>

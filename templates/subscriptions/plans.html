@@ -292,7 +292,7 @@
             <p>Start with a free trial. No credit card required.</p>
         </div>
 
-        {# Filter Toggle Bar #}
+        <!-- Filter Toggle Bar -->
         <div class="filter-bar">
             <div class="filter-group">
                 <button class="filter-btn active" id="monthlyBtn" onclick="toggleBilling('monthly')">Monthly</button>
@@ -300,7 +300,7 @@
             </div>
         </div>
 
-        {# Monthly Plans #}
+        <!-- Monthly Plans -->
         <div class="row g-4 mb-5" id="monthlyPlans">
             {% for plan in monthly_plans %}
             <div class="col-lg-3 col-md-6">
@@ -342,7 +342,7 @@
             {% endfor %}
         </div>
 
-        {# Yearly Plans (hidden by default) #}
+        <!-- Yearly Plans (hidden by default) -->
         <div class="row g-4 mb-5" id="yearlyPlans" style="display: none;">
             {% for plan in yearly_plans %}
             <div class="col-lg-4 col-md-6">
@@ -384,7 +384,7 @@
             {% endfor %}
         </div>
 
-        {# Info Section #}
+        <!-- Info Section -->
         <div class="info-section">
             <h3 class="h5 mb-4">Why Choose {{ APP_NAME }}?</h3>
             <div class="info-grid">
@@ -418,7 +418,7 @@
             </div>
         </div>
 
-        {# FAQ Section #}
+        <!-- FAQ Section -->
         <div class="faq-section">
             <h2>Frequently Asked Questions</h2>
             <div class="faq-grid">

@@ -48,7 +48,23 @@ app.conf.beat_schedule = {
         "schedule": crontab(hour=2, minute=0),  # 02:00 daily
         "kwargs": {"grace_days": 7},
     },
-
+    # Omnichannel messaging: purge message history beyond each store's
+    # plan retention (30/60/90 days, capped by MESSAGING_MAX_RETENTION_DAYS).
+    # Runs at 03:00 daily, after the subscription sweeps so the latest
+    # plan/retention values are in effect.
+    "purge-expired-messages-daily": {
+        "task": "apps.messaging.tasks.purge_expired_messages",
+        "schedule": crontab(hour=3, minute=0),  # 03:00 daily
+    },
+    # Omnichannel messaging: validate token health and auto-refresh
+    # expiring channel credentials (e.g. Facebook long-lived user/page
+    # tokens). Runs at 04:00 daily — after the retention purge so the
+    # log is clean. Accounts whose tokens can't be refreshed are marked
+    # ``expired`` so the store owner is prompted to reconnect.
+    "validate-channel-tokens-daily": {
+        "task": "apps.messaging.tasks.validate_channel_tokens",
+        "schedule": crontab(hour=4, minute=0),  # 04:00 daily
+    },
 }
 
 

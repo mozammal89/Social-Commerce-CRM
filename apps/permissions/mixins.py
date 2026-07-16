@@ -45,7 +45,7 @@ class StoreContextMixin:
     store_required: bool = True
 
     def initial(self, request, *args, **kwargs):
-        from .models import Store
+        from apps.stores.models import Store
 
         raw = kwargs.get(self.store_kwarg)
         if not raw:

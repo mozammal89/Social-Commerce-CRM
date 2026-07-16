@@ -1,7 +1,7 @@
-{# Auth state card partial (success / warning / danger / info).
+<!--  Auth state card partial (success / warning / danger / info).
    Usage:
      {% include 'components/auth_state_card.html' with icon='check-circle' tone='success' title='...' body='...' %}
-#}
+ -->
 {% if icon or title or body %}
 <section class="auth-card auth-card--state auth-card--narrow" {% if tone == 'danger' or tone == 'warning' %}role="alert"{% else %}role="status"{% endif %}>
     {% if icon %}

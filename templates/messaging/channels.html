@@ -1,0 +1,720 @@
+{% extends 'layouts/dashboard.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - {{ APP_NAME }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  @keyframes channels-spin { to { transform: rotate(360deg); } }
+  .spin { animation: channels-spin .8s linear infinite; display: inline-block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container" x-data="channelsApp()" data-store-id="{{ store_id }}" data-is-superuser="{{ is_superuser|yesno:'true,false' }}" x-cloak>
+
+  <!-- Page header -->
+  <div class="section-header mb-4 d-flex align-items-center justify-content-between">
+    <div>
+      <h1 class="section-title"><i class="bi bi-broadcast me-2"></i>Connected Channels</h1>
+      <p class="section-subtitle">Connect Facebook Pages and WhatsApp numbers, then manage them here.</p>
+    </div>
+    <button class="btn btn-outline-success btn-sm d-flex align-items-center gap-1" @click="showWaGuide = true">
+      <i class="bi bi-whatsapp"></i>
+      <span class="d-none d-sm-inline">WhatsApp Setup Guide</span>
+      <span class="d-sm-none">Guide</span>
+    </button>
+  </div>
+
+  <!-- Connected accounts -->
+  <div class="mb-5">
+    <h5 class="fw-bold mb-3">Connected</h5>
+
+    <!-- Loading -->  
+    <template x-if="loading">
+      <div class="row g-3">
+        <template x-for="i in 2" :key="i">
+          <div class="col-md-6">
+            <div class="card border-0 shadow-sm"><div class="card-body">
+              <div class="skeleton" style="height:60px;border-radius:8px;"></div>
+            </div></div>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <!-- Error -->
+    <template x-if="error">
+      <div class="alert alert-danger d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-triangle"></i>
+        <span x-text="error"></span>
+        <button class="btn btn-sm btn-outline-danger ms-auto" @click="loadAccounts()">Retry</button>
+      </div>
+    </template>
+
+    <!-- Empty -->
+    <template x-if="!loading && accounts.length === 0 && !error">
+      <div class="empty-state text-center py-5">
+        <div class="empty-state-icon"><i class="bi bi-plug"></i></div>
+        <h5 class="empty-state-title">No channels connected yet</h5>
+        <p class="empty-state-description">Connect Facebook Messenger or WhatsApp to start receiving messages.</p>
+      </div>
+    </template>
+
+    <!-- Account cards -->
+    <div class="row g-3">
+      <template x-for="acct in accounts" :key="acct.id">
+        <div class="col-md-6">
+          <div class="card border-0 shadow-sm h-100" :style="acct.status !== 'connected' ? 'opacity:.65;' : ''">
+            <div class="card-body">
+              <div class="d-flex align-items-start gap-3 mb-3">
+                <div class="rounded-3 d-flex align-items-center justify-content-center"
+                     style="width:48px;height:48px;background:var(--brand-50);color:var(--brand-600);">
+                  <i class="bi fs-4" :class="channelIcon(acct)"></i>
+                </div>
+                <div class="flex-grow-1 min-w-0">
+                  <h6 class="mb-0 fw-bold text-truncate" x-text="acct.name"></h6>
+                  <div class="d-flex align-items-center gap-2 mt-1">
+                    <span class="status-badge" :class="statusMeta(acct.status).cls" x-text="statusMeta(acct.status).label"></span>
+                    <small class="text-muted" x-text="acct.channel?.name || ''"></small>
+                    <i x-show="acct.status === 'connected' && acct.metadata?.verified_at"
+                       class="bi bi-patch-check-fill text-success" title="Verified"></i>
+                  </div>
+                  <div x-show="acct.status === 'connected' && acct.metadata?.verified_name"
+                       class="small text-success mt-1">
+                    <i class="bi bi-check-circle me-1"></i>
+                    <span x-text="'Verified as ' + acct.metadata.verified_name"></span>
+                  </div>
+                  <div x-show="acct.status === 'error' && acct.error_message"
+                       class="small text-danger mt-1">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    <span x-text="acct.error_message"></span>
+                  </div>
+                </div>
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-ghost" data-bs-toggle="dropdown"><i class="bi bi-three-dots"></i></button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" @click="verifyChannel(acct)" :class="{ disabled: verifyingId === acct.id }">
+                      <i class="bi me-2" :class="verifyingId === acct.id ? 'bi-arrow-repeat spin' : 'bi-wifi'"></i>
+                      <span x-text="verifyingId === acct.id ? 'Testing…' : 'Test connection'"></span>
+                    </a></li>
+                    <li><a class="dropdown-item" @click="openSettings(acct)">
+                      <i class="bi bi-gear me-2"></i>Settings
+                    </a></li>
+                    <li><a class="dropdown-item" @click="toggleStatus(acct)">
+                      <i class="bi me-2" :class="acct.status === 'connected' ? 'bi-pause-circle' : 'bi-play-circle'"></i>
+                      <span x-text="acct.status === 'connected' ? 'Disable' : 'Enable'"></span>
+                    </a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item text-danger" @click="disconnect(acct)"><i class="bi bi-x-circle me-2"></i>Disconnect</a></li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Webhook URL -->
+              <div class="bg-body-secondary rounded p-2 small">
+                <div class="d-flex align-items-center gap-2">
+                  <i class="bi bi-link-45deg text-muted"></i>
+                  <code class="flex-grow-1 text-truncate" x-text="webhookUrl(acct)"></code>
+                  <button class="btn btn-sm btn-ghost py-0 px-1" @click="copyWebhook(acct)" title="Copy"><i class="bi bi-clipboard"></i></button>
+                </div>
+                <div class="text-muted mt-1" style="font-size:.7rem;">Register this URL in your Meta App dashboard under Webhooks.</div>
+              </div>
+
+              <!-- Verify token (masked) -->
+              <div class="mt-2 small text-muted">
+                <strong>Verify Token:</strong> <code x-text="acct.webhook_verify_token_masked || '(not set)'"></code>
+              </div>
+
+              <!-- Enable/disable quick toggle -->
+              <div class="form-check form-switch mt-3">
+                <input class="form-check-input" type="checkbox" :checked="acct.status === 'connected'" @change="toggleStatus(acct)">
+                <label class="form-check-label small">Enabled</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- Available channels -->
+  <div>
+    <h5 class="fw-bold mb-3">Available Channels</h5>
+    <div class="row g-3">
+      <template x-for="ch in catalog" :key="ch.slug">
+        <div class="col-md-4">
+          <div class="card border h-100" style="border-style:dashed !important;">
+            <div class="card-body text-center py-4">
+              <i class="bi fs-1 text-muted" :class="ch.icon || 'bi-chat'"></i>
+              <h6 class="fw-bold mt-2" x-text="ch.name"></h6>
+              <p class="small text-muted mb-2" x-text="ch.description || ''"></p>
+              <button class="btn btn-primary btn-sm mt-1" @click="openConnect(ch.slug)"
+                      :disabled="!ch.adapter_available"
+                      :title="ch.adapter_available ? '' : 'Adapter not yet available'">
+                <i class="bi bi-plus-lg me-1"></i>Connect
+              </button>
+              <div x-show="!ch.adapter_available" class="badge bg-warning-subtle text-warning mt-2 small">Coming soon</div>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template x-if="catalog.length === 0">
+        <div class="col-12"><p class="text-muted small mb-0">All available channels are already connected.</p></div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ================================================================
+  Super-admin: platform channel catalog management
+  (only superusers see this — toggle channels on/off globally)
+  ================================================================ #} -->
+  <div class="mt-5" x-show="isSuperuser" x-cloak>
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <h5 class="fw-bold mb-0">Platform Channels</h5>
+      <span class="badge bg-warning-subtle text-warning small">
+        <i class="bi bi-shield-check me-1"></i>Super Admin
+      </span>
+    </div>
+    <p class="text-muted small mb-3">
+      Control which channels are available to all stores. Enable a channel here to make it appear in every store's
+      "Available Channels" list. Channels without a built adapter show as "Coming soon" but can still be toggled on.
+    </p>
+    <div class="card border-0 shadow-sm">
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Channel</th>
+              <th>Type</th>
+              <th>Adapter</th>
+              <th class="text-center">Enabled</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="ch in adminCatalog" :key="ch.id">
+              <tr>
+                <td>
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi fs-5" :class="ch.icon || 'bi-chat'" :style="!ch.is_enabled ? 'opacity:.4' : ''"></i>
+                    <div>
+                      <div class="fw-semibold" x-text="ch.name"></div>
+                      <small class="text-muted" x-text="ch.description"></small>
+                    </div>
+                  </div>
+                </td>
+                <td><code class="small" x-text="ch.channel_type"></code></td>
+                <td>
+                  <span x-show="ch.adapter_available" class="badge bg-success-subtle text-success small">Available</span>
+                  <span x-show="!ch.adapter_available" class="badge bg-warning-subtle text-warning small">Coming soon</span>
+                </td>
+                <td class="text-center">
+                  <div class="form-check form-switch d-inline-block">
+                    <input class="form-check-input" type="checkbox" :checked="ch.is_enabled"
+                           @change="adminToggle(ch, $event.target.checked)"
+                           :disabled="togglingId === ch.id">
+                  </div>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+     Connect modal
+  ================================================================ -->
+  <div class="modal fade" :class="{ show: showConnect }"
+       :style="{ display: showConnect ? 'block' : 'none' }"
+       tabindex="-1" @keydown.escape.window="showConnect = false">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 900px;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi me-2" :class="connectChannel?.icon || 'bi-chat'"></i>
+            Connect <span x-text="connectChannel?.name || ''"></span>
+          </h5>
+          <button type="button" class="btn-close" @click="showConnect = false"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Basic account info (inline fields) -->
+          <div class="row g-3 mb-3">
+            <div class="col-md-5">
+              <label class="form-label">Account Name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" x-model="connectName"
+                     :placeholder="connectChannel?.channel_type === 'whatsapp' ? 'e.g. Sales WhatsApp' : 'e.g. Main Facebook Page'">
+            </div>
+            <div class="col-md-7">
+              <label class="form-label">
+                <span x-text="connectChannel?.channel_type === 'whatsapp' ? 'WABA ID (WhatsApp Business Account)' : 'Facebook Page Numeric ID'"></span>
+                <span class="text-danger">*</span>
+              </label>
+              <input type="text" class="form-control" x-model="connectExternalId"
+                     :placeholder="connectChannel?.channel_type === 'whatsapp' ? 'e.g. 123456789012345' : 'e.g. 1029384756'">
+              <div class="form-text" style="font-size: 0.75rem;">
+                <span x-show="connectChannel?.channel_type === 'whatsapp'">
+                  From Meta Business Settings → Your Business Information
+                </span>
+                <span x-show="connectChannel?.channel_type === 'facebook_messenger'">
+                  From Facebook Page Settings → About section (Page ID)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Platform-specific credentials -->
+          <hr>
+          <div class="alert alert-info border-0 small d-flex gap-2 align-items-start"
+               x-show="connectChannel?.channel_type === 'whatsapp'">
+            <i class="bi bi-info-circle-fill text-info"></i>
+            <div>
+              <strong>New to the WhatsApp Cloud API?</strong>
+              If your number is registered with the WhatsApp Business App, you need to migrate it first.
+              <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="showWaGuide = true">
+                Read the migration guide &rarr;
+              </button>
+            </div>
+          </div>
+          <p class="text-muted small mb-3"><i class="bi bi-shield-lock me-1"></i>Credentials are encrypted at rest and never shown again after saving.</p>
+
+          <!-- Credentials organized by size -->
+          <template x-for="field in credentialFields()" :key="field.key">
+            <!-- Large fields (tokens and secrets) take full width -->
+            <div class="row g-3 mb-3" x-show="field.secret || field.key.includes('token')">
+              <div class="col-12">
+                <label class="form-label">
+                  <span x-text="field.label"></span>
+                  <span x-show="!field.optional" class="text-danger">*</span>
+                  <span x-show="field.optional" class="text-muted small">(optional)</span>
+                </label>
+                <input :type="field.secret ? 'password' : 'text'"
+                       class="form-control"
+                       :placeholder="field.placeholder"
+                       x-model="connectCreds[field.key]"
+                       @input="connectCreds[field.key] = $event.target.value">
+                <div class="form-text" x-text="field.help"></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Smaller fields grouped inline in rows -->
+          <template x-for="pair in smallCredentialFieldPairs()" :key="pair[0]?.key || 'empty'">
+            <div class="row g-3 mb-3">
+              <!-- First field in pair -->
+              <div class="col-md-6" x-show="pair[0]">
+                <label class="form-label">
+                  <span x-text="pair[0]?.label"></span>
+                  <span x-show="pair[0] && !pair[0].optional" class="text-danger">*</span>
+                  <span x-show="pair[0] && pair[0].optional" class="text-muted small">(optional)</span>
+                </label>
+                <input type="text" class="form-control"
+                       :placeholder="pair[0]?.placeholder"
+                       x-model="connectCreds[pair[0]?.key]"
+                       @input="connectCreds[pair[0]?.key] = $event.target.value">
+                <div class="form-text" x-text="pair[0]?.help"></div>
+              </div>
+
+              <!-- Second field in pair -->
+              <div class="col-md-6" x-show="pair[1]">
+                <label class="form-label">
+                  <span x-text="pair[1]?.label"></span>
+                  <span x-show="pair[1] && !pair[1].optional" class="text-danger">*</span>
+                  <span x-show="pair[1] && pair[1].optional" class="text-muted small">(optional)</span>
+                </label>
+                <input type="text" class="form-control"
+                       :placeholder="pair[1]?.placeholder"
+                       x-model="connectCreds[pair[1]?.key]"
+                       @input="connectCreds[pair[1]?.key] = $event.target.value">
+                <div class="form-text" x-text="pair[1]?.help"></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Webhook verify token -->
+          <hr>
+          <div class="row g-3">
+            <div class="col-md-12">
+              <label class="form-label">Webhook Verify Token <small class="text-muted small">(Token will be masked after saving)</small></label>
+              <div class="input-group">
+                <input type="text" class="form-control" x-model="connectVerifyToken"
+                       placeholder="Auto-generated or enter custom token">
+                <button class="btn btn-outline-secondary" @click="connectVerifyToken = 'crm_' + Math.random().toString(36).slice(2, 14)" title="Generate random token">
+                  <i class="bi bi-magic"></i>
+                </button>
+              </div>
+              <div class="form-text">Use this token when subscribing the webhook URL in your Meta App dashboard.</div>
+            </div>
+            <!-- <div class="col-md-4 d-flex align-items-end">
+              <div class="form-text text-muted">
+                <i class="bi bi-info-circle me-1"></i>
+                Token will be masked after saving
+              </div>
+            </div> -->
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" @click="showConnect = false" :disabled="connecting">Cancel</button>
+          <button class="btn btn-primary" @click="submitConnect()" :disabled="connecting">
+            <span x-show="!connecting"><i class="bi bi-check-lg me-1"></i>Connect</span>
+            <span x-show="connecting"><span class="spinner-border spinner-border-sm me-1"></span>Connecting…</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade" :class="{ show: showConnect }"
+       :style="{ display: showConnect ? 'block' : 'none' }"
+       x-show="showConnect" style="display:none;" @click="showConnect=false"></div>
+
+  <!-- ================================================================
+     Account Settings modal
+  ================================================================ -->
+  <div class="modal fade" :class="{ show: showSettings }"
+       :style="{ display: showSettings ? 'block' : 'none' }"
+       tabindex="-1" @keydown.escape.window="showSettings = false">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 850px;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi me-2" :class="settingsAccount?.channel?.icon || 'bi-chat'"></i>
+            <span x-text="settingsAccount?.name || 'Account Settings'"></span>
+          </h5>
+          <button type="button" class="btn-close" @click="showSettings = false"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Loading settings -->
+          <template x-if="loadingSettings">
+            <div class="text-center py-4">
+              <div class="spinner-border spinner-border-sm" role="status"></div>
+              <p class="text-muted mt-2 small">Loading settings...</p>
+            </div>
+          </template>
+
+          <!-- Settings tabs -->
+          <template x-if="!loadingSettings && settingsData">
+            <div>
+              <ul class="nav nav-tabs mb-3" role="tablist">
+                <li class="nav-item">
+                  <button class="nav-link" :class="{ active: settingsTab === 'details' }"
+                          @click="settingsTab = 'details'">Details</button>
+                </li>
+                <li class="nav-item">
+                  <button class="nav-link" :class="{ active: settingsTab === 'credentials' }"
+                          @click="settingsTab = 'credentials'">Credentials</button>
+                </li>
+                <li class="nav-item">
+                  <button class="nav-link" :class="{ active: settingsTab === 'webhook' }"
+                          @click="settingsTab = 'webhook'">Webhook</button>
+                </li>
+              </ul>
+
+              <!-- Details Tab -->
+              <div x-show="settingsTab === 'details'">
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="small text-muted">Account Name</label>
+                    <div class="fw-semibold" x-text="settingsAccount?.name"></div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="small text-muted">Status</label>
+                    <div><span class="badge" :class="statusMeta(settingsAccount?.status).cls" x-text="statusMeta(settingsAccount?.status).label"></span></div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="small text-muted">Channel</label>
+                    <div class="fw-semibold" x-text="settingsAccount?.channel?.name"></div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="small text-muted">External ID</label>
+                    <div><code class="small" x-text="settingsAccount?.external_id"></code></div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="small text-muted">Connected By</label>
+                    <div x-text="settingsAccount?.connected_by?.full_name || settingsAccount?.connected_by?.email || 'N/A'"></div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="small text-muted">Last Synced</label>
+                    <div x-text="settingsAccount?.last_synced_at ? new Date(settingsAccount.last_synced_at).toLocaleString() : 'Never'"></div>
+                  </div>
+                  <div class="col-12" x-show="settingsAccount?.error_message">
+                    <label class="small text-muted">Last Error</label>
+                    <div class="text-danger small" x-text="settingsAccount?.error_message"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Credentials Tab -->
+              <div x-show="settingsTab === 'credentials'">
+                <div class="alert alert-info small">
+                  <i class="bi bi-info-circle me-2"></i>
+                  Credentials are encrypted at rest. Use this form to update individual fields.
+                </div>
+
+                <!-- Masked credentials display -->
+                <template x-if="settingsData?.credentials?.has_credentials">
+                  <div class="mb-4">
+                    <h6 class="fw-bold mb-3">Stored Credentials</h6>
+                    <div class="table-responsive">
+                      <table class="table table-sm small">
+                        <thead>
+                          <tr>
+                            <th style="width: 35%;">Field</th>
+                            <th style="width: 50%;">Value (Masked)</th>
+                            <th style="width: 15%;">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <template x-for="key in settingsData?.credentials?.keys || []" :key="key">
+                            <tr>
+                              <td><span x-text="getCredentialLabel(key)"></span></td>
+                              <td><code class="text-muted" style="word-break: break-all; max-width: 300px; display: inline-block;" x-text="settingsData?.credentials?.masked[key]"></code></td>
+                              <td>
+                                <button class="btn btn-sm btn-outline-primary" @click="editCredential(key)">Update</button>
+                              </td>
+                            </tr>
+                          </template>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </template>
+
+                <template x-if="!settingsData?.credentials?.has_credentials">
+                  <div class="text-center py-4 text-muted">
+                    <i class="bi bi-lock fs-1 mb-2 d-block"></i>
+                    <p>No credentials stored for this account.</p>
+                  </div>
+                </template>
+
+                <!-- Quick update form -->
+                <div class="mt-4">
+                  <h6 class="fw-bold mb-3">Quick Update</h6>
+                  <div class="mb-3">
+                    <label class="form-label">Field to Update</label>
+                    <select class="form-select" x-model="updateFieldKey">
+                      <option value="">Select a field...</option>
+                      <template x-for="key in settingsData?.credentials?.keys || []" :key="key">
+                        <option :value="key" x-text="getCredentialLabel(key)"></option>
+                      </template>
+                    </select>
+                  </div>
+                  <div class="mb-3" x-show="updateFieldKey">
+                    <label class="form-label">New Value</label>
+                    <input type="password" class="form-control" x-model="updateValue"
+                           :placeholder="`Enter new value for ${getCredentialLabel(updateFieldKey)}...`">
+                  </div>
+                  <button class="btn btn-primary btn-sm" @click="submitCredentialUpdate()"
+                          :disabled="!updateFieldKey || !updateValue || updatingCredentials">
+                    <span x-show="!updatingCredentials"><i class="bi bi-check-lg me-1"></i>Update</span>
+                    <span x-show="updatingCredentials"><span class="spinner-border spinner-border-sm me-1"></span>Updating...</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Webhook Tab -->
+              <div x-show="settingsTab === 'webhook'">
+                <div class="mb-4">
+                  <label class="form-label">Webhook URL</label>
+                  <div class="input-group">
+                    <input type="text" class="form-control" readonly :value="settingsData?.webhook?.url">
+                    <button class="btn btn-outline-secondary" @click="copyWebhookUrl()">
+                      <i class="bi bi-clipboard"></i>
+                    </button>
+                  </div>
+                  <div class="form-text">Register this URL in your Meta App dashboard under Webhooks.</div>
+                </div>
+
+                <div class="mb-4">
+                  <label class="form-label">Current Verify Token</label>
+                  <div class="input-group">
+                    <input :type="showVerifyToken ? 'text' : 'password'" class="form-control" readonly :value="showVerifyToken ? (settingsData?.webhook?.verify_token_raw || '(not set)') : (settingsData?.webhook?.verify_token || '(not set)')">
+                    <button class="btn btn-outline-secondary" @click="toggleVerifyToken()" :title="showVerifyToken ? 'Hide' : 'Show'">
+                      <i class="bi" :class="showVerifyToken ? 'bi-eye-slash' : 'bi-eye'"></i>
+                    </button>
+                  </div>
+                  <div class="form-text">Used to verify incoming webhook requests.</div>
+                </div>
+
+                <div>
+                  <h6 class="fw-bold mb-3">Update Verify Token</h6>
+                  <div class="mb-3">
+                    <label class="form-label">New Verify Token</label>
+                    <div class="input-group">
+                      <input type="text" class="form-control" x-model="newVerifyToken"
+                             placeholder="Enter new verify token...">
+                      <button class="btn btn-outline-secondary" @click="generateVerifyToken()" title="Generate random token">
+                        <i class="bi bi-magic"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <button class="btn btn-primary btn-sm" @click="submitVerifyTokenUpdate()"
+                          :disabled="!newVerifyToken || updatingCredentials">
+                    <span x-show="!updatingCredentials"><i class="bi bi-check-lg me-1"></i>Update Token</span>
+                    <span x-show="updatingCredentials"><span class="spinner-border spinner-border-sm me-1"></span>Updating...</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" @click="showSettings = false">Close</button>
+          <button class="btn btn-primary" @click="verifyChannel(settingsAccount)" :class="{ disabled: verifyingId === settingsAccount?.id }">
+            <i class="bi me-2" :class="verifyingId === settingsAccount?.id ? 'bi-arrow-repeat spin' : 'bi-wifi'"></i>
+            <span x-text="verifyingId === settingsAccount?.id ? 'Testing…' : 'Test Connection'"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade" :class="{ show: showSettings }"
+       :style="{ display: showSettings ? 'block' : 'none' }"
+       x-show="showSettings" style="display:none;" @click="showSettings=false"></div>
+
+  <!-- ================================================================
+     WhatsApp Business Platform — onboarding & migration guide
+  ================================================================ -->
+  <div class="modal fade" :class="{ show: showWaGuide }"
+       :style="{ display: showWaGuide ? 'block' : 'none' }"
+       tabindex="-1" @keydown.escape.window="showWaGuide = false">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 720px;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-whatsapp me-2 text-success"></i>WhatsApp Business Platform Guide
+          </h5>
+          <button type="button" class="btn-close" @click="showWaGuide = false"></button>
+        </div>
+        <div class="modal-body">
+
+          <!-- Migration warning -->
+          <div class="alert alert-warning border-0 d-flex gap-3">
+            <i class="bi bi-phone-vibrate fs-4"></i>
+            <div>
+              <strong>Using the WhatsApp Business App on this number?</strong>
+              <p class="mb-0 mt-1 small">To use it with the CRM, you must migrate it to the WhatsApp Business Platform (Cloud API). Once migrated, you will manage all conversations directly from the CRM.</p>
+            </div>
+          </div>
+
+          <!-- Benefits -->
+          <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-stars me-1 text-primary"></i>Why migrate to the Cloud API?</h6>
+          <ul class="small text-muted ps-3 mb-3">
+            <li><strong>Multi-agent support</strong> — your whole team can reply from the unified inbox.</li>
+            <li><strong>Unified inbox</strong> — all channels (WhatsApp, Messenger, etc.) in one place.</li>
+            <li><strong>Team collaboration</strong> — assign, share notes, and hand off conversations.</li>
+            <li><strong>Customer management</strong> — unified profiles with full conversation history.</li>
+            <li><strong>CRM integration</strong> — orders, tags, and customer data at your fingertips.</li>
+            <li><strong>Automation</strong> — auto-replies, templates, and workflow triggers.</li>
+            <li><strong>Order & conversation management</strong> — track every customer journey.</li>
+          </ul>
+          <p class="small text-muted mb-3">The CRM replaces the WhatsApp Business mobile app for this phone number after migration.</p>
+
+          <!-- Step-by-step migration -->
+          <h6 class="fw-bold mb-3"><i class="bi bi-list-ol me-1 text-primary"></i>Step-by-step migration guide</h6>
+          <div class="accordion" id="waMigrationSteps">
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep1">
+                  Step 1 — Back up your WhatsApp Business App chats
+                </button>
+              </h2>
+              <div id="waStep1" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
+                <div class="accordion-body small">
+                  Open the WhatsApp Business App &rarr; Settings &rarr; Chats &rarr; Chat Backup &rarr; <strong>Back Up</strong>.
+                  Migration permanently transfers the number to the Cloud API.
+                </div>
+              </div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep2">
+                  Step 2 — Delete the number from the WhatsApp Business App
+                </button>
+              </h2>
+              <div id="waStep2" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
+                <div class="accordion-body small">
+                  In the WhatsApp Business App, go to Settings &rarr; Account &rarr; <strong>Delete my account</strong>. Enter your phone number and confirm. This deregisters the number so Meta's Cloud API can claim it.
+                  <div class="alert alert-danger border-0 small mt-2 mb-0 py-1"><strong>Important:</strong> do this on the old phone only. Skipping this step causes a "number already registered" error later.</div>
+                </div>
+              </div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep3">
+                  Step 3 — Add the number to your Meta Business Manager
+                </button>
+              </h2>
+              <div id="waStep3" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
+                <div class="accordion-body small">
+                  Go to <a href="https://business.facebook.com/settings/whatsapp" target="_blank">Meta Business Settings</a> &rarr; WhatsApp Manager. Under <strong>Phone Numbers</strong>, click <strong>Add phone number</strong> and follow the wizard. Select your WhatsApp Business Account (WABA) and verify the number via SMS or call.
+                </div>
+              </div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep4">
+                  Step 4 — Copy your credentials into the CRM
+                </button>
+              </h2>
+              <div id="waStep4" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
+                <div class="accordion-body small">
+                  From the WhatsApp Manager, copy:
+                  <ul class="mb-0">
+                    <li><strong>Phone Number ID</strong> — from the Phone Numbers list.</li>
+                    <li><strong>WABA ID</strong> — from Business Settings &rarr; Business Information.</li>
+                    <li><strong>Permanent Access Token</strong> — from Meta Business Settings &rarr; Users &rarr; System Users &rarr; Generate token.</li>
+                  </ul>
+                  Close this guide, click <strong>Connect</strong> on the WhatsApp card, and paste the values.
+                </div>
+              </div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep5">
+                  Step 5 — Set up the webhook
+                </button>
+              </h2>
+              <div id="waStep5" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
+                <div class="accordion-body small">
+                  In Meta &rarr; App Dashboard &rarr; WhatsApp &rarr; Configuration, paste the <strong>Webhook URL</strong> and <strong>Verify Token</strong> shown on the channel card, then subscribe to messages.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Revert guide -->
+          <hr class="my-4">
+          <h6 class="fw-bold mb-2"><i class="bi bi-arrow-counterclockwise me-1 text-secondary"></i>Want to switch back to the Business App?</h6>
+          <p class="small text-muted mb-1">You are never locked into the Cloud API. To revert:</p>
+          <ol class="small text-muted ps-3 mb-0">
+            <li>Disconnect the number in this CRM (Channels &rarr; Disconnect).</li>
+            <li>In the <a href="https://business.facebook.com/settings/whatsapp" target="_blank">Meta Business Settings</a>, remove or deregister the number from the Cloud API / WABA.</li>
+            <li>Install the WhatsApp Business App on your phone and register with the same number.</li>
+          </ol>
+          <p class="small text-muted mt-2 mb-0">Your CRM conversation history is preserved; only live WhatsApp messaging stops.</p>
+
+        </div>
+        <div class="modal-footer">
+          <a href="https://developers.facebook.com/docs/whatsapp" target="_blank" class="btn btn-ghost me-auto small">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Official WhatsApp docs
+          </a>
+          <button class="btn btn-primary" @click="showWaGuide = false">Got it</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade" :class="{ show: showWaGuide }"
+       :style="{ display: showWaGuide ? 'block' : 'none' }"
+       x-show="showWaGuide" style="display:none;" @click="showWaGuide=false"></div>
+
+  <!-- Notifications use the global showNotification() system (main.js);
+     no per-page toast markup needed. -->
+</div>
+
+<form style="display:none">{% csrf_token %}</form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/channels.js' %}"></script>
+{% endblock %}

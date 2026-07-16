@@ -1,10 +1,10 @@
 {% load static %}
 
-{# =====================================================================
+<!-- =====================================================================
    Auth layout v2 - new design system
    Used by the redesigned auth pages. Pages can extend this and fill
    the auth_content block.
-   ===================================================================== #}
+   ===================================================================== -->
 
 {% block title %}{{ block.super }}{% endblock %}
 
@@ -16,7 +16,7 @@
 
 {% block body %}
 <div class="auth-wrapper">
-    {# ----- Branding panel (left, hidden on mobile) ----- #}
+    <!-- ----- Branding panel (left, hidden on mobile) ----- -->
     <aside class="auth-branding" aria-label="Product information">
         <div class="branding-content">
             <div>
@@ -79,10 +79,10 @@
         </div>
     </aside>
 
-    {# ----- Form panel (right) ----- #}
+    <!-- ----- Form panel (right) ----- -->
     <main class="auth-form-wrapper" role="main">
         <div class="auth-form-card">
-            {# Mobile-only logo, hidden on desktop because the branding panel is visible #}
+            <!-- Mobile-only logo, hidden on desktop because the branding panel is visible -->
             <div class="auth-mobile-logo d-lg-none">
                 <img src="{% static 'images/logo.svg' %}" alt="{{ APP_NAME }}" class="auth-mobile-logo-img">
             </div>

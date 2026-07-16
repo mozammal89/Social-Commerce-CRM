@@ -4,22 +4,22 @@
 {% block title %}Dashboard - {{ APP_NAME }}{% endblock %}
 
 {% block content %}
-{# Welcome Banner #}
+<!--  Welcome Banner  -->
 {% include 'components/welcome_banner.html' %}
 
 <div class="dashboard-container">
 
-    {# ============================================================ #}
-    {#  Empty-state onboarding card                                  #}
-    {#  Renders when the user needs to complete onboarding steps     #}
-    {# ============================================================ #}
+    <!-- ============================================================ -->
+    <!--  Empty-state onboarding card                                  -->
+    <!--  Renders when the user needs to complete onboarding steps     -->
+    <!-- ============================================================ -->
     {% if user_has_no_store %}
     <div class="dashboard-section">
         <div class="card border-0 shadow-sm" style="border-radius: var(--radius-lg);">
             <div class="card-body text-center" style="padding: var(--space-10) var(--space-6);">
                 
                 {% if is_superuser %}
-                {# Superuser onboarding flow #}
+                <!-- Superuser onboarding flow -->
                 <div style="width: 80px; height: 80px; margin: 0 auto var(--space-5); display: flex; align-items: center; justify-content: center; background: var(--brand-50); border-radius: 50%; color: var(--brand-600);">
                     <i class="bi bi-shop" style="font-size: 2.5rem;"></i>
                 </div>
@@ -32,7 +32,7 @@
                 </a>
                 
                 {% elif user_subscription %}
-                {# User has subscription but no store - guide to create store #}
+                <!-- User has subscription but no store - guide to create store -->
                 <div style="width: 80px; height: 80px; margin: 0 auto var(--space-5); display: flex; align-items: center; justify-content: center; background: var(--brand-50); border-radius: 50%; color: var(--brand-600);">
                     <i class="bi bi-shop" style="font-size: 2.5rem;"></i>
                 </div>
@@ -47,7 +47,7 @@
                 </div>
 
                 {% elif has_pending_subscription %}
-                {# User has pending subscription but no store - guide to create store #}
+                <!-- User has pending subscription but no store - guide to create store -->
                 <div style="width: 80px; height: 80px; margin: 0 auto var(--space-5); display: flex; align-items: center; justify-content: center; background: var(--brand-50); border-radius: 50%; color: var(--brand-600);">
                     <i class="bi bi-shop" style="font-size: 2.5rem;"></i>
                 </div>
@@ -66,7 +66,7 @@
                 </div>
                 
                 {% else %}
-                {# User has no subscription - this shouldn't happen due to redirect, but show CTA #}
+                <!-- User has no subscription - this shouldn't happen due to redirect, but show CTA -->
                 <div style="width: 80px; height: 80px; margin: 0 auto var(--space-5); display: flex; align-items: center; justify-content: center; background: var(--warning-50); border-radius: 50%; color: var(--warning-600);">
                     <i class="bi bi-stars" style="font-size: 2.5rem;"></i>
                 </div>
@@ -85,11 +85,11 @@
     </div>
     {% else %}
 
-    {# ============================================================ #}
-    {#  Regular dashboard (member has at least one store)            #}
-    {# ============================================================ #}
+    <!-- ============================================================ -->
+    <!--  Regular dashboard (member has at least one store)            -->
+    <!-- ============================================================ -->
 
-    {# Plan-change success banner (Fix #5). #}
+    <!-- Plan-change success banner (Fix #5). -->
     {% if plan_changed %}
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         <i class="bi bi-check-circle-fill me-2"></i>
@@ -111,7 +111,7 @@
     </div>
     {% endif %}
 
-    <!-- {# Subscription-needs-attention banner. Renders when the user has
+    <!--  Subscription-needs-attention banner. Renders when the user has
        stores but their subscription is canceled/expired/past_due — the
        dashboard no longer hard-redirects them away (that produced a
        loop combined with the missing Store Management sidebar entry).
@@ -120,7 +120,7 @@
        ``user_subscription`` is the authoritative "live sub" check; the
        earlier ``subscription_needs_attention`` is just the
        has-stores boolean — the banner only renders when both are
-       true. #} -->
+       true.  -->
     {% if subscription_needs_attention and not user_subscription %}
     <div class="alert alert-warning d-flex align-items-start mb-4" role="alert">
         <i class="bi bi-exclamation-triangle-fill me-3 fs-4"></i>
@@ -142,14 +142,14 @@
     </div>
     {% endif %}
 
-    <!-- {# Trial-ending-soon banner. Mirrors the banner in
+    <!--  Trial-ending-soon banner. Mirrors the banner in
        ``templates/subscriptions/manage.html`` — shown when the resolved
        subscription is in ``trialing`` status and the trial ends within
        the next 3 days. The dashboard view (``apps.dashboard.views``)
        computes ``is_trial`` and ``trial_days_remaining`` from the same
        ``user_subscription`` resolver used everywhere else, so a trialing
        user gets a consistent countdown on both the dashboard and the
-       manage page. #} -->
+       manage page.  -->
     {% if is_trial and trial_days_remaining is not None and trial_days_remaining <= 3 and trial_days_remaining >= 0 %}
     <div class="alert alert-info d-flex align-items-start mb-4" role="alert">
         <i class="bi bi-clock-history me-3 fs-4"></i>
@@ -206,7 +206,7 @@
         </div>
     </div>
 
-    {# RBAC status pill row — role + plan + permission count #}
+    <!-- RBAC status pill row — role + plan + permission count -->
     {% if current_store %}
     <div class="dashboard-section">
         <div class="d-flex flex-wrap gap-3 align-items-center" style="padding: var(--space-3) 0;">
@@ -243,7 +243,7 @@
     {% if current_store %}
     <div class="kpi-grid kpi-grid-4 dashboard-section">
 
-        {# Revenue — requires orders.view #}
+        <!-- Revenue — requires orders.view -->
         <div class="kpi-card">
             <div class="kpi-card-header">
                 <div class="kpi-card-label">
@@ -274,7 +274,7 @@
             {% endif %}
         </div>
 
-        {# Orders — requires orders.view #}
+        <!--  Orders — requires orders.view  -->
         <div class="kpi-card">
             <div class="kpi-card-header">
                 <div class="kpi-card-label">
@@ -305,7 +305,7 @@
             {% endif %}
         </div>
 
-        {# Customers — requires customers.view #}
+        <!--  Customers — requires customers.view  -->
         <div class="kpi-card">
             <div class="kpi-card-header">
                 <div class="kpi-card-label">
@@ -336,7 +336,7 @@
             {% endif %}
         </div>
 
-        {# Low Stock — requires inventory.view #}
+        <!--  Low Stock — requires inventory.view  -->
         <div class="kpi-card">
             <div class="kpi-card-header">
                 <div class="kpi-card-label">

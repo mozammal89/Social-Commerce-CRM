@@ -1,8 +1,8 @@
-{# Reusable role card for the role list grid. #}
+<!-- Reusable role card for the role list grid. -->
 <article class="rp-role-card h-100{% if not role.is_active %} opacity-75{% endif %}"
          data-role-id="{{ role.id }}">
 
-    {# ---- Header with brand-colored gradient ---- #}
+    <!-- ---- Header with brand-colored gradient ---- -->
     <div class="rp-role-card__head d-flex align-items-center gap-3">
         <span class="rp-role-card__icon">
             {% if role.is_system %}
@@ -30,7 +30,7 @@
         {% endif %}
     </div>
 
-    {# ---- Body ---- #}
+    <!-- ---- Body ---- -->
     <div class="rp-role-card__body">
         {% if role.description %}
             <p class="rp-role-card__desc mb-2">
@@ -80,8 +80,8 @@
         </div>
         {% endif %}
 
-        <!-- {# ---- Action buttons ---- #}
-        {# Edit visible to: superusers (any role) OR store admins on non-system roles. #} -->
+        <!-- ---- Action buttons ----
+        Edit visible to: superusers (any role) OR store admins on non-system roles. -->
         <div class="rp-role-card__actions">
             <a href="{% url 'role_permission:role_detail' role_id=role.id %}"
                class="btn btn-sm btn-outline-primary flex-fill">

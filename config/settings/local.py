@@ -12,6 +12,7 @@ ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
     "0.0.0.0",
+    "outline-kilometer-abroad.ngrok-free.dev",
 ]
 
 # DATABASES = {
@@ -69,5 +70,6 @@ CSRF_TRUSTED_ORIGINS = env.list(
         "http://127.0.0.1:8000",
         "http://127.0.0.1:8003",
         "http://localhost:8003",
+        "https://outline-kilometer-abroad.ngrok-free.dev",
     ],
 )
