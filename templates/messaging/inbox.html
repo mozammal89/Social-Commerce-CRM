@@ -352,6 +352,13 @@
                          :title="deliveryMeta(msg.delivery_status).label"></i>
                     </template>
                   </div>
+                  <!-- {# Inline error for failed outbound messages #} -->
+                  <template x-if="msg.direction === 'outbound' && msg.delivery_status === 'failed' && msg.error_message">
+                    <div class="msg-error" :title="msg.error_code ? ('Error code: ' + msg.error_code) : ''">
+                      <i class="bi bi-exclamation-triangle me-1"></i>
+                      <span x-text="msg.error_message"></span>
+                    </div>
+                  </template>
                 </div>
               </div>
             </template>

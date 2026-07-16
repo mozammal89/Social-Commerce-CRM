@@ -305,6 +305,21 @@
     justify-content: flex-end;
 }
 
+/* Inline error shown below a failed outbound message */
+.msg-error {
+    font-size: var(--font-size-xs);
+    color: var(--danger, #dc3545);
+    background: rgba(220, 53, 69, 0.08);
+    border-radius: var(--radius-sm);
+    padding: var(--space-1) var(--space-2);
+    margin-top: var(--space-1);
+    max-width: 100%;
+    word-break: break-word;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+}
+
 /* Reply quote (shown above a reply message) */
 .msg-reply-quote {
     font-size: var(--font-size-xs);

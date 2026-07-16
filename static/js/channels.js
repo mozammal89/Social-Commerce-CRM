@@ -129,6 +129,9 @@ function channelsApp() {
         showVerifyToken: false,
         updatingCredentials: false,
 
+        // WhatsApp onboarding / migration guide modal
+        showWaGuide: false,
+
         /* ---- lifecycle ---- */
         async init() {
             const el = this.$el;
@@ -309,7 +312,14 @@ function channelsApp() {
                 if (updated.status === 'connected') {
                     this.notify(`Connection verified${updated.metadata?.verified_name ? ' as ' + updated.metadata.verified_name : ''}.`, 'success');
                 } else {
-                    this.notify(`Verification failed: ${updated.error_message || 'invalid credentials'}.`, 'error');
+                    const msg = updated.error_message || 'invalid credentials';
+                    // If the error hints at a Business App migration issue,
+                    // proactively open the migration guide for WhatsApp.
+                    if (account.channel?.channel_type === 'whatsapp' &&
+                        /migrat|not registered|business app|cloud api/i.test(msg)) {
+                        this.showWaGuide = true;
+                    }
+                    this.notify(`Verification failed: ${msg}.`, 'error');
                 }
             } catch (err) { this.notify(err.message, 'error'); }
             finally { this.verifyingId = null; }

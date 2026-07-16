@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 import requests
 
 from ..exceptions import AuthenticationError, SendMessageError
+from .error_codes import translate_error
 
 if TYPE_CHECKING:  # pragma: no cover - type-only imports
     from ...models import ConnectedAccount
@@ -34,7 +35,9 @@ DEFAULT_TIMEOUT = 20  # seconds
 def _headers(account: "ConnectedAccount") -> dict[str, str]:
     token = (account.credentials or {}).get("access_token", "")
     if not token:
-        raise SendMessageError("Connected WhatsApp account has no access_token.", code="missing_token")
+        raise SendMessageError(
+            "Connected WhatsApp account has no access_token.", code="missing_token"
+        )
     return {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -51,7 +54,9 @@ def send(
     try:
         resp = requests.post(url, headers=_headers(account), json=payload, timeout=DEFAULT_TIMEOUT)
     except requests.RequestException as exc:
-        raise SendMessageError(f"WhatsApp send request failed: {exc}", code="transport_error") from exc
+        raise SendMessageError(
+            f"WhatsApp send request failed: {exc}", code="transport_error"
+        ) from exc
     return _handle_response(resp, action="send")
 
 
@@ -97,7 +102,11 @@ def verify_phone_number(*, account: "ConnectedAccount") -> dict[str, Any]:
 
 
 def _handle_response(resp: requests.Response, *, action: str) -> dict[str, Any]:
-    """Parse a Cloud API response, raising SendMessageError on failure."""
+    """Parse a Cloud API response, raising SendMessageError on failure.
+
+    Meta error codes are translated to user-friendly messages via the
+    ``error_codes`` module so agents never see raw API internals.
+    """
     try:
         data = resp.json()
     except ValueError:
@@ -106,8 +115,17 @@ def _handle_response(resp: requests.Response, *, action: str) -> dict[str, Any]:
     if resp.status_code >= 400:
         err = (data or {}).get("error", {}) if isinstance(data, dict) else {}
         code = str(err.get("code", resp.status_code))
-        message = err.get("message", resp.text[:300])
+        subcode = err.get("error_subcode") or err.get("subcode")
+        raw_message = err.get("message", resp.text[:300])
+
+        # Translate the raw Meta error into a user-friendly message.
+        friendly = translate_error(
+            code=code,
+            subcode=subcode,
+            message=raw_message,
+        )
+
         if action in ("authenticate", "verify"):
-            raise AuthenticationError(f"WhatsApp {action} failed: {message}")
-        raise SendMessageError(f"WhatsApp {action} failed: {message}", code=code)
+            raise AuthenticationError(friendly)
+        raise SendMessageError(friendly, code=code)
     return data
