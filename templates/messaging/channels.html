@@ -14,16 +14,38 @@
 <div class="dashboard-container" x-data="channelsApp()" data-store-id="{{ store_id }}" data-is-superuser="{{ is_superuser|yesno:'true,false' }}" x-cloak>
 
   <!-- Page header -->
-  <div class="section-header mb-4 d-flex align-items-center justify-content-between">
+  <div class="section-header mb-4 d-flex align-items-center justify-content-between gap-2">
     <div>
       <h1 class="section-title"><i class="bi bi-broadcast me-2"></i>Connected Channels</h1>
       <p class="section-subtitle">Connect Facebook Pages and WhatsApp numbers, then manage them here.</p>
     </div>
-    <button class="btn btn-outline-success btn-sm d-flex align-items-center gap-1" @click="showWaGuide = true">
-      <i class="bi bi-whatsapp"></i>
-      <span class="d-none d-sm-inline">WhatsApp Setup Guide</span>
-      <span class="d-sm-none">Guide</span>
-    </button>
+    <div class="dropdown">
+      <button class="btn btn-outline-primary btn-sm d-flex align-items-center gap-1" data-bs-toggle="dropdown">
+        <i class="bi bi-book"></i>
+        <span class="d-none d-sm-inline">Setup Guides</span>
+        <span class="d-sm-none">Guides</span>
+        <i class="bi bi-chevron-down small ms-1"></i>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><h6 class="dropdown-header">Channel setup guides</h6></li>
+        <li>
+          <button class="dropdown-item d-flex align-items-center gap-2" @click="openGuide('whatsapp')">
+            <i class="bi bi-whatsapp text-success"></i> WhatsApp Business Platform
+          </button>
+        </li>
+        <li>
+          <button class="dropdown-item d-flex align-items-center gap-2" @click="openGuide('facebook_messenger')">
+            <i class="bi bi-messenger text-primary"></i> Facebook Messenger
+          </button>
+        </li>
+        <li><hr class="dropdown-divider"></li>
+        <li>
+          <button class="dropdown-item d-flex align-items-center gap-2" @click="openGuide('generic')">
+            <i class="bi bi-question-circle text-muted"></i> General help
+          </button>
+        </li>
+      </ul>
+    </div>
   </div>
 
   <!-- Connected accounts -->
@@ -98,6 +120,10 @@
                       <i class="bi me-2" :class="verifyingId === acct.id ? 'bi-arrow-repeat spin' : 'bi-wifi'"></i>
                       <span x-text="verifyingId === acct.id ? 'Testing…' : 'Test connection'"></span>
                     </a></li>
+                    <li><a class="dropdown-item" @click="openGuide(acct.channel?.channel_type)" :class="{ disabled: !acct.channel?.channel_type }">
+                      <i class="bi me-2" :class="channelIcon(acct)"></i>
+                      <span><span x-text="acct.channel?.name || 'Channel'"></span> setup guide</span>
+                    </a></li>
                     <li><a class="dropdown-item" @click="openSettings(acct)">
                       <i class="bi bi-gear me-2"></i>Settings
                     </a></li>
@@ -153,6 +179,11 @@
                       :disabled="!ch.adapter_available"
                       :title="ch.adapter_available ? '' : 'Adapter not yet available'">
                 <i class="bi bi-plus-lg me-1"></i>Connect
+              </button>
+              <button class="btn btn-link btn-sm d-block mx-auto mt-1 px-1 text-decoration-none small"
+                      @click="openGuide(ch.channel_type)"
+                      :disabled="!ch.adapter_available">
+                <i class="bi bi-book me-1"></i><span x-text="ch.name"></span> setup guide
               </button>
               <div x-show="!ch.adapter_available" class="badge bg-warning-subtle text-warning mt-2 small">Coming soon</div>
             </div>
@@ -266,14 +297,27 @@
 
           <!-- Platform-specific credentials -->
           <hr>
+          <!-- Channel-specific connect help banner -->
           <div class="alert alert-info border-0 small d-flex gap-2 align-items-start"
                x-show="connectChannel?.channel_type === 'whatsapp'">
             <i class="bi bi-info-circle-fill text-info"></i>
             <div>
               <strong>New to the WhatsApp Cloud API?</strong>
               If your number is registered with the WhatsApp Business App, you need to migrate it first.
-              <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="showWaGuide = true">
+              <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="openGuide('whatsapp')">
                 Read the migration guide &rarr;
+              </button>
+            </div>
+          </div>
+          <div class="alert alert-info border-0 small d-flex gap-2 align-items-start"
+               x-show="connectChannel?.channel_type === 'facebook_messenger'">
+            <i class="bi bi-info-circle-fill text-info"></i>
+            <div>
+              <strong>Connecting a Facebook Page?</strong>
+              You'll need a long-lived Page Access Token and App Secret. Long-lived tokens are exchanged
+              automatically and refreshed in the background.
+              <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="openGuide('facebook_messenger')">
+                See the Messenger setup guide &rarr;
               </button>
             </div>
           </div>
@@ -572,143 +616,317 @@
        :style="{ display: showSettings ? 'block' : 'none' }"
        x-show="showSettings" style="display:none;" @click="showSettings=false"></div>
 
-  <!-- ================================================================
-     WhatsApp Business Platform — onboarding & migration guide
-  ================================================================ -->
-  <div class="modal fade" :class="{ show: showWaGuide }"
-       :style="{ display: showWaGuide ? 'block' : 'none' }"
-       tabindex="-1" @keydown.escape.window="showWaGuide = false">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 720px;">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">
-            <i class="bi bi-whatsapp me-2 text-success"></i>WhatsApp Business Platform Guide
-          </h5>
-          <button type="button" class="btn-close" @click="showWaGuide = false"></button>
-        </div>
-        <div class="modal-body">
+   <!-- ================================================================
+      WhatsApp Business Platform — onboarding & migration guide
+      (shown when openGuide('whatsapp') is called)
+   ================================================================ -->
+   <div class="modal fade" :class="{ show: showGuide && guideChannel === 'whatsapp' }"
+        :style="{ display: (showGuide && guideChannel === 'whatsapp') ? 'block' : 'none' }"
+        tabindex="-1" @keydown.escape.window="closeGuide()">
+     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 720px;">
+       <div class="modal-content">
+         <div class="modal-header">
+           <h5 class="modal-title">
+             <i class="bi bi-whatsapp me-2 text-success"></i>WhatsApp Business Platform Guide
+           </h5>
+           <button type="button" class="btn-close" @click="closeGuide()"></button>
+         </div>
+         <div class="modal-body">
 
-          <!-- Migration warning -->
-          <div class="alert alert-warning border-0 d-flex gap-3">
-            <i class="bi bi-phone-vibrate fs-4"></i>
-            <div>
-              <strong>Using the WhatsApp Business App on this number?</strong>
-              <p class="mb-0 mt-1 small">To use it with the CRM, you must migrate it to the WhatsApp Business Platform (Cloud API). Once migrated, you will manage all conversations directly from the CRM.</p>
-            </div>
-          </div>
+           <!-- Migration warning -->
+           <div class="alert alert-warning border-0 d-flex gap-3">
+             <i class="bi bi-phone-vibrate fs-4"></i>
+             <div>
+               <strong>Using the WhatsApp Business App on this number?</strong>
+               <p class="mb-0 mt-1 small">To use it with the CRM, you must migrate it to the WhatsApp Business Platform (Cloud API). Once migrated, you will manage all conversations directly from the CRM.</p>
+             </div>
+           </div>
 
-          <!-- Benefits -->
-          <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-stars me-1 text-primary"></i>Why migrate to the Cloud API?</h6>
-          <ul class="small text-muted ps-3 mb-3">
-            <li><strong>Multi-agent support</strong> — your whole team can reply from the unified inbox.</li>
-            <li><strong>Unified inbox</strong> — all channels (WhatsApp, Messenger, etc.) in one place.</li>
-            <li><strong>Team collaboration</strong> — assign, share notes, and hand off conversations.</li>
-            <li><strong>Customer management</strong> — unified profiles with full conversation history.</li>
-            <li><strong>CRM integration</strong> — orders, tags, and customer data at your fingertips.</li>
-            <li><strong>Automation</strong> — auto-replies, templates, and workflow triggers.</li>
-            <li><strong>Order & conversation management</strong> — track every customer journey.</li>
-          </ul>
-          <p class="small text-muted mb-3">The CRM replaces the WhatsApp Business mobile app for this phone number after migration.</p>
+           <!-- Benefits -->
+           <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-stars me-1 text-primary"></i>Why migrate to the Cloud API?</h6>
+           <ul class="small text-muted ps-3 mb-3">
+             <li><strong>Multi-agent support</strong> — your whole team can reply from the unified inbox.</li>
+             <li><strong>Unified inbox</strong> — all channels (WhatsApp, Messenger, etc.) in one place.</li>
+             <li><strong>Team collaboration</strong> — assign, share notes, and hand off conversations.</li>
+             <li><strong>Customer management</strong> — unified profiles with full conversation history.</li>
+             <li><strong>CRM integration</strong> — orders, tags, and customer data at your fingertips.</li>
+             <li><strong>Automation</strong> — auto-replies, templates, and workflow triggers.</li>
+             <li><strong>Order & conversation management</strong> — track every customer journey.</li>
+           </ul>
+           <p class="small text-muted mb-3">The CRM replaces the WhatsApp Business mobile app for this phone number after migration.</p>
 
-          <!-- Step-by-step migration -->
-          <h6 class="fw-bold mb-3"><i class="bi bi-list-ol me-1 text-primary"></i>Step-by-step migration guide</h6>
-          <div class="accordion" id="waMigrationSteps">
-            <div class="accordion-item">
-              <h2 class="accordion-header">
-                <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep1">
-                  Step 1 — Back up your WhatsApp Business App chats
-                </button>
-              </h2>
-              <div id="waStep1" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
-                <div class="accordion-body small">
-                  Open the WhatsApp Business App &rarr; Settings &rarr; Chats &rarr; Chat Backup &rarr; <strong>Back Up</strong>.
-                  Migration permanently transfers the number to the Cloud API.
-                </div>
-              </div>
-            </div>
-            <div class="accordion-item">
-              <h2 class="accordion-header">
-                <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep2">
-                  Step 2 — Delete the number from the WhatsApp Business App
-                </button>
-              </h2>
-              <div id="waStep2" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
-                <div class="accordion-body small">
-                  In the WhatsApp Business App, go to Settings &rarr; Account &rarr; <strong>Delete my account</strong>. Enter your phone number and confirm. This deregisters the number so Meta's Cloud API can claim it.
-                  <div class="alert alert-danger border-0 small mt-2 mb-0 py-1"><strong>Important:</strong> do this on the old phone only. Skipping this step causes a "number already registered" error later.</div>
-                </div>
-              </div>
-            </div>
-            <div class="accordion-item">
-              <h2 class="accordion-header">
-                <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep3">
-                  Step 3 — Add the number to your Meta Business Manager
-                </button>
-              </h2>
-              <div id="waStep3" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
-                <div class="accordion-body small">
-                  Go to <a href="https://business.facebook.com/settings/whatsapp" target="_blank">Meta Business Settings</a> &rarr; WhatsApp Manager. Under <strong>Phone Numbers</strong>, click <strong>Add phone number</strong> and follow the wizard. Select your WhatsApp Business Account (WABA) and verify the number via SMS or call.
-                </div>
-              </div>
-            </div>
-            <div class="accordion-item">
-              <h2 class="accordion-header">
-                <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep4">
-                  Step 4 — Copy your credentials into the CRM
-                </button>
-              </h2>
-              <div id="waStep4" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
-                <div class="accordion-body small">
-                  From the WhatsApp Manager, copy:
-                  <ul class="mb-0">
-                    <li><strong>Phone Number ID</strong> — from the Phone Numbers list.</li>
-                    <li><strong>WABA ID</strong> — from Business Settings &rarr; Business Information.</li>
-                    <li><strong>Permanent Access Token</strong> — from Meta Business Settings &rarr; Users &rarr; System Users &rarr; Generate token.</li>
-                  </ul>
-                  Close this guide, click <strong>Connect</strong> on the WhatsApp card, and paste the values.
-                </div>
-              </div>
-            </div>
-            <div class="accordion-item">
-              <h2 class="accordion-header">
-                <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep5">
-                  Step 5 — Set up the webhook
-                </button>
-              </h2>
-              <div id="waStep5" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
-                <div class="accordion-body small">
-                  In Meta &rarr; App Dashboard &rarr; WhatsApp &rarr; Configuration, paste the <strong>Webhook URL</strong> and <strong>Verify Token</strong> shown on the channel card, then subscribe to messages.
-                </div>
-              </div>
-            </div>
-          </div>
+           <!-- Step-by-step migration -->
+           <h6 class="fw-bold mb-3"><i class="bi bi-list-ol me-1 text-primary"></i>Step-by-step migration guide</h6>
+           <div class="accordion" id="waMigrationSteps">
+             <div class="accordion-item">
+               <h2 class="accordion-header">
+                 <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep1">
+                   Step 1 — Back up your WhatsApp Business App chats
+                 </button>
+               </h2>
+               <div id="waStep1" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
+                 <div class="accordion-body small">
+                   Open the WhatsApp Business App &rarr; Settings &rarr; Chats &rarr; Chat Backup &rarr; <strong>Back Up</strong>.
+                   Migration permanently transfers the number to the Cloud API.
+                 </div>
+               </div>
+             </div>
+             <div class="accordion-item">
+               <h2 class="accordion-header">
+                 <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep2">
+                   Step 2 — Delete the number from the WhatsApp Business App
+                 </button>
+               </h2>
+               <div id="waStep2" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
+                 <div class="accordion-body small">
+                   In the WhatsApp Business App, go to Settings &rarr; Account &rarr; <strong>Delete my account</strong>. Enter your phone number and confirm. This deregisters the number so Meta's Cloud API can claim it.
+                   <div class="alert alert-danger border-0 small mt-2 mb-0 py-1"><strong>Important:</strong> do this on the old phone only. Skipping this step causes a "number already registered" error later.</div>
+                 </div>
+               </div>
+             </div>
+             <div class="accordion-item">
+               <h2 class="accordion-header">
+                 <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep3">
+                   Step 3 — Add the number to your Meta Business Manager
+                 </button>
+               </h2>
+               <div id="waStep3" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
+                 <div class="accordion-body small">
+                   Go to <a href="https://business.facebook.com/settings/whatsapp" target="_blank">Meta Business Settings</a> &rarr; WhatsApp Manager. Under <strong>Phone Numbers</strong>, click <strong>Add phone number</strong> and follow the wizard. Select your WhatsApp Business Account (WABA) and verify the number via SMS or call.
+                 </div>
+               </div>
+             </div>
+             <div class="accordion-item">
+               <h2 class="accordion-header">
+                 <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep4">
+                   Step 4 — Copy your credentials into the CRM
+                 </button>
+               </h2>
+               <div id="waStep4" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
+                 <div class="accordion-body small">
+                   From the WhatsApp Manager, copy:
+                   <ul class="mb-0">
+                     <li><strong>Phone Number ID</strong> — from the Phone Numbers list.</li>
+                     <li><strong>WABA ID</strong> — from Business Settings &rarr; Business Information.</li>
+                     <li><strong>Permanent Access Token</strong> — from Meta Business Settings &rarr; Users &rarr; System Users &rarr; Generate token.</li>
+                   </ul>
+                   Close this guide, click <strong>Connect</strong> on the WhatsApp card, and paste the values.
+                 </div>
+               </div>
+             </div>
+             <div class="accordion-item">
+               <h2 class="accordion-header">
+                 <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#waStep5">
+                   Step 5 — Set up the webhook
+                 </button>
+               </h2>
+               <div id="waStep5" class="accordion-collapse collapse" data-bs-parent="#waMigrationSteps">
+                 <div class="accordion-body small">
+                   In Meta &rarr; App Dashboard &rarr; WhatsApp &rarr; Configuration, paste the <strong>Webhook URL</strong> and <strong>Verify Token</strong> shown on the channel card, then subscribe to messages.
+                 </div>
+               </div>
+             </div>
+           </div>
 
-          <!-- Revert guide -->
-          <hr class="my-4">
-          <h6 class="fw-bold mb-2"><i class="bi bi-arrow-counterclockwise me-1 text-secondary"></i>Want to switch back to the Business App?</h6>
-          <p class="small text-muted mb-1">You are never locked into the Cloud API. To revert:</p>
-          <ol class="small text-muted ps-3 mb-0">
-            <li>Disconnect the number in this CRM (Channels &rarr; Disconnect).</li>
-            <li>In the <a href="https://business.facebook.com/settings/whatsapp" target="_blank">Meta Business Settings</a>, remove or deregister the number from the Cloud API / WABA.</li>
-            <li>Install the WhatsApp Business App on your phone and register with the same number.</li>
-          </ol>
-          <p class="small text-muted mt-2 mb-0">Your CRM conversation history is preserved; only live WhatsApp messaging stops.</p>
+           <!-- Revert guide -->
+           <hr class="my-4">
+           <h6 class="fw-bold mb-2"><i class="bi bi-arrow-counterclockwise me-1 text-secondary"></i>Want to switch back to the Business App?</h6>
+           <p class="small text-muted mb-1">You are never locked into the Cloud API. To revert:</p>
+           <ol class="small text-muted ps-3 mb-0">
+             <li>Disconnect the number in this CRM (Channels &rarr; Disconnect).</li>
+             <li>In the <a href="https://business.facebook.com/settings/whatsapp" target="_blank">Meta Business Settings</a>, remove or deregister the number from the Cloud API / WABA.</li>
+             <li>Install the WhatsApp Business App on your phone and register with the same number.</li>
+           </ol>
+           <p class="small text-muted mt-2 mb-0">Your CRM conversation history is preserved; only live WhatsApp messaging stops.</p>
 
-        </div>
-        <div class="modal-footer">
-          <a href="https://developers.facebook.com/docs/whatsapp" target="_blank" class="btn btn-ghost me-auto small">
-            <i class="bi bi-box-arrow-up-right me-1"></i>Official WhatsApp docs
-          </a>
-          <button class="btn btn-primary" @click="showWaGuide = false">Got it</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="modal-backdrop fade" :class="{ show: showWaGuide }"
-       :style="{ display: showWaGuide ? 'block' : 'none' }"
-       x-show="showWaGuide" style="display:none;" @click="showWaGuide=false"></div>
+         </div>
+         <div class="modal-footer">
+           <a href="https://developers.facebook.com/docs/whatsapp" target="_blank" class="btn btn-ghost me-auto small">
+             <i class="bi bi-box-arrow-up-right me-1"></i>Official WhatsApp docs
+           </a>
+           <button class="btn btn-primary" @click="closeGuide()">Got it</button>
+         </div>
+       </div>
+     </div>
+   </div>
+   <div class="modal-backdrop fade" :class="{ show: showGuide && guideChannel === 'whatsapp' }"
+        :style="{ display: (showGuide && guideChannel === 'whatsapp') ? 'block' : 'none' }"
+        x-show="showGuide && guideChannel === 'whatsapp'" style="display:none;" @click="closeGuide()"></div>
 
-  <!-- Notifications use the global showNotification() system (main.js);
+   <!-- ================================================================
+      Facebook Messenger — setup guide
+      (shown when openGuide('facebook_messenger') is called)
+   ================================================================ -->
+   <div class="modal fade" :class="{ show: showGuide && guideChannel === 'facebook_messenger' }"
+        :style="{ display: (showGuide && guideChannel === 'facebook_messenger') ? 'block' : 'none' }"
+        tabindex="-1" @keydown.escape.window="closeGuide()">
+     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 720px;">
+       <div class="modal-content">
+         <div class="modal-header">
+           <h5 class="modal-title">
+             <i class="bi bi-messenger me-2 text-primary"></i>Facebook Messenger Setup Guide
+           </h5>
+           <button type="button" class="btn-close" @click="closeGuide()"></button>
+         </div>
+         <div class="modal-body">
+
+           <!-- Intro -->
+           <div class="alert alert-info border-0 d-flex gap-3">
+             <i class="bi bi-messenger fs-4"></i>
+             <div>
+               <strong>Connect a Facebook Page to the CRM</strong>
+               <p class="mb-0 mt-1 small">Once connected, every message your Page receives on Facebook or Messenger appears in the unified inbox — and your whole team can reply from the CRM.</p>
+             </div>
+           </div>
+
+           <!-- Benefits -->
+           <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-stars me-1 text-primary"></i>What you get</h6>
+           <ul class="small text-muted ps-3 mb-3">
+             <li><strong>Multi-agent inbox</strong> — multiple team members reply to the same Page.</li>
+             <li><strong>Unified inbox</strong> — Messenger + WhatsApp + others in one view.</li>
+             <li><strong>Customer profiles</strong> — every chat attached to a unified customer record.</li>
+             <li><strong>Notes & assignments</strong> — hand off conversations internally.</li>
+             <li><strong>Automation</strong> — auto-replies and template messages.</li>
+             <li><strong>Order context</strong> — see orders and tags while chatting.</li>
+           </ul>
+           <p class="small text-muted mb-3">The CRM takes over messaging for this Page. Messages still arrive in your Facebook Inbox too, but replies from the CRM are delivered through the Page.</p>
+
+           <!-- Step-by-step -->
+           <h6 class="fw-bold mb-3"><i class="bi bi-list-ol me-1 text-primary"></i>Step-by-step setup</h6>
+           <div class="accordion" id="fbMigrationSteps">
+             <div class="accordion-item">
+               <h2 class="accordion-header">
+                 <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#fbStep1">
+                   Step 1 — Create a Meta App (or use an existing one)
+                 </button>
+               </h2>
+               <div id="fbStep1" class="accordion-collapse collapse" data-bs-parent="#fbMigrationSteps">
+                 <div class="accordion-body small">
+                   Go to the <a href="https://developers.facebook.com/apps/" target="_blank">Meta for Developers dashboard</a> &rarr; <strong>My Apps</strong> &rarr; <strong>Create App</strong>.
+                   Choose the <em>Business</em> type and add the <strong>Messenger</strong> product.
+                 </div>
+               </div>
+             </div>
+             <div class="accordion-item">
+               <h2 class="accordion-header">
+                 <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#fbStep2">
+                   Step 2 — Get your Page Numeric ID
+                 </button>
+               </h2>
+               <div id="fbStep2" class="accordion-collapse collapse" data-bs-parent="#fbMigrationSteps">
+                 <div class="accordion-body small">
+                   Open your Facebook Page &rarr; <strong>About</strong> &rarr; <strong>Page transparency</strong>. The <strong>Page ID</strong> at the bottom is the numeric ID you paste as the "Facebook Page Numeric ID" in the connect form.
+                 </div>
+               </div>
+             </div>
+             <div class="accordion-item">
+               <h2 class="accordion-header">
+                 <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#fbStep3">
+                   Step 3 — Generate a Page Access Token
+                 </button>
+               </h2>
+               <div id="fbStep3" class="accordion-collapse collapse" data-bs-parent="#fbMigrationSteps">
+                 <div class="accordion-body small">
+                   In the Meta App dashboard &rarr; <strong>Messenger</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Access Tokens</strong>, select your Page and generate a token with these permissions:
+                   <code>pages_messaging</code>, <code>pages_manage_metadata</code>, <code>pages_read_engagement</code>, <code>pages_show_list</code>.
+                   <div class="alert alert-success border-0 small mt-2 mb-0 py-1">
+                     <i class="bi bi-shield-check me-1"></i>
+                     <strong>Tip:</strong> paste a <em>short-lived</em> user token or the Page token into the connect form and the CRM will exchange it for a long-lived Page token automatically and refresh it in the background.
+                   </div>
+                 </div>
+               </div>
+             </div>
+             <div class="accordion-item">
+               <h2 class="accordion-header">
+                 <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#fbStep4">
+                   Step 4 — Copy your App Secret
+                 </button>
+               </h2>
+               <div id="fbStep4" class="accordion-collapse collapse" data-bs-parent="#fbMigrationSteps">
+                 <div class="accordion-body small">
+                   In the Meta App dashboard &rarr; <strong>Settings</strong> &rarr; <strong>Basic</strong>, copy the <strong>App Secret</strong>. The CRM uses it to verify that incoming webhook events genuinely came from Meta.
+                 </div>
+               </div>
+             </div>
+             <div class="accordion-item">
+               <h2 class="accordion-header">
+                 <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#fbStep5">
+                   Step 5 — Subscribe the webhook
+                 </button>
+               </h2>
+               <div id="fbStep5" class="accordion-collapse collapse" data-bs-parent="#fbMigrationSteps">
+                 <div class="accordion-body small">
+                   In the Meta App dashboard &rarr; <strong>Messenger</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Webhooks</strong>, paste the <strong>Webhook URL</strong> and <strong>Verify Token</strong> from the channel card. Subscribe to the <code>messages</code>, <code>messaging_postbacks</code>, and <code>message_deliveries</code> fields.
+                 </div>
+               </div>
+             </div>
+           </div>
+
+           <!-- Token lifecycle note -->
+           <hr class="my-4">
+           <h6 class="fw-bold mb-2"><i class="bi bi-shield-check me-1 text-success"></i>Token lifecycle</h6>
+           <p class="small text-muted mb-0">
+             The CRM stores long-lived Page tokens and checks their health daily. If a token ever expires or is revoked, the channel is marked <em>Expired</em> and you'll be prompted to reconnect — your conversation history stays intact.
+           </p>
+
+         </div>
+         <div class="modal-footer">
+           <a href="https://developers.facebook.com/docs/messenger-platform" target="_blank" class="btn btn-ghost me-auto small">
+             <i class="bi bi-box-arrow-up-right me-1"></i>Official Messenger docs
+           </a>
+           <button class="btn btn-primary" @click="closeGuide()">Got it</button>
+         </div>
+       </div>
+     </div>
+   </div>
+   <div class="modal-backdrop fade" :class="{ show: showGuide && guideChannel === 'facebook_messenger' }"
+        :style="{ display: (showGuide && guideChannel === 'facebook_messenger') ? 'block' : 'none' }"
+        x-show="showGuide && guideChannel === 'facebook_messenger'" style="display:none;" @click="closeGuide()"></div>
+
+   <!-- ================================================================
+      Generic help / fallback guide
+      (shown when openGuide('generic') is called, or for channels
+      without a dedicated guide)
+   ================================================================ -->
+   <div class="modal fade" :class="{ show: showGuide && (guideChannel === 'generic' || (guideChannel && guideChannel !== 'whatsapp' && guideChannel !== 'facebook_messenger')) }"
+        :style="{ display: (showGuide && (guideChannel === 'generic' || (guideChannel && guideChannel !== 'whatsapp' && guideChannel !== 'facebook_messenger'))) ? 'block' : 'none' }"
+        tabindex="-1" @keydown.escape.window="closeGuide()">
+     <div class="modal-dialog modal-dialog-centered" style="max-width: 600px;">
+       <div class="modal-content">
+         <div class="modal-header">
+           <h5 class="modal-title">
+             <i class="bi bi-question-circle me-2 text-primary"></i>Channel Setup Help
+           </h5>
+           <button type="button" class="btn-close" @click="closeGuide()"></button>
+         </div>
+         <div class="modal-body">
+           <p class="text-muted">
+             Every channel connects the same way: you provide credentials from the platform, and the CRM
+             handles messaging, webhooks, and token refresh in the background.
+           </p>
+           <h6 class="fw-bold mb-2">General steps</h6>
+           <ol class="small text-muted ps-3 mb-3">
+             <li>Create an app/account on the platform's developer portal.</li>
+             <li>Generate an access token and copy your account ID.</li>
+             <li>Click <strong>Connect</strong> on the channel card and paste the values.</li>
+             <li>Register the Webhook URL and Verify Token shown on the card.</li>
+           </ol>
+           <div class="alert alert-info border-0 small mb-0">
+             <i class="bi bi-info-circle me-1"></i>
+             Need a specific channel's guide? Use the <strong>Setup Guides</strong> menu at the top right to open the WhatsApp or Messenger guide.
+           </div>
+         </div>
+         <div class="modal-footer">
+           <button class="btn btn-primary" @click="closeGuide()">Got it</button>
+         </div>
+       </div>
+     </div>
+   </div>
+   <div class="modal-backdrop fade" :class="{ show: showGuide && (guideChannel === 'generic' || (guideChannel && guideChannel !== 'whatsapp' && guideChannel !== 'facebook_messenger')) }"
+        :style="{ display: (showGuide && (guideChannel === 'generic' || (guideChannel && guideChannel !== 'whatsapp' && guideChannel !== 'facebook_messenger'))) ? 'block' : 'none' }"
+        x-show="showGuide && (guideChannel === 'generic' || (guideChannel && guideChannel !== 'whatsapp' && guideChannel !== 'facebook_messenger'))" style="display:none;" @click="closeGuide()"></div>
+
+   <!-- Notifications use the global showNotification() system (main.js);
      no per-page toast markup needed. -->
 </div>
 

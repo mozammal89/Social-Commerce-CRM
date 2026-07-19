@@ -132,6 +132,13 @@ function channelsApp() {
         // WhatsApp onboarding / migration guide modal
         showWaGuide: false,
 
+        // Channel-aware setup guide: showGuide controls visibility,
+        // guideChannel holds the channel_type whose guide to render
+        // (e.g. 'whatsapp', 'facebook_messenger'). Each channel ships
+        // its own guide modal in the template, shown when its type matches.
+        showGuide: false,
+        guideChannel: null,
+
         /* ---- lifecycle ---- */
         async init() {
             const el = this.$el;
@@ -213,6 +220,37 @@ function channelsApp() {
             this.connectExternalId = '';
             this.connectCreds = {};
             this.showConnect = true;
+        },
+
+        /* ---- setup guide (channel-aware) ---- */
+        openGuide(channelType) {
+            // channelType may come from a catalog item, a connected
+            // account, or a raw string. Accept either an object with
+            // ``channel_type`` / ``channel.channel_type`` or the string.
+            let type = channelType;
+            if (type && typeof type === 'object') {
+                type = type.channel_type || (type.channel && type.channel.channel_type) || type.channel_type;
+            }
+            if (!type) return;
+            this.guideChannel = type;
+            this.showGuide = true;
+            // Keep the legacy WhatsApp-only flag in sync so existing
+            // template bindings keep working during the transition.
+            this.showWaGuide = (type === 'whatsapp');
+        },
+
+        closeGuide() {
+            this.showGuide = false;
+            this.showWaGuide = false;
+            this.guideChannel = null;
+        },
+
+        guideFor(accountOrChannel) {
+            // Convenience for templates: returns true if the guide
+            // currently open is for the given account/channel.
+            const type = accountOrChannel?.channel_type ||
+                         accountOrChannel?.channel?.channel_type || '';
+            return this.showGuide && this.guideChannel === type;
         },
 
         credentialFields() {
@@ -317,7 +355,7 @@ function channelsApp() {
                     // proactively open the migration guide for WhatsApp.
                     if (account.channel?.channel_type === 'whatsapp' &&
                         /migrat|not registered|business app|cloud api/i.test(msg)) {
-                        this.showWaGuide = true;
+                        this.openGuide('whatsapp');
                     }
                     this.notify(`Verification failed: ${msg}.`, 'error');
                 }
