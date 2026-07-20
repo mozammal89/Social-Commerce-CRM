@@ -118,11 +118,15 @@ class ConversationDetailView(StoreContextMixin, generics.RetrieveUpdateAPIView):
         # additionally record the audit Activity rows.
         if "status" in serializer.validated_data:
             services.ConversationService.set_status(
-                conversation=conv, status=serializer.validated_data["status"], actor=self.request.user,
+                conversation=conv,
+                status=serializer.validated_data["status"],
+                actor=self.request.user,
             )
         if "priority" in serializer.validated_data:
             services.ConversationService.set_priority(
-                conversation=conv, priority=serializer.validated_data["priority"], actor=self.request.user,
+                conversation=conv,
+                priority=serializer.validated_data["priority"],
+                actor=self.request.user,
             )
 
 
@@ -179,7 +183,11 @@ class MessageListView(StoreContextMixin, generics.ListCreateAPIView):
         # ``get_permissions`` must return INSTANCES; ``HasPermission.with_code``
         # returns a class, so we instantiate it.
         if self.request.method == "POST":
-            return [permissions.IsAuthenticated(), IsStoreMember(), HasPermission.with_code("messages.create")()]
+            return [
+                permissions.IsAuthenticated(),
+                IsStoreMember(),
+                HasPermission.with_code("messages.create")(),
+            ]
         return super().get_permissions()
 
     def get_queryset(self):
@@ -191,8 +199,7 @@ class MessageListView(StoreContextMixin, generics.ListCreateAPIView):
         if not Conversation.objects.filter(store=store, id=conv_id).exists():
             return Message.objects.none()
         return (
-            Message.objects
-            .filter(store=store, conversation_id=conv_id)
+            Message.objects.filter(store=store, conversation_id=conv_id)
             .select_related("sender")
             .prefetch_related("attachments")
             .order_by("created_at")
@@ -214,7 +221,8 @@ class MessageListView(StoreContextMixin, generics.ListCreateAPIView):
         reply_to = None
         if ser.validated_data.get("reply_to"):
             reply_to = Message.objects.filter(
-                id=ser.validated_data["reply_to"], conversation=conv,
+                id=ser.validated_data["reply_to"],
+                conversation=conv,
             ).first()
 
         message = services.MessageService.send(
@@ -238,7 +246,11 @@ class InternalNoteListView(StoreContextMixin, generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == "POST":
-            return [permissions.IsAuthenticated(), IsStoreMember(), HasPermission.with_code("notes.create")()]
+            return [
+                permissions.IsAuthenticated(),
+                IsStoreMember(),
+                HasPermission.with_code("notes.create")(),
+            ]
         return super().get_permissions()
 
     def get_queryset(self):
@@ -249,21 +261,26 @@ class InternalNoteListView(StoreContextMixin, generics.ListCreateAPIView):
         if not Conversation.objects.filter(store=store, id=conv_id).exists():
             return InternalNote.objects.none()
         return (
-            InternalNote.objects
-            .filter(store=store, conversation_id=conv_id)
+            InternalNote.objects.filter(store=store, conversation_id=conv_id)
             .select_related("author")
             .order_by("-created_at")
         )
 
     def get_serializer_class(self):
-        return InternalNoteCreateSerializer if self.request.method == "POST" else InternalNoteSerializer
+        return (
+            InternalNoteCreateSerializer
+            if self.request.method == "POST"
+            else InternalNoteSerializer
+        )
 
     def perform_create(self, serializer):
         store = self.request.store
         conv_id = self.kwargs["conversation_id"]
         conv = Conversation.objects.filter(store=store, id=conv_id).first()
         services.ConversationService.add_internal_note(
-            conversation=conv, author=self.request.user, body=serializer.validated_data["body"],
+            conversation=conv,
+            author=self.request.user,
+            body=serializer.validated_data["body"],
         )
 
 
@@ -284,10 +301,15 @@ class CustomerListView(StoreContextMixin, generics.ListAPIView):
         qs = Customer.objects.filter(store=store, is_merged=False).select_related("assigned_to")
         q = self.request.GET.get("q")
         if q:
-            qs = qs.filter(
-                # Case-insensitive search across name/email/phone.
-                display_name__icontains=q,
-            ) | qs.filter(first_name__icontains=q) | qs.filter(email__icontains=q) | qs.filter(phone__icontains=q)
+            qs = (
+                qs.filter(
+                    # Case-insensitive search across name/email/phone.
+                    display_name__icontains=q,
+                )
+                | qs.filter(first_name__icontains=q)
+                | qs.filter(email__icontains=q)
+                | qs.filter(phone__icontains=q)
+            )
         return qs.distinct().order_by("-last_seen_at")
 
 
@@ -303,16 +325,27 @@ class CustomerDetailView(StoreContextMixin, generics.RetrieveUpdateAPIView):
         store = self.request.store
         if store is None:
             return Customer.objects.none()
-        return Customer.objects.filter(store=store).select_related("assigned_to").prefetch_related(
-            "channel_identities", "tags",
+        return (
+            Customer.objects.filter(store=store)
+            .select_related("assigned_to")
+            .prefetch_related(
+                "channel_identities",
+                "tags",
+            )
         )
 
     def get_serializer_class(self):
-        return CustomerUpdateSerializer if self.request.method in ("PATCH", "PUT") else CustomerSerializer
+        return (
+            CustomerUpdateSerializer
+            if self.request.method in ("PATCH", "PUT")
+            else CustomerSerializer
+        )
 
     def perform_update(self, serializer):
         services.CustomerService.update_profile(
-            customer=serializer.instance, actor=self.request.user, **serializer.validated_data,
+            customer=serializer.instance,
+            actor=self.request.user,
+            **serializer.validated_data,
         )
 
 
@@ -332,7 +365,9 @@ def merge_customer(request, customer_id):
     ser.is_valid(raise_exception=True)
     duplicate = Customer.objects.filter(store=store, id=ser.validated_data["duplicate_id"]).first()
     if duplicate is None:
-        return Response({"detail": "Duplicate customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": "Duplicate customer not found."}, status=status.HTTP_404_NOT_FOUND
+        )
 
     services.CustomerService.merge(primary=primary, duplicate=duplicate, actor=request.user)
     return Response(CustomerSerializer(primary).data)
@@ -347,7 +382,86 @@ def customer_timeline(request, customer_id):
     if customer is None:
         raise NotFound("Customer not found.")
     return Response(CustomerTimelineSerializer(customer).data)
-    
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+@current_store
+def refresh_customer_identity(request, customer_id, identity_id):
+    """Trigger an on-demand profile refresh for one channel identity.
+
+    Enqueues the ``enrich_customer_identity`` Celery task (async) so the
+    response is fast. The task pulls the latest name/avatar/locale from
+    the channel API, subject to the source-of-truth rule (agent-edited
+    fields are never overwritten). The UI should re-fetch the customer
+    a few seconds later to see the refreshed data, or use the realtime
+    WebSocket update when available.
+
+    Path: ``POST /api/v1/messaging/customers/<customer_id>/identities/<identity_id>/refresh/``
+    Permission: ``customers.update``.
+    """
+    from .models import CustomerChannelIdentity
+    from .tasks import enrich_customer_identity
+
+    store = request.store
+    if not PermissionResolver().check(request.user, store, "customers.update"):
+        raise PermissionDenied("You cannot refresh customer profiles.")
+
+    # Both the customer and the identity must belong to the store. The
+    # identity must also belong to the customer (path consistency).
+    customer = Customer.objects.filter(store=store, id=customer_id).first()
+    if customer is None:
+        raise NotFound("Customer not found.")
+    identity = (
+        CustomerChannelIdentity.objects.filter(store=store, customer=customer, id=identity_id)
+        .select_related("channel")
+        .first()
+    )
+    if identity is None:
+        raise NotFound("Channel identity not found for this customer.")
+
+    # Enqueue + return immediately. The task is idempotent and safe to retry.
+    enrich_customer_identity.delay(str(identity.id))
+    return Response(
+        {
+            "detail": f"Profile refresh queued for {identity.channel.name}.",
+            "identity_id": str(identity.id),
+            "queued_at": customer.updated_at.isoformat() if customer.updated_at else None,
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+@current_store
+def suggested_merges(request):
+    """Return likely-duplicate customer pairs for manual review.
+
+    Heuristic-only — never auto-merges. Looks for active (un-merged)
+    customers in the store sharing strong signals: identical avatar URL
+    (score 0.9) or same display name with recency overlap ≤7 days
+    (score 0.6). Each suggestion is ready for UI review with
+    "Merge" / "Dismiss" actions.
+
+    Path: ``GET /api/v1/messaging/customers/suggested_merges/``
+    Permission: ``customers.view``.
+    Optional query: ``?limit=50`` (max 200).
+    """
+    store = request.store
+    if not PermissionResolver().check(request.user, store, "customers.view"):
+        raise PermissionDenied("You cannot view customer suggestions.")
+
+    try:
+        limit = min(int(request.GET.get("limit", 50)), 200)
+    except (TypeError, ValueError):
+        limit = 50
+
+    suggestions = services.CustomerProfileService.detect_duplicates(
+        store_id=store.id,
+        limit=limit,
+    )
+    return Response({"items": suggestions, "count": len(suggestions)})
+
 
 # ===========================================================================
 # Connected channels
@@ -360,17 +474,27 @@ class ConnectedAccountListView(StoreContextMixin, generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == "POST":
-            return [permissions.IsAuthenticated(), IsStoreMember(), HasPermission.with_code("connected_channels.create")()]
+            return [
+                permissions.IsAuthenticated(),
+                IsStoreMember(),
+                HasPermission.with_code("connected_channels.create")(),
+            ]
         return super().get_permissions()
 
     def get_queryset(self):
         store = self.request.store
         if store is None:
             return ConnectedAccount.objects.none()
-        return ConnectedAccount.objects.filter(store=store).select_related("channel", "connected_by")
+        return ConnectedAccount.objects.filter(store=store).select_related(
+            "channel", "connected_by"
+        )
 
     def get_serializer_class(self):
-        return ConnectChannelSerializer if self.request.method == "POST" else ConnectedAccountSerializer
+        return (
+            ConnectChannelSerializer
+            if self.request.method == "POST"
+            else ConnectedAccountSerializer
+        )
 
     def create(self, request, *args, **kwargs):
         ser = ConnectChannelSerializer(data=request.data)
@@ -415,7 +539,9 @@ class ConnectedAccountDetailView(StoreContextMixin, generics.RetrieveUpdateDestr
         allowed = {"connected", "disconnected"}
         if new_status in allowed:
             services.ChannelService.set_status(
-                account=instance, status=new_status, actor=self.request.user,
+                account=instance,
+                status=new_status,
+                actor=self.request.user,
             )
         instance.refresh_from_db()
 
@@ -437,6 +563,7 @@ def verify_channel(request, channel_id):
     button in the channel card. Requires ``connected_channels.update``.
     """
     from apps.permissions.resolver import PermissionResolver
+
     store = request.store
     if not PermissionResolver().check(request.user, store, "connected_channels.update"):
         raise PermissionDenied("You cannot verify channels.")
@@ -459,6 +586,7 @@ def account_settings(request, channel_id):
     ``connected_channels.view``.
     """
     from apps.permissions.resolver import PermissionResolver
+
     store = request.store
     if not PermissionResolver().check(request.user, store, "connected_channels.view"):
         raise PermissionDenied("You cannot view channel settings.")
@@ -476,7 +604,9 @@ def account_settings(request, channel_id):
         for key, value in account.credentials.items():
             if not value:
                 masked_creds[key] = "(empty)"
-            elif any(secret_word in key.lower() for secret_word in ['secret', 'token', 'password', 'key']):
+            elif any(
+                secret_word in key.lower() for secret_word in ["secret", "token", "password", "key"]
+            ):
                 # For secrets, show last 4 chars only
                 str_val = str(value)
                 if len(str_val) > 8:
@@ -493,23 +623,28 @@ def account_settings(request, channel_id):
 
     # Build webhook URL
     from django.contrib.sites.shortcuts import get_current_site
-    site = get_current_site(request)
-    webhook_url = f"{request.scheme}://{site.domain}/messaging/webhooks/{channel.slug}/{account.id}/"
 
-    return Response({
-        "account": ConnectedAccountSerializer(account).data,
-        "credentials": {
-            "masked": masked_creds,
-            "keys": list(account.credentials.keys()) if account.credentials else [],
-            "count": len(account.credentials) if account.credentials else 0,
-            "has_credentials": bool(account.credentials),
-        },
-        "webhook": {
-            "url": webhook_url,
-            "verify_token": mask_token(account.webhook_verify_token),
-            "verify_token_raw": account.webhook_verify_token or None,  # For show/hide toggle
-        },
-    })
+    site = get_current_site(request)
+    webhook_url = (
+        f"{request.scheme}://{site.domain}/messaging/webhooks/{channel.slug}/{account.id}/"
+    )
+
+    return Response(
+        {
+            "account": ConnectedAccountSerializer(account).data,
+            "credentials": {
+                "masked": masked_creds,
+                "keys": list(account.credentials.keys()) if account.credentials else [],
+                "count": len(account.credentials) if account.credentials else 0,
+                "has_credentials": bool(account.credentials),
+            },
+            "webhook": {
+                "url": webhook_url,
+                "verify_token": mask_token(account.webhook_verify_token),
+                "verify_token_raw": account.webhook_verify_token or None,  # For show/hide toggle
+            },
+        }
+    )
 
 
 def mask_token(token: str) -> str:
@@ -534,6 +669,7 @@ def update_account_credentials(request, channel_id):
     updating individual fields. Requires ``connected_channels.update``.
     """
     from apps.permissions.resolver import PermissionResolver
+
     store = request.store
     if not PermissionResolver().check(request.user, store, "connected_channels.update"):
         raise PermissionDenied("You cannot update channel credentials.")
@@ -562,6 +698,7 @@ def update_account_credentials(request, channel_id):
 
     # Log the activity (account info stored in metadata)
     from .models import Activity
+
     Activity.objects.create(
         store=store,
         actor=request.user,
@@ -581,10 +718,12 @@ def update_account_credentials(request, channel_id):
         # Verification failed, but still return success for the update
         pass
 
-    return Response({
-        "account": ConnectedAccountSerializer(account).data,
-        "message": "Credentials updated successfully",
-    })
+    return Response(
+        {
+            "account": ConnectedAccountSerializer(account).data,
+            "message": "Credentials updated successfully",
+        }
+    )
 
 
 # ===========================================================================
@@ -639,7 +778,9 @@ def toggle_channel(request, channel_id):
         raise NotFound("Channel not found.")
     new_enabled = request.data.get("is_enabled")
     if not isinstance(new_enabled, bool):
-        return Response({"detail": "is_enabled (boolean) is required."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"detail": "is_enabled (boolean) is required."}, status=status.HTTP_400_BAD_REQUEST
+        )
     channel.is_enabled = new_enabled
     channel.save(update_fields=["is_enabled", "updated_at"])
     return Response(ChannelCatalogSerializer(channel).data)

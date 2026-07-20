@@ -60,11 +60,21 @@ function customersApp() {
         mergeCandidates: [],
         merging: false,
 
+        // Suggested merges (Tier 3 duplicate review). Dismissal is
+        // per-session (sessionStorage) — keeps the UI lean without a
+        // persistent suggestion model. Reload = fresh review.
+        suggestions: [],
+        dismissedSuggestionKeys: new Set(
+            (JSON.parse(sessionStorage.getItem('dismissedSuggestions') || '[]'))
+        ),
+        mergingSuggestion: null,
+
 
         init() {
             this.storeId = this.$el.dataset.storeId || '';
             if (!this.storeId) { this.error = 'No store selected.'; return; }
             this.loadCustomers();
+            this.loadSuggestions();
         },
 
         async loadCustomers() {
@@ -130,6 +140,76 @@ function customersApp() {
                 await this.openTimeline(primary);
             } catch (err) { this.notify(err.message, 'error'); }
             finally { this.merging = false; }
+        },
+
+        /* ================================================================
+         * Suggested merges (Tier 3 duplicate review)
+         * ================================================================ */
+        async loadSuggestions() {
+            try {
+                const data = await api(`${this.apiBase}/customers/suggested_merges/`, { storeId: this.storeId });
+                this.suggestions = data.items || [];
+            } catch { /* best-effort — feature degrades silently */ }
+        },
+
+        get visibleSuggestions() {
+            // Exclude already-dismissed + already-merged (one side no
+            // longer in the active list). Caps at 5 to stay scannable.
+            return this.suggestions
+                .filter(s => !this.isSuggestionDismissed(s))
+                .filter(s => this.customers.some(c => c.id === s.primary_id)
+                          && this.customers.some(c => c.id === s.duplicate_id))
+                .slice(0, 5);
+        },
+
+        isSuggestionDismissed(s) {
+            const key = this._suggestionKey(s);
+            return this.dismissedSuggestionKeys.has(key);
+        },
+
+        dismissSuggestion(s) {
+            const key = this._suggestionKey(s);
+            this.dismissedSuggestionKeys.add(key);
+            this.dismissedSuggestionKeys = new Set(this.dismissedSuggestionKeys); // trigger reactivity
+            sessionStorage.setItem('dismissedSuggestions', JSON.stringify([...this.dismissedSuggestionKeys]));
+        },
+
+        dismissAllSuggestions() {
+            for (const s of this.visibleSuggestions) this.dismissSuggestion(s);
+        },
+
+        async acceptSuggestion(s, idx) {
+            // Merge duplicate into primary (primary is the higher-score
+            // first element of the pair). Same confirmation modal as the
+            // manual merge flow so the agent sees the same warning.
+            const ok = await window.confirmAction({
+                title: 'Merge these customers?',
+                message: `Merge "${s.duplicate_name}" into "${s.primary_name}"? The duplicate will be retired and all its history moved over.`,
+                confirmText: 'Merge',
+                confirmClass: 'btn-warning',
+            });
+            if (!ok) return;
+            this.mergingSuggestion = idx;
+            try {
+                await api(`${this.apiBase}/customers/${s.primary_id}/merge/`, {
+                    method: 'POST', storeId: this.storeId, body: { duplicate_id: s.duplicate_id },
+                });
+                this.dismissSuggestion(s);
+                this.notify(`Merged "${s.duplicate_name}" into "${s.primary_name}".`, 'success');
+                await this.loadCustomers();
+                // The merged-away customer is gone, so reload suggestions
+                // to drop any pair that referenced it.
+                await this.loadSuggestions();
+            } catch (err) {
+                this.notify(err.message || 'Merge failed.', 'error');
+            } finally {
+                this.mergingSuggestion = null;
+            }
+        },
+
+        _suggestionKey(s) {
+            // Order-independent key so (A,B) and (B,A) dismiss as one.
+            return [s.primary_id, s.duplicate_id].sort().join(':');
         },
 
         /* ---- helpers ---- */

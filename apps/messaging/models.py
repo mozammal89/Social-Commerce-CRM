@@ -33,6 +33,8 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -86,7 +88,9 @@ class Channel(BaseModel):
     )
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
-    icon = models.CharField(max_length=64, blank=True, help_text=_("Icon name or emoji for the UI."))
+    icon = models.CharField(
+        max_length=64, blank=True, help_text=_("Icon name or emoji for the UI.")
+    )
     is_enabled = models.BooleanField(default=True, db_index=True)
     capabilities = models.JSONField(
         default=dict,
@@ -100,7 +104,9 @@ class Channel(BaseModel):
     adapter_class = models.CharField(
         max_length=255,
         blank=True,
-        help_text=_("Dotted path to the BaseChannelAdapter subclass, e.g. apps.messaging.adapters.facebook.adapter.FacebookAdapter"),
+        help_text=_(
+            "Dotted path to the BaseChannelAdapter subclass, e.g. apps.messaging.adapters.facebook.adapter.FacebookAdapter"
+        ),
     )
     config_schema = models.JSONField(
         default=dict,
@@ -274,6 +280,27 @@ class Customer(TenantBaseModel):
     class Meta:
         ordering = ["-last_seen_at", "-created_at"]
         db_table = "messaging_customer"
+        constraints = [
+            # Partial unique constraints enforce deterministic cross-channel
+            # matching (Tier 2): at most one *active (un-merged)* customer per
+            # (store, normalized email) and per (store, phone). Empty values
+            # and merged duplicates are excluded so they don't collide.
+            # NOTE: applying these fails if existing data already violates
+            # them — migration 0003 pre-scans and reports violations before
+            # adding the constraints so they can be merged first.
+            models.UniqueConstraint(
+                "store",
+                Lower("email"),
+                condition=~Q(email="") & Q(is_merged=False),
+                name="uniq_customer_store_email_active",
+            ),
+            models.UniqueConstraint(
+                "store",
+                "phone",
+                condition=~Q(phone="") & Q(is_merged=False),
+                name="uniq_customer_store_phone_active",
+            ),
+        ]
         indexes = [
             models.Index(fields=["store", "last_seen_at"]),
             models.Index(fields=["store", "assigned_to"]),
@@ -333,6 +360,47 @@ class CustomerChannelIdentity(TenantBaseModel):
     avatar_url = models.URLField(max_length=1024, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
 
+    # --- Profile sync lifecycle (added to enable background profile refresh) ---
+    # Channel-provided context that doesn't belong on the channel-agnostic
+    # Customer profile. Filled by ``adapter.fetch_identity_profile()``.
+    language = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text=_("ISO 639-1 language code from the channel, if exposed."),
+    )
+    timezone = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        help_text=_("IANA timezone (e.g. America/New_York) from the channel, if exposed."),
+    )
+    # When the identity's profile was last refreshed from the channel API.
+    # NULL means "never synced" — the periodic refresh task picks those up
+    # first. Drives the daily sync batch.
+    last_synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_("Last successful profile refresh from the channel API."),
+    )
+    # UI hint: which identity's display_name/avatar should surface on the
+    # customer card. Defaults to the first identity; user can change it.
+    # Not a hard constraint — at most one is primary per customer is enforced
+    # at the service layer, not the DB, to keep migrations simple.
+    is_primary = models.BooleanField(
+        default=False,
+        help_text=_("Whether this identity's profile is surfaced on the customer card."),
+    )
+    # Last raw profile payload from the channel, kept separate from
+    # ``metadata`` (which is adapter-controlled). Useful for debugging and
+    # for the source-of-truth field tracking (see CustomerProfileService).
+    profile_metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=_("Last raw profile payload from the channel + per-field source tracking."),
+    )
+
     class Meta:
         ordering = ["-created_at"]
         db_table = "messaging_customer_channel_identity"
@@ -347,6 +415,8 @@ class CustomerChannelIdentity(TenantBaseModel):
         indexes = [
             models.Index(fields=["connected_account", "external_id"]),
             models.Index(fields=["customer", "channel"]),
+            # Drives the daily "which identities need re-syncing?" query.
+            models.Index(fields=["store", "last_synced_at"]),
         ]
 
     def __str__(self) -> str:
@@ -619,7 +689,9 @@ class Attachment(TenantBaseModel):
     file_size = models.PositiveBigIntegerField(null=True, blank=True)
     width = models.PositiveIntegerField(null=True, blank=True)
     height = models.PositiveIntegerField(null=True, blank=True)
-    duration = models.PositiveIntegerField(null=True, blank=True, help_text=_("Seconds, for audio/video."))
+    duration = models.PositiveIntegerField(
+        null=True, blank=True, help_text=_("Seconds, for audio/video.")
+    )
     thumbnail_url = models.URLField(max_length=2048, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
 

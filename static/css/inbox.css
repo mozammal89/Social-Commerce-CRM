@@ -814,3 +814,14 @@
 .mobile-back-btn {
     display: none;
 }
+
+/* Slow spin for the per-identity "Refresh profile" button while a
+   refresh is queued/in-flight. The inline button already has the
+   Bootstrap icon swap; this just rotates it. */
+.spin-slow i {
+    animation: spin-slow 1.4s linear infinite;
+}
+@keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}

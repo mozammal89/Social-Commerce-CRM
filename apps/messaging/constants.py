@@ -151,6 +151,8 @@ class ActivityType(models.TextChoices):
     CUSTOMER_CREATED = "customer.created", "Customer created"
     CUSTOMER_UPDATED = "customer.updated", "Customer profile updated"
     CUSTOMER_MERGED = "customer.merged", "Customer merged"
+    CUSTOMER_PROFILE_SYNCED = "customer.profile_synced", "Customer profile synced from channel"
+    CUSTOMER_IDENTITY_LINKED = "customer.identity_linked", "Channel identity linked"
     TAG_ADDED = "tag.added", "Tag added"
     TAG_REMOVED = "tag.removed", "Tag removed"
     CHANNEL_CONNECTED = "channel.connected", "Channel connected"

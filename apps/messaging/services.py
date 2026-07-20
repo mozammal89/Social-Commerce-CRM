@@ -34,7 +34,7 @@ the service signatures.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from django.contrib.auth import get_user_model
@@ -88,6 +88,27 @@ User = get_user_model()
 PREVIEW_LENGTH = 160
 
 
+def _enqueue_enrichment(identity_id: str) -> None:
+    """Fire-and-forget enqueue of profile enrichment for a new identity.
+
+    Imported lazily to break the services↔tasks circular import (tasks.py
+    imports services.py for ``MessageService`` etc., so services.py must
+    not import tasks.py at module load time). Swallows all errors so
+    webhook ingestion never breaks if Celery is down or misconfigured —
+    the daily ``sync_customer_profiles`` task is the safety net that
+    catches any identity whose ``last_synced_at`` is still NULL.
+    """
+    try:
+        from .tasks import enrich_customer_identity
+
+        enrich_customer_identity.delay(identity_id)
+    except Exception:
+        logger.exception(
+            "Failed to enqueue enrich_customer_identity for %s — the daily sync will retry",
+            identity_id,
+        )
+
+
 # ===========================================================================
 # Customer service
 # ===========================================================================
@@ -106,19 +127,36 @@ class CustomerService:
     ) -> tuple[Customer, CustomerChannelIdentity, bool]:
         """Resolve a customer from a channel identity, creating if needed.
 
-        Returns ``(customer, identity, created_customer)``. The identity
-        is the webhook resolution key; we look it up first so the same
-        inbound sender always maps to the same customer across messages.
-        ``created_customer`` is True only when a brand-new Customer was
-        created (the identity row is created whenever missing).
+        Resolution tiers (in order):
+
+        1. **Identity match** — ``(store, channel, external_id)`` unique
+           key on CustomerChannelIdentity. Always hits for a returning
+           sender; the hot path for every inbound message.
+
+        2. **Cross-channel contact match** — when the inbound payload
+           yields a channel-verified email or phone and that contact
+           already belongs to an active (un-merged) Customer in the same
+           store, attach the new identity to that customer via
+           :meth:`CustomerProfileService.link_identity` instead of
+           creating a duplicate. Verified-contact rules:
+             * WhatsApp — ``external_id`` IS the E.164 phone number.
+             * Future email channel — ``external_id`` IS the email.
+             * Others — only explicit ``profile['email']`` / ``profile['phone']``.
+
+        3. **Create** — no match: build a new Customer (with verified
+           contact info persisted, so future Tier 2 lookups can find it)
+           + a new CustomerChannelIdentity.
+
+        Returns ``(customer, identity, created_customer)`` where
+        ``created_customer`` is True only at tier 3.
         """
         profile = profile or {}
         channel = connected_account.channel
 
         with transaction.atomic():
+            # --- Tier 1: identity lookup -------------------------------
             identity = (
-                CustomerChannelIdentity.objects
-                .select_related("customer")
+                CustomerChannelIdentity.objects.select_related("customer")
                 .filter(
                     store=connected_account.store,
                     channel=channel,
@@ -131,7 +169,38 @@ class CustomerService:
                 CustomerService._maybe_enrich_identity(identity, profile)
                 return identity.customer, identity, False
 
-            # No identity yet -> create a customer + identity together.
+            # --- Tier 2: cross-channel contact match ------------------
+            email, phone = CustomerService._extract_verified_contact(
+                channel_slug=channel.slug,
+                external_id=external_id,
+                profile=profile,
+            )
+            existing = CustomerService._find_active_by_contact(
+                store=connected_account.store,
+                email=email,
+                phone=phone,
+            )
+            if existing is not None:
+                # Attach the new identity to the existing customer. This
+                # is the duplicate-prevention path: a WA sender whose
+                # phone matches an existing customer (e.g. one created
+                # earlier via FB + agent-added phone) gets linked rather
+                # than duplicated.
+                identity, _ident_created = CustomerProfileService.link_identity(
+                    customer=existing,
+                    connected_account=connected_account,
+                    external_id=external_id,
+                    profile=profile,
+                )
+                # Enqueue lazy enrichment for the newly-linked identity
+                # (same rule as the create path: skip when webhook had a
+                # display_name already).
+                webhook_had_name = bool(profile.get("display_name") or profile.get("name"))
+                if not webhook_had_name:
+                    transaction.on_commit(lambda iid=str(identity.id): _enqueue_enrichment(iid))
+                return existing, identity, False
+
+            # --- Tier 3: create new customer + identity ----------------
             display_name = profile.get("display_name") or profile.get("name") or external_id
             customer = Customer.objects.create(
                 store=connected_account.store,
@@ -139,6 +208,10 @@ class CustomerService:
                 last_name=profile.get("last_name", ""),
                 display_name=display_name,
                 avatar=profile.get("avatar_url", ""),
+                # Persist verified contact so future Tier 2 lookups can
+                # find this customer from a different channel.
+                email=email or (profile.get("email") or "").strip().lower(),
+                phone=phone or (profile.get("phone") or "").strip(),
                 first_seen_at=timezone.now(),
                 last_seen_at=timezone.now(),
             )
@@ -159,7 +232,85 @@ class CustomerService:
                 description=f"Customer created via {channel.name}",
                 metadata={"channel": channel.slug, "external_id": external_id},
             )
+
+            # Lazy profile enrichment: ask the channel API for the real
+            # name/avatar/locale/timezone. Skipped when the webhook
+            # payload already carried a display_name (WhatsApp does this
+            # — avoids redundant API work). Scheduled via on_commit so
+            # the task never sees a half-committed identity. Failure is
+            # non-fatal: the daily sync_store_profiles task catches any
+            # identity whose last_synced_at is still NULL.
+            webhook_had_name = bool(profile.get("display_name") or profile.get("name"))
+            if not webhook_had_name:
+                transaction.on_commit(lambda iid=str(identity.id): _enqueue_enrichment(iid))
+
             return customer, identity, True
+
+    # ------------------------------------------------------------------
+    # Cross-channel contact matching (Tier 2 helpers)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _extract_verified_contact(
+        *,
+        channel_slug: str,
+        external_id: str,
+        profile: dict[str, Any],
+    ) -> tuple[str, str]:
+        """Return ``(email, phone)`` verified by the channel for this sender.
+
+        "Verified" means the channel itself asserts the value — not a
+        user-supplied field. The partial unique constraints on
+        ``messaging_customer`` (from migration 0003) make these the
+        canonical duplicate-prevention keys.
+
+        Channel rules:
+          * ``whatsapp`` — ``external_id`` IS the E.164 phone number
+            (the Cloud API only accepts real phone numbers as the
+            sender; Meta verifies them at delivery). Always trusted.
+          * (future) ``email`` — ``external_id`` IS the email address
+            (verified at SMTP handshake / DKIM).
+          * Others — only explicit ``profile['email']`` / ``profile['phone']``
+            keys are trusted; the adapter decides whether to populate
+            them from a verified platform field.
+
+        Both values are normalized: email lowercased + trimmed, phone
+        stripped of whitespace. Empty string when unavailable.
+        """
+        email = (profile.get("email") or "").strip().lower()
+        phone = (profile.get("phone") or "").strip()
+        if channel_slug == "whatsapp" and not phone and external_id:
+            # WA sender id is the E.164 phone — verified by the platform.
+            phone = external_id.strip()
+        return email, phone
+
+    @staticmethod
+    def _find_active_by_contact(
+        *,
+        store,
+        email: str,
+        phone: str,
+    ) -> Customer | None:
+        """Find an active (un-merged) customer in ``store`` by verified contact.
+
+        Email wins over phone (a verified email is a stronger signal
+        than a phone — numbers get recycled, emails don't). Returns
+        ``None`` when both inputs are empty or no match exists.
+
+        The partial unique constraints added in migration 0003
+        (``uniq_customer_store_email_active`` and
+        ``uniq_customer_store_phone_active``) guarantee at most one
+        active customer per (store, contact), so ``.first()`` is
+        deterministic — there cannot be two.
+        """
+        if email:
+            match = Customer.objects.filter(store=store, email=email, is_merged=False).first()
+            if match is not None:
+                return match
+        if phone:
+            match = Customer.objects.filter(store=store, phone=phone, is_merged=False).first()
+            if match is not None:
+                return match
+        return None
 
     # ------------------------------------------------------------------
     # Profile enrichment
@@ -197,16 +348,29 @@ class CustomerService:
             cust_changed = True
         if cust_changed:
             cust.last_seen_at = timezone.now()
-            cust.save(update_fields=[
-                "display_name", "avatar", "first_name", "last_name", "last_seen_at", "updated_at",
-            ])
+            cust.save(
+                update_fields=[
+                    "display_name",
+                    "avatar",
+                    "first_name",
+                    "last_name",
+                    "last_seen_at",
+                    "updated_at",
+                ]
+            )
         else:
             # Still bump last_seen — the customer just messaged us.
             Customer.objects.filter(pk=cust.pk).update(last_seen_at=timezone.now())
 
     @staticmethod
     def update_profile(*, customer: Customer, actor: User | None = None, **fields) -> Customer:
-        """Update editable customer fields (called by the CRM UI)."""
+        """Update editable customer fields (called by the CRM UI).
+
+        Marks every touched syncable field as agent-edited so subsequent
+        channel profile syncs don't overwrite the agent's changes. The
+        source-of-truth record lives on ``Customer.metadata._field_sources``
+        and is consulted by ``CustomerProfileService._propagate_to_customer``.
+        """
         allowed = {"first_name", "last_name", "display_name", "email", "phone", "avatar", "notes"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -215,6 +379,12 @@ class CustomerService:
             for k, v in updates.items():
                 setattr(customer, k, v)
             customer.save(update_fields=list(updates) + ["updated_at"])
+            # Record agent edits so the next channel sync skips these fields.
+            for field in updates:
+                CustomerProfileService.mark_field_as_agent_edited(
+                    customer=customer,
+                    field_name=field,
+                )
             Activity.objects.create(
                 store=customer.store,
                 customer=customer,
@@ -287,9 +457,12 @@ class CustomerService:
         with transaction.atomic():
             customer.tags.add(tag)
             Activity.objects.create(
-                store=customer.store, customer=customer, actor=actor,
+                store=customer.store,
+                customer=customer,
+                actor=actor,
                 action_type=ActivityType.TAG_ADDED.value,
-                description=f"Tag '{tag.name}' added", metadata={"tag_id": str(tag.pk)},
+                description=f"Tag '{tag.name}' added",
+                metadata={"tag_id": str(tag.pk)},
             )
 
     @staticmethod
@@ -297,9 +470,12 @@ class CustomerService:
         with transaction.atomic():
             customer.tags.remove(tag)
             Activity.objects.create(
-                store=customer.store, customer=customer, actor=actor,
+                store=customer.store,
+                customer=customer,
+                actor=actor,
                 action_type=ActivityType.TAG_REMOVED.value,
-                description=f"Tag '{tag.name}' removed", metadata={"tag_id": str(tag.pk)},
+                description=f"Tag '{tag.name}' removed",
+                metadata={"tag_id": str(tag.pk)},
             )
 
     @staticmethod
@@ -307,9 +483,12 @@ class CustomerService:
         with transaction.atomic():
             note = CustomerNote.objects.create(customer=customer, author=author, body=body)
             Activity.objects.create(
-                store=customer.store, customer=customer, actor=author,
+                store=customer.store,
+                customer=customer,
+                actor=author,
                 action_type=ActivityType.NOTE_ADDED.value,
-                description="Customer note added", metadata={"note_id": str(note.pk)},
+                description="Customer note added",
+                metadata={"note_id": str(note.pk)},
             )
         return note
 
@@ -327,31 +506,536 @@ class CustomerService:
         """
         items: list[dict[str, Any]] = []
         for msg in customer.messages.select_related("sender").order_by("created_at"):
-            items.append({
-                "type": "message",
-                "timestamp": msg.created_at,
-                "data": {
-                    "id": str(msg.id),
-                    "direction": msg.direction,
-                    "message_type": msg.message_type,
-                    "text": msg.text,
-                    "sender_type": msg.sender_type,
-                },
-            })
+            items.append(
+                {
+                    "type": "message",
+                    "timestamp": msg.created_at,
+                    "data": {
+                        "id": str(msg.id),
+                        "direction": msg.direction,
+                        "message_type": msg.message_type,
+                        "text": msg.text,
+                        "sender_type": msg.sender_type,
+                    },
+                }
+            )
         for note in customer.customer_notes.select_related("author").order_by("created_at"):
-            items.append({
-                "type": "note",
-                "timestamp": note.created_at,
-                "data": {"id": str(note.id), "body": note.body, "author": str(note.author) if note.author else ""},
-            })
+            items.append(
+                {
+                    "type": "note",
+                    "timestamp": note.created_at,
+                    "data": {
+                        "id": str(note.id),
+                        "body": note.body,
+                        "author": str(note.author) if note.author else "",
+                    },
+                }
+            )
         for act in customer.activities.order_by("created_at"):
-            items.append({
-                "type": "activity",
-                "timestamp": act.created_at,
-                "data": {"id": str(act.id), "action_type": act.action_type, "description": act.description},
-            })
+            items.append(
+                {
+                    "type": "activity",
+                    "timestamp": act.created_at,
+                    "data": {
+                        "id": str(act.id),
+                        "action_type": act.action_type,
+                        "description": act.description,
+                    },
+                }
+            )
         items.sort(key=lambda i: i["timestamp"] or datetime.min.replace(tzinfo=timezone.utc))
         return items
+
+
+# ===========================================================================
+# Customer profile service — channel-driven enrichment & identity linking
+# ===========================================================================
+class CustomerProfileService:
+    """Channel-driven customer profile enrichment, sync and identity linking.
+
+    This service is the **sole consumer** of
+    ``BaseChannelAdapter.fetch_identity_profile()``. It owns:
+
+    * The source-of-truth rule (agent edits vs channel-provided data).
+    * Identity refresh lifecycle (``last_synced_at``).
+    * Cross-channel identity linking (Tier 2 matching entry point).
+    * Duplicate suggestion (Tier 3 heuristic).
+
+    Source-of-truth tracking
+    ------------------------
+    Every syncable field records who last wrote it:
+
+    * ``CustomerChannelIdentity.profile_metadata["_sources"][field]`` —
+      one of ``"channel:<slug>"`` or ``"agent"``. Covers the identity-level
+      fields (``display_name``, ``avatar_url``, ``language``, ``timezone``).
+    * ``Customer.metadata["_field_sources"][field]`` — same vocabulary,
+      covers customer-level fields (``first_name``, ``last_name``,
+      ``display_name``, ``avatar``).
+
+    Sync rule for each field:
+      1. If the recorded source is ``"agent"`` → never overwrite.
+      2. Else if the adapter returned a non-empty value → overwrite and
+         record ``"channel:<slug>"``.
+      3. Else (adapter returned empty) → leave the existing value intact
+         (a transient API miss must not blank stored data).
+
+    An agent can undo their edit (flip the source back to ``"channel"``)
+    via :meth:`unmark_agent_edit`, future UI affordance.
+    """
+
+    # Fields that live on CustomerChannelIdentity and come from the channel.
+    IDENTITY_SYNC_FIELDS: tuple[str, ...] = (
+        "display_name",
+        "avatar_url",
+        "language",
+        "timezone",
+    )
+    # Fields that live on Customer and are propagated from the primary
+    # identity. Maps customer field → the key the adapter returns.
+    CUSTOMER_SYNC_FIELDS: tuple[str, ...] = (
+        "first_name",
+        "last_name",
+        "display_name",
+        "avatar",
+    )
+    _CUSTOMER_FROM_ADAPTER = {
+        "first_name": "first_name",
+        "last_name": "last_name",
+        "display_name": "display_name",
+        "avatar": "avatar_url",
+    }
+    # Sync window for the periodic batch task.
+    SYNC_RESCAN_WINDOW_DAYS = 7
+
+    # ------------------------------------------------------------------
+    # Single-identity enrichment (the Celery task target)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def enrich_identity(identity_id) -> bool:
+        """Fetch a fresh profile from the channel and update the identity.
+
+        Idempotent and safe to retry. Returns ``True`` when an update was
+        applied, ``False`` when the identity was skipped (merged customer,
+        unknown identity, or adapter returned nothing new). Never raises
+        on adapter failures — logs and returns ``False`` so the Celery
+        task doesn't poison the batch.
+
+        Called from:
+          * The lazy-enrichment hook in ``CustomerService.get_or_create_by_identity``
+            (Step 4) — ``enrich_customer_identity.delay(identity_id)``.
+          * The daily ``sync_customer_profiles`` beat task for stale identities.
+          * The on-demand ``POST /customers/{id}/identities/{iid}/refresh/``.
+        """
+        try:
+            identity = CustomerChannelIdentity.objects.select_related(
+                "customer", "connected_account", "channel"
+            ).get(pk=identity_id)
+        except CustomerChannelIdentity.DoesNotExist:
+            logger.warning("enrich_identity: identity %s not found", identity_id)
+            return False
+
+        # Skip merged duplicates — their profile is frozen for history.
+        if identity.customer.is_merged:
+            return False
+
+        adapter = get_adapter_for_account(identity.connected_account)
+        try:
+            profile = (
+                adapter.fetch_identity_profile(
+                    account=identity.connected_account,
+                    external_id=identity.external_id,
+                )
+                or {}
+            )
+        except Exception:
+            logger.exception(
+                "enrich_identity: adapter %s raised for identity %s",
+                identity.channel.slug,
+                identity.id,
+            )
+            return False
+
+        channel_source = f"channel:{identity.channel.slug}"
+        identity_changed = CustomerProfileService._apply_profile_to_identity(
+            identity=identity,
+            profile=profile,
+            channel_source=channel_source,
+        )
+
+        # Always record last_synced_at + raw payload, even if nothing else
+        # changed — this is what the periodic batch uses to skip fresh rows.
+        identity.last_synced_at = timezone.now()
+        pmeta = dict(identity.profile_metadata or {})
+        pmeta["_raw"] = profile
+        identity.profile_metadata = pmeta
+        identity.save(
+            update_fields=[
+                *CustomerProfileService.IDENTITY_SYNC_FIELDS,
+                "profile_metadata",
+                "last_synced_at",
+                "updated_at",
+            ]
+        )
+
+        # Propagate to the customer profile if this identity is the primary
+        # one (or there is no primary yet — first sync auto-promotes).
+        customer_changed = False
+        if (
+            identity.is_primary
+            or not identity.customer.channel_identities.filter(is_primary=True).exists()
+        ):
+            if not identity.is_primary:
+                CustomerProfileService.set_primary(identity)
+            customer_changed = CustomerProfileService._propagate_to_customer(
+                identity=identity,
+                profile=profile,
+                channel_source=channel_source,
+            )
+
+        Activity.objects.create(
+            store=identity.store,
+            customer=identity.customer,
+            action_type=ActivityType.CUSTOMER_PROFILE_SYNCED.value,
+            description=f"Profile synced from {identity.channel.name}",
+            metadata={
+                "identity_id": str(identity.id),
+                "channel": identity.channel.slug,
+                "identity_changed": identity_changed,
+                "customer_changed": customer_changed,
+            },
+        )
+        return True
+
+    # ------------------------------------------------------------------
+    # Source-of-truth helpers (internal)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _apply_profile_to_identity(
+        *,
+        identity: CustomerChannelIdentity,
+        profile: dict[str, Any],
+        channel_source: str,
+    ) -> bool:
+        """Write the adapter profile into the identity's syncable fields.
+
+        Honors the source-of-truth rule: never overwrites an agent-edited
+        field. Returns ``True`` if at least one field actually changed.
+        Mutates ``identity`` in place but does NOT save it (caller saves).
+        """
+        pmeta = dict(identity.profile_metadata or {})
+        sources = dict(pmeta.get("_sources", {}))
+        changed = False
+        for field in CustomerProfileService.IDENTITY_SYNC_FIELDS:
+            if sources.get(field) == "agent":
+                continue
+            new_val = profile.get(field, "") or ""
+            if new_val and new_val != getattr(identity, field):
+                setattr(identity, field, new_val)
+                sources[field] = channel_source
+                changed = True
+        pmeta["_sources"] = sources
+        identity.profile_metadata = pmeta
+        return changed
+
+    @staticmethod
+    def _propagate_to_customer(
+        *,
+        identity: CustomerChannelIdentity,
+        profile: dict[str, Any],
+        channel_source: str,
+    ) -> bool:
+        """Propagate the (primary) identity's profile to its Customer.
+
+        Subject to the source-of-truth rule. Only non-empty adapter values
+        overwrite. Returns ``True`` if any customer field was changed.
+        """
+        customer = identity.customer
+        cmeta = dict(customer.metadata or {})
+        field_sources = dict(cmeta.get("_field_sources", {}))
+        changed = False
+        for cust_field, adapter_key in CustomerProfileService._CUSTOMER_FROM_ADAPTER.items():
+            if field_sources.get(cust_field) == "agent":
+                continue
+            new_val = profile.get(adapter_key, "") or ""
+            if new_val and new_val != getattr(customer, cust_field):
+                setattr(customer, cust_field, new_val)
+                field_sources[cust_field] = channel_source
+                changed = True
+        if changed:
+            cmeta["_field_sources"] = field_sources
+            customer.metadata = cmeta
+            customer.last_seen_at = timezone.now()
+            customer.save(
+                update_fields=[
+                    *CustomerProfileService.CUSTOMER_SYNC_FIELDS,
+                    "metadata",
+                    "last_seen_at",
+                    "updated_at",
+                ]
+            )
+        return changed
+
+    @staticmethod
+    def set_primary(identity: CustomerChannelIdentity) -> CustomerChannelIdentity:
+        """Mark ``identity`` as the primary for its customer; unsets siblings.
+
+        The primary identity is the one whose profile propagates to the
+        Customer card. Enforced at the service layer (not the DB) so we
+        don't need a partial unique constraint that complicates migrations.
+        """
+        with transaction.atomic():
+            (
+                CustomerChannelIdentity.objects.filter(customer=identity.customer, is_primary=True)
+                .exclude(pk=identity.pk)
+                .update(is_primary=False)
+            )
+            if not identity.is_primary:
+                identity.is_primary = True
+                identity.save(update_fields=["is_primary", "updated_at"])
+        return identity
+
+    @staticmethod
+    def mark_field_as_agent_edited(
+        *,
+        customer: Customer,
+        field_name: str,
+    ) -> None:
+        """Record that ``field_name`` on ``customer`` was agent-edited.
+
+        After this, channel sync will not overwrite that field until
+        :meth:`unmark_agent_edit` flips it back. Called by
+        ``CustomerService.update_profile`` for every field the agent touched.
+        Safe to call for fields not in ``CUSTOMER_SYNC_FIELDS`` (no-op).
+        """
+        if field_name not in CustomerProfileService.CUSTOMER_SYNC_FIELDS:
+            return
+        cmeta = dict(customer.metadata or {})
+        field_sources = dict(cmeta.get("_field_sources", {}))
+        field_sources[field_name] = "agent"
+        cmeta["_field_sources"] = field_sources
+        customer.metadata = cmeta
+        customer.save(update_fields=["metadata", "updated_at"])
+
+    @staticmethod
+    def unmark_agent_edit(*, customer: Customer, field_name: str) -> None:
+        """Allow channel sync to overwrite ``field_name`` again.
+
+        Future UI affordance ("Undo agent edit"). The next sync of the
+        primary identity will repopulate the field.
+        """
+        cmeta = dict(customer.metadata or {})
+        field_sources = dict(cmeta.get("_field_sources", {}))
+        field_sources.pop(field_name, None)
+        cmeta["_field_sources"] = field_sources
+        customer.metadata = cmeta
+        customer.save(update_fields=["metadata", "updated_at"])
+
+    # ------------------------------------------------------------------
+    # Cross-channel identity linking (Tier 2 entry point)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def link_identity(
+        *,
+        customer: Customer,
+        connected_account: ConnectedAccount,
+        external_id: str,
+        profile: dict[str, Any] | None = None,
+    ) -> tuple[CustomerChannelIdentity, bool]:
+        """Attach a new channel identity to an existing customer.
+
+        This is the Tier 2 cross-channel matching path: when an inbound
+        payload yields a verified email/phone that matches an existing
+        Customer, the service layer calls this to attach the new identity
+        to that customer instead of creating a duplicate.
+
+        Returns ``(identity, created)``. Idempotent: if the identity
+        already exists it is returned unchanged (with ``created=False``).
+        The customer must belong to the same store as the account.
+        """
+        profile = profile or {}
+        channel = connected_account.channel
+        if customer.store_id != connected_account.store_id:
+            raise ValueError(
+                "link_identity: customer and connected_account must belong to the same store."
+            )
+
+        with transaction.atomic():
+            identity, created = CustomerChannelIdentity.objects.get_or_create(
+                store=connected_account.store,
+                channel=channel,
+                external_id=external_id,
+                defaults={
+                    "customer": customer,
+                    "connected_account": connected_account,
+                    "display_name": profile.get("display_name", ""),
+                    "avatar_url": profile.get("avatar_url", ""),
+                    "language": profile.get("language", ""),
+                    "timezone": profile.get("timezone", ""),
+                    "metadata": profile.get("extra", {}) or {},
+                },
+            )
+            if not created:
+                return identity, False
+
+            # Auto-promote to primary if this is the customer's first identity.
+            if not customer.channel_identities.filter(is_primary=True).exists():
+                identity.is_primary = True
+                identity.save(update_fields=["is_primary", "updated_at"])
+
+            Activity.objects.create(
+                store=connected_account.store,
+                customer=customer,
+                action_type=ActivityType.CUSTOMER_IDENTITY_LINKED.value,
+                description=f"Linked {channel.name} identity to existing customer",
+                metadata={
+                    "identity_id": str(identity.id),
+                    "channel": channel.slug,
+                    "external_id": external_id,
+                },
+            )
+            return identity, created
+
+    # ------------------------------------------------------------------
+    # Batch sync (the daily beat target)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def sync_store_profiles(*, store_id, batch_size: int = 500) -> dict[str, int]:
+        """Refresh all stale identities for one store.
+
+        Stale = ``last_synced_at`` older than :attr:`SYNC_RESCAN_WINDOW_DAYS`
+        or NULL (never synced). Runs in batches to bound memory; per-row
+        failures are logged but don't abort the batch. Designed to be
+        called from a Celery task — not the request path.
+
+        Returns ``{checked, refreshed, skipped, failed}`` for monitoring.
+        """
+        cutoff = timezone.now() - timedelta(
+            days=CustomerProfileService.SYNC_RESCAN_WINDOW_DAYS,
+        )
+        qs = (
+            CustomerChannelIdentity.objects.filter(store_id=store_id)
+            .exclude(customer__is_merged=True)
+            .filter(Q(last_synced_at__isnull=True) | Q(last_synced_at__lt=cutoff))
+            .values_list("pk", flat=True)
+            .order_by("last_synced_at")
+        )
+        summary = {"checked": 0, "refreshed": 0, "skipped": 0, "failed": 0}
+        pks = list(qs[:batch_size])
+        for pk in pks:
+            summary["checked"] += 1
+            try:
+                ok = CustomerProfileService.enrich_identity(pk)
+            except Exception:
+                logger.exception("sync_store_profiles: identity %s raised", pk)
+                summary["failed"] += 1
+            else:
+                if ok:
+                    summary["refreshed"] += 1
+                else:
+                    summary["skipped"] += 1
+        logger.info("sync_store_profiles(%s): %s", store_id, summary)
+        return summary
+
+    # ------------------------------------------------------------------
+    # Tier 3 duplicate suggestion (heuristic, never auto-merges)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def detect_duplicates(*, store_id, limit: int = 50) -> list[dict[str, Any]]:
+        """Return likely-duplicate customer pairs for manual review.
+
+        Heuristic, never auto-merges. Looks for active (un-merged)
+        customers in the same store sharing strong signals:
+
+          * identical avatar URL (often the same person across channels)
+          * identical normalized display name AND overlapping recency
+
+        Each suggestion is ``{primary_id, duplicate_id, reason, score,
+        primary_name, duplicate_name}`` ready for UI review. ``score`` is
+        0..1 (higher = stronger match). Capped at ``limit`` results.
+
+        Note: email/phone duplicates are already prevented by the partial
+        unique constraints from migration 0003, so we don't scan for them
+        here — those would be a data integrity bug, not a suggestion.
+        """
+        active = list(
+            Customer.objects.filter(store_id=store_id, is_merged=False)
+            .values("id", "display_name", "first_name", "last_name", "avatar", "last_seen_at")
+            .order_by("-last_seen_at")[:500]
+        )
+        suggestions: list[dict[str, Any]] = []
+
+        # Signal 1: identical avatar URL. (Empty avatars are common, so
+        # they're filtered INSIDE this block — not at the query level —
+        # so avatar-less customers can still match on name.)
+        by_avatar: dict[str, list[dict]] = {}
+        for c in active:
+            avatar = (c["avatar"] or "").strip()
+            if avatar:
+                by_avatar.setdefault(avatar, []).append(c)
+        for avatar, group in by_avatar.items():
+            if len(group) < 2:
+                continue
+            for i in range(len(group)):
+                for j in range(i + 1, len(group)):
+                    suggestions.append(
+                        {
+                            "primary_id": str(group[i]["id"]),
+                            "duplicate_id": str(group[j]["id"]),
+                            "primary_name": group[i]["display_name"]
+                            or f"{group[i]['first_name']} {group[i]['last_name']}".strip(),
+                            "duplicate_name": group[j]["display_name"]
+                            or f"{group[j]['first_name']} {group[j]['last_name']}".strip(),
+                            "reason": "identical_avatar",
+                            "score": 0.9,
+                            "evidence": {"avatar": avatar[:80]},
+                        }
+                    )
+
+        # Signal 2: identical normalized display name + recency overlap (<=7d).
+        def _norm(name: str) -> str:
+            return "".join(c.lower() for c in (name or "") if c.isalnum())
+
+        by_name: dict[str, list[dict]] = {}
+        for c in active:
+            n = _norm(c["display_name"] or f"{c['first_name']}{c['last_name']}")
+            if len(n) >= 4:  # skip very short / generic names
+                by_name.setdefault(n, []).append(c)
+        now = timezone.now()
+        for n, group in by_name.items():
+            if len(group) < 2:
+                continue
+            for i in range(len(group)):
+                for j in range(i + 1, len(group)):
+                    a, b = group[i], group[j]
+                    ta = a["last_seen_at"] or now
+                    tb = b["last_seen_at"] or now
+                    days_apart = abs((ta - tb).total_seconds()) / 86400
+                    if days_apart <= 7:
+                        suggestions.append(
+                            {
+                                "primary_id": str(a["id"]),
+                                "duplicate_id": str(b["id"]),
+                                "primary_name": a["display_name"],
+                                "duplicate_name": b["display_name"],
+                                "reason": "same_name_recent",
+                                "score": 0.6,
+                                "evidence": {"name": n, "days_apart": round(days_apart, 1)},
+                            }
+                        )
+
+        suggestions.sort(key=lambda s: s["score"], reverse=True)
+        # De-duplicate by (primary_id, duplicate_id) keeping the strongest.
+        seen: set[tuple[str, str]] = set()
+        out: list[dict[str, Any]] = []
+        for s in suggestions:
+            key = tuple(sorted([s["primary_id"], s["duplicate_id"]]))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(s)
+            if len(out) >= limit:
+                break
+        return out
 
 
 # ===========================================================================
@@ -377,16 +1061,12 @@ class ConversationService:
         """
         channel = connected_account.channel
         with transaction.atomic():
-            conv = (
-                Conversation.objects
-                .filter(
-                    store=connected_account.store,
-                    connected_account=connected_account,
-                    customer=customer,
-                    status__in=ACTIVE_CONVERSATION_STATUSES,
-                )
-                .first()
-            )
+            conv = Conversation.objects.filter(
+                store=connected_account.store,
+                connected_account=connected_account,
+                customer=customer,
+                status__in=ACTIVE_CONVERSATION_STATUSES,
+            ).first()
             if conv is not None:
                 return conv, False
 
@@ -398,7 +1078,9 @@ class ConversationService:
                 status=ConversationStatus.OPEN.value,
             )
             Activity.objects.create(
-                store=conv.store, conversation=conv, customer=customer,
+                store=conv.store,
+                conversation=conv,
+                customer=customer,
                 action_type=ActivityType.CONVERSATION_CREATED.value,
                 description=f"New conversation on {channel.name}",
             )
@@ -408,25 +1090,39 @@ class ConversationService:
     # Mutation operations
     # ------------------------------------------------------------------
     @staticmethod
-    def assign(*, conversation: Conversation, agent: User | None, actor: User | None = None) -> Conversation:
+    def assign(
+        *, conversation: Conversation, agent: User | None, actor: User | None = None
+    ) -> Conversation:
         with transaction.atomic():
             previous = conversation.assigned_to_id
             conversation.assigned_to = agent
             conversation.save(update_fields=["assigned_to", "updated_at"])
-            action = (ActivityType.CONVERSATION_ASSIGNED.value if agent
-                      else ActivityType.CONVERSATION_UNASSIGNED.value)
+            action = (
+                ActivityType.CONVERSATION_ASSIGNED.value
+                if agent
+                else ActivityType.CONVERSATION_UNASSIGNED.value
+            )
             Activity.objects.create(
-                store=conversation.store, conversation=conversation,
-                customer=conversation.customer, actor=actor,
+                store=conversation.store,
+                conversation=conversation,
+                customer=conversation.customer,
+                actor=actor,
                 action_type=action,
-                description=f"Assigned to {agent.get_full_name() or agent.email}" if agent else "Unassigned",
-                metadata={"agent_id": str(agent.pk) if agent else None, "previous_id": str(previous) if previous else None},
+                description=f"Assigned to {agent.get_full_name() or agent.email}"
+                if agent
+                else "Unassigned",
+                metadata={
+                    "agent_id": str(agent.pk) if agent else None,
+                    "previous_id": str(previous) if previous else None,
+                },
             )
         _emit_conversation_updated(conversation)
         return conversation
 
     @staticmethod
-    def set_status(*, conversation: Conversation, status: str, actor: User | None = None) -> Conversation:
+    def set_status(
+        *, conversation: Conversation, status: str, actor: User | None = None
+    ) -> Conversation:
         with transaction.atomic():
             previous = conversation.status
             conversation.status = status
@@ -442,8 +1138,10 @@ class ConversationService:
                 update_fields += ["closed_at", "closed_by"]
             conversation.save(update_fields=update_fields)
             Activity.objects.create(
-                store=conversation.store, conversation=conversation,
-                customer=conversation.customer, actor=actor,
+                store=conversation.store,
+                conversation=conversation,
+                customer=conversation.customer,
+                actor=actor,
                 action_type=ActivityType.CONVERSATION_STATUS_CHANGED.value,
                 description=f"Status {previous} -> {status}",
                 metadata={"previous": previous, "status": status},
@@ -452,14 +1150,18 @@ class ConversationService:
         return conversation
 
     @staticmethod
-    def set_priority(*, conversation: Conversation, priority: str, actor: User | None = None) -> Conversation:
+    def set_priority(
+        *, conversation: Conversation, priority: str, actor: User | None = None
+    ) -> Conversation:
         with transaction.atomic():
             previous = conversation.priority
             conversation.priority = priority
             conversation.save(update_fields=["priority", "updated_at"])
             Activity.objects.create(
-                store=conversation.store, conversation=conversation,
-                customer=conversation.customer, actor=actor,
+                store=conversation.store,
+                conversation=conversation,
+                customer=conversation.customer,
+                actor=actor,
                 action_type=ActivityType.CONVERSATION_PRIORITY_CHANGED.value,
                 description=f"Priority {previous} -> {priority}",
                 metadata={"previous": previous, "priority": priority},
@@ -479,18 +1181,26 @@ class ConversationService:
         return conversation
 
     @staticmethod
-    def add_internal_note(*, conversation: Conversation, author: User, body: str, mentions=None) -> InternalNote:
+    def add_internal_note(
+        *, conversation: Conversation, author: User, body: str, mentions=None
+    ) -> InternalNote:
         with transaction.atomic():
             note = InternalNote.objects.create(
-                store=conversation.store, conversation=conversation, author=author, body=body,
+                store=conversation.store,
+                conversation=conversation,
+                author=author,
+                body=body,
             )
             if mentions:
                 note.mentions.set(mentions)
             Activity.objects.create(
-                store=conversation.store, conversation=conversation,
-                customer=conversation.customer, actor=author,
+                store=conversation.store,
+                conversation=conversation,
+                customer=conversation.customer,
+                actor=author,
                 action_type=ActivityType.NOTE_ADDED.value,
-                description="Internal note added", metadata={"note_id": str(note.pk)},
+                description="Internal note added",
+                metadata={"note_id": str(note.pk)},
             )
         _emit_conversation_updated(conversation)
         return note
@@ -513,10 +1223,8 @@ class ConversationService:
         to the current user in the view layer). ``unassigned_only``
         returns only conversations with no agent.
         """
-        qs = (
-            Conversation.objects
-            .filter(store=store, is_deleted=False)
-            .select_related("customer", "channel", "connected_account", "assigned_to")
+        qs = Conversation.objects.filter(store=store, is_deleted=False).select_related(
+            "customer", "channel", "connected_account", "assigned_to"
         )
         if status:
             qs = qs.filter(status=status)
@@ -532,13 +1240,17 @@ class ConversationService:
     def search(*, store: Store, query: str) -> QuerySet[Conversation]:
         """Full-text-ish search across message text, customer name, subject."""
         qs = Conversation.objects.filter(store=store, is_deleted=False).distinct()
-        return qs.filter(
-            Q(subject__icontains=query)
-            | Q(customer__display_name__icontains=query)
-            | Q(customer__first_name__icontains=query)
-            | Q(customer__last_name__icontains=query)
-            | Q(messages__text__icontains=query)
-        ).select_related("customer", "channel").order_by("-last_message_at")
+        return (
+            qs.filter(
+                Q(subject__icontains=query)
+                | Q(customer__display_name__icontains=query)
+                | Q(customer__first_name__icontains=query)
+                | Q(customer__last_name__icontains=query)
+                | Q(messages__text__icontains=query)
+            )
+            .select_related("customer", "channel")
+            .order_by("-last_message_at")
+        )
 
 
 # ===========================================================================
@@ -586,7 +1298,8 @@ class MessageService:
 
             # 3. Conversation resolution.
             conversation, conv_created = ConversationService.get_or_create_for_inbound(
-                connected_account=connected_account, customer=customer,
+                connected_account=connected_account,
+                customer=customer,
             )
 
             # 4. Idempotency: skip if we've already stored this message.
@@ -598,12 +1311,18 @@ class MessageService:
                 return None
 
             # 5. Persist the message.
-            logger.info(f"[Webhook] Ingesting message: external_id={event.external_message_id}, attachments_count={len(event.attachments)}")
+            logger.info(
+                f"[Webhook] Ingesting message: external_id={event.external_message_id}, attachments_count={len(event.attachments)}"
+            )
             print(f"[DEBUG] Ingesting message: attachments_count={len(event.attachments)}")
             if event.attachments:
                 for att in event.attachments:
-                    logger.info(f"[Webhook] Event attachment: type={att.attachment_type}, url={att.external_url}")
-                    print(f"[DEBUG] Event attachment: type={att.attachment_type}, url={att.external_url}")
+                    logger.info(
+                        f"[Webhook] Event attachment: type={att.attachment_type}, url={att.external_url}"
+                    )
+                    print(
+                        f"[DEBUG] Event attachment: type={att.attachment_type}, url={att.external_url}"
+                    )
             # Resolve the reply target: if the event references another
             # message by its external id (FB ``reply_to.mid``), link it
             # so the UI can render it as a reply. The referenced message
@@ -611,14 +1330,10 @@ class MessageService:
             # the same connected account.
             reply_to_msg = None
             if event.reply_to_external_id:
-                reply_to_msg = (
-                    Message.objects
-                    .filter(
-                        connected_account=connected_account,
-                        external_id=event.reply_to_external_id,
-                    )
-                    .first()
-                )
+                reply_to_msg = Message.objects.filter(
+                    connected_account=connected_account,
+                    external_id=event.reply_to_external_id,
+                ).first()
             message = Message.objects.create(
                 store=connected_account.store,
                 conversation=conversation,
@@ -640,11 +1355,17 @@ class MessageService:
             )
 
             # Attachments
-            logger.info(f"[Webhook] Creating {len(event.attachments)} attachments for message {message.id}")
+            logger.info(
+                f"[Webhook] Creating {len(event.attachments)} attachments for message {message.id}"
+            )
             print(f"[DEBUG] Creating {len(event.attachments)} attachments for message {message.id}")
             for att in event.attachments:
-                logger.info(f"[Webhook] Creating attachment: type={att.attachment_type}, url={att.external_url}")
-                print(f"[DEBUG] Creating attachment: type={att.attachment_type}, url={att.external_url}")
+                logger.info(
+                    f"[Webhook] Creating attachment: type={att.attachment_type}, url={att.external_url}"
+                )
+                print(
+                    f"[DEBUG] Creating attachment: type={att.attachment_type}, url={att.external_url}"
+                )
                 created_att = Attachment.objects.create(
                     store=connected_account.store,
                     message=message,
@@ -671,7 +1392,8 @@ class MessageService:
 
             Activity.objects.create(
                 store=connected_account.store,
-                conversation=conversation, customer=customer,
+                conversation=conversation,
+                customer=customer,
                 action_type=ActivityType.MESSAGE_RECEIVED.value,
                 description=f"Message received via {connected_account.channel.name}",
             )
@@ -681,8 +1403,12 @@ class MessageService:
         message.refresh_from_db()
         # Log attachment count after refresh
         att_count_after_refresh = Attachment.objects.filter(message_id=message.id).count()
-        logger.info(f"[Webhook] After refresh: message {message.id} has {att_count_after_refresh} attachments")
-        print(f"[DEBUG] After refresh: message {message.id} has {att_count_after_refresh} attachments")
+        logger.info(
+            f"[Webhook] After refresh: message {message.id} has {att_count_after_refresh} attachments"
+        )
+        print(
+            f"[DEBUG] After refresh: message {message.id} has {att_count_after_refresh} attachments"
+        )
         _emit_message_received(message, conversation)
         _emit_conversation_updated(conversation)
         return message
@@ -773,13 +1499,17 @@ class MessageService:
             )
         except SendMessageError as exc:
             result = SendResult(
-                success=False, status=DeliveryStatus.FAILED.value,
-                error_message=str(exc), error_code=exc.code,
+                success=False,
+                status=DeliveryStatus.FAILED.value,
+                error_message=str(exc),
+                error_code=exc.code,
             )
         except Exception as exc:  # pragma: no cover - defensive
             logger.exception("Unexpected adapter error sending message %s", message.id)
             result = SendResult(
-                success=False, status=DeliveryStatus.FAILED.value, error_message=str(exc),
+                success=False,
+                status=DeliveryStatus.FAILED.value,
+                error_message=str(exc),
             )
 
         # Apply the send result.
@@ -792,10 +1522,17 @@ class MessageService:
                 message.failed_at = timezone.now()
                 message.error_code = result.error_code
                 message.error_message = result.error_message
-            message.save(update_fields=[
-                "external_id", "delivery_status", "sent_at", "failed_at",
-                "error_code", "error_message", "updated_at",
-            ])
+            message.save(
+                update_fields=[
+                    "external_id",
+                    "delivery_status",
+                    "sent_at",
+                    "failed_at",
+                    "error_code",
+                    "error_message",
+                    "updated_at",
+                ]
+            )
 
             ConversationService._apply_outbound_message(conversation, message)
 
@@ -805,10 +1542,15 @@ class MessageService:
                 error_desc = error_desc[:200] + "..."
 
             Activity.objects.create(
-                store=connected_account.store, conversation=conversation,
-                customer=conversation.customer, actor=sender,
-                action_type=(ActivityType.MESSAGE_SENT.value if result.success
-                             else ActivityType.MESSAGE_FAILED.value),
+                store=connected_account.store,
+                conversation=conversation,
+                customer=conversation.customer,
+                actor=sender,
+                action_type=(
+                    ActivityType.MESSAGE_SENT.value
+                    if result.success
+                    else ActivityType.MESSAGE_FAILED.value
+                ),
                 description=("Reply sent" if result.success else f"Send failed: {error_desc}"),
             )
 
@@ -828,7 +1570,9 @@ class MessageService:
         update: DeliveryUpdate,
     ) -> int:
         """Apply a delivery/read receipt. Returns the count of messages updated."""
-        ids = update.external_message_ids or ([update.external_message_id] if update.external_message_id else [])
+        ids = update.external_message_ids or (
+            [update.external_message_id] if update.external_message_id else []
+        )
         if not ids:
             return 0
 
@@ -906,7 +1650,9 @@ class MessageService:
                 )
 
         # Broadcast the reaction change so the inbox updates live.
-        _emit_reaction_updated(connected_account, str(msg.id), str(msg.conversation_id), event.action, event.emoji)
+        _emit_reaction_updated(
+            connected_account, str(msg.id), str(msg.conversation_id), event.action, event.emoji
+        )
         return True
 
 
@@ -940,6 +1686,7 @@ class ChannelService:
         so the user can fix their credentials and re-verify.
         """
         from .models import Channel
+
         channel = Channel.objects.get(slug=channel_slug)
         adapter = get_adapter(channel.channel_type)
 
@@ -966,10 +1713,15 @@ class ChannelService:
                 },
             )
             Activity.objects.create(
-                store=store, actor=actor,
+                store=store,
+                actor=actor,
                 action_type=ActivityType.CHANNEL_CONNECTED.value,
                 description=f"Connected {channel.name}: {name}",
-                metadata={"channel": channel.slug, "external_id": external_id, "account_id": str(account.id)},
+                metadata={
+                    "channel": channel.slug,
+                    "external_id": external_id,
+                    "account_id": str(account.id),
+                },
             )
 
         # Live credential check. The account is already persisted, so a
@@ -985,7 +1737,9 @@ class ChannelService:
 
     @staticmethod
     def verify_account(
-        *, account: ConnectedAccount, actor: User | None = None,
+        *,
+        account: ConnectedAccount,
+        actor: User | None = None,
     ) -> ConnectedAccount:
         """Live-check the account's credentials against the platform.
 
@@ -1000,9 +1754,18 @@ class ChannelService:
         try:
             result = adapter.verify_credentials(account=account)
         except Exception as exc:  # pragma: no cover - defensive
-            result = type("R", (), {"valid": False, "error_message": str(exc),
-                                    "error_code": "error", "account_name": "",
-                                    "external_id": "", "raw": {}})()
+            result = type(
+                "R",
+                (),
+                {
+                    "valid": False,
+                    "error_message": str(exc),
+                    "error_code": "error",
+                    "account_name": "",
+                    "external_id": "",
+                    "raw": {},
+                },
+            )()
         with transaction.atomic():
             if result.valid:
                 account.status = ConnectedAccountStatus.CONNECTED.value
@@ -1018,13 +1781,21 @@ class ChannelService:
                 account.status = ConnectedAccountStatus.ERROR.value
                 account.error_message = result.error_message or "Verification failed"
             account.last_synced_at = timezone.now()
-            account.save(update_fields=[
-                "status", "error_message", "metadata", "last_synced_at", "updated_at",
-            ])
+            account.save(
+                update_fields=[
+                    "status",
+                    "error_message",
+                    "metadata",
+                    "last_synced_at",
+                    "updated_at",
+                ]
+            )
         return account
 
     @staticmethod
-    def set_status(*, account: ConnectedAccount, status: str, actor: User | None = None) -> ConnectedAccount:
+    def set_status(
+        *, account: ConnectedAccount, status: str, actor: User | None = None
+    ) -> ConnectedAccount:
         """Enable/disable/error an account without dropping credentials."""
         with transaction.atomic():
             previous = account.status
@@ -1032,11 +1803,14 @@ class ChannelService:
             if status == ConnectedAccountStatus.CONNECTED.value:
                 account.error_message = ""
             account.save(update_fields=["status", "error_message", "updated_at"])
-            action = (ActivityType.CHANNEL_CONNECTED.value
-                      if status == ConnectedAccountStatus.CONNECTED.value
-                      else ActivityType.CHANNEL_DISCONNECTED.value)
+            action = (
+                ActivityType.CHANNEL_CONNECTED.value
+                if status == ConnectedAccountStatus.CONNECTED.value
+                else ActivityType.CHANNEL_DISCONNECTED.value
+            )
             Activity.objects.create(
-                store=account.store, actor=actor,
+                store=account.store,
+                actor=actor,
                 action_type=action,
                 description=f"Channel {account.channel.name} {previous} -> {status}",
                 metadata={"account_id": str(account.id), "previous": previous, "status": status},
@@ -1046,7 +1820,9 @@ class ChannelService:
     @staticmethod
     def disconnect(*, account: ConnectedAccount, actor: User | None = None) -> ConnectedAccount:
         return ChannelService.set_status(
-            account=account, status=ConnectedAccountStatus.DISCONNECTED.value, actor=actor,
+            account=account,
+            status=ConnectedAccountStatus.DISCONNECTED.value,
+            actor=actor,
         )
 
     # ------------------------------------------------------------------
@@ -1069,7 +1845,8 @@ class ChannelService:
         except Exception as exc:
             logger.warning("Token refresh failed for account %s: %s", account.id, exc)
             return ChannelService.mark_account_expired(
-                account=account, reason=f"Token refresh failed: {exc}",
+                account=account,
+                reason=f"Token refresh failed: {exc}",
             )
         if not refreshed:
             return account
@@ -1085,7 +1862,9 @@ class ChannelService:
 
     @staticmethod
     def mark_account_expired(
-        *, account: ConnectedAccount, reason: str = "",
+        *,
+        account: ConnectedAccount,
+        reason: str = "",
     ) -> ConnectedAccount:
         """Mark a connected account as ``expired`` and record an activity.
 
@@ -1102,9 +1881,14 @@ class ChannelService:
                 "Please reconnect your Facebook account."
             )
             account.last_synced_at = timezone.now()
-            account.save(update_fields=[
-                "status", "error_message", "last_synced_at", "updated_at",
-            ])
+            account.save(
+                update_fields=[
+                    "status",
+                    "error_message",
+                    "last_synced_at",
+                    "updated_at",
+                ]
+            )
             Activity.objects.create(
                 store=account.store,
                 action_type=ActivityType.CHANNEL_TOKEN_EXPIRED.value,
@@ -1120,7 +1904,10 @@ class ChannelService:
                 },
             )
         logger.warning(
-            "Account %s marked expired (was %s): %s", account.id, previous, reason,
+            "Account %s marked expired (was %s): %s",
+            account.id,
+            previous,
+            reason,
         )
         return account
 
@@ -1146,10 +1933,17 @@ def _apply_inbound_message(conversation: Conversation, message: Message) -> None
     # Re-open if it was pending/resolved and the customer writes back.
     if conversation.status not in ACTIVE_CONVERSATION_STATUSES:
         conversation.status = ConversationStatus.OPEN.value
-    conversation.save(update_fields=[
-        "last_message_at", "last_message_preview", "last_message_direction",
-        "unread_count", "message_count", "status", "updated_at",
-    ])
+    conversation.save(
+        update_fields=[
+            "last_message_at",
+            "last_message_preview",
+            "last_message_direction",
+            "unread_count",
+            "message_count",
+            "status",
+            "updated_at",
+        ]
+    )
 
 
 def _apply_outbound_message(conversation: Conversation, message: Message) -> None:
@@ -1158,10 +1952,15 @@ def _apply_outbound_message(conversation: Conversation, message: Message) -> Non
     conversation.last_message_preview = _preview(message.text or message.message_type)
     conversation.last_message_direction = message.direction
     conversation.message_count = (conversation.message_count or 0) + 1
-    conversation.save(update_fields=[
-        "last_message_at", "last_message_preview", "last_message_direction",
-        "message_count", "updated_at",
-    ])
+    conversation.save(
+        update_fields=[
+            "last_message_at",
+            "last_message_preview",
+            "last_message_direction",
+            "message_count",
+            "updated_at",
+        ]
+    )
 
 
 # Attach the helpers to ConversationService for namespacing. Defined as
@@ -1190,6 +1989,7 @@ def _channel_layer():
     """Lazily fetch the channel layer. Returns None if unavailable."""
     try:
         from channels.layers import get_channel_layer
+
         return get_channel_layer()
     except Exception:  # pragma: no cover - channels not configured
         return None
@@ -1206,6 +2006,7 @@ def _broadcast(group_name: str, event_type: str, payload: dict) -> None:
         return
     try:
         from asgiref.sync import async_to_sync
+
         async_to_sync(layer.group_send)(
             group_name,
             {"type": event_type, "payload": payload},
@@ -1227,8 +2028,11 @@ def _serialize_message_brief(message: Message) -> dict:
             # Explicitly query by message_id to avoid Django ORM relationship caching issues
             # Use raw SQL to bypass any potential ORM issues in Celery context
             from django.db import connection
+
             with connection.cursor() as cursor:
-                cursor.execute("SELECT COUNT(*) FROM messaging_attachment WHERE message_id = %s", [message.id])
+                cursor.execute(
+                    "SELECT COUNT(*) FROM messaging_attachment WHERE message_id = %s", [message.id]
+                )
                 raw_count = cursor.fetchone()[0]
                 print(f"[DEBUG] RAW SQL COUNT: {raw_count} attachments for message {message.id}")
 
@@ -1242,25 +2046,34 @@ def _serialize_message_brief(message: Message) -> dict:
             print(f"[DEBUG] Materialized {len(attachments_list)} attachment objects")
 
             for att in attachments_list:
-                print(f"[DEBUG] Attachment: id={att.id}, type={att.attachment_type}, url={att.external_url}")
-                attachments_data.append({
-                    "id": str(att.id),
-                    "attachment_type": att.attachment_type or "",
-                    "external_url": att.external_url or "",
-                    "mime_type": att.mime_type or "",
-                    "file_name": att.file_name or "",
-                    "file_size": att.file_size or 0,
-                    "width": att.width or 0,
-                    "height": att.height or 0,
-                    "thumbnail_url": att.thumbnail_url or "",
-                })
+                print(
+                    f"[DEBUG] Attachment: id={att.id}, type={att.attachment_type}, url={att.external_url}"
+                )
+                attachments_data.append(
+                    {
+                        "id": str(att.id),
+                        "attachment_type": att.attachment_type or "",
+                        "external_url": att.external_url or "",
+                        "mime_type": att.mime_type or "",
+                        "file_name": att.file_name or "",
+                        "file_size": att.file_size or 0,
+                        "width": att.width or 0,
+                        "height": att.height or 0,
+                        "thumbnail_url": att.thumbnail_url or "",
+                    }
+                )
 
-            logger.info(f"[WebSocket] Serialized {len(attachments_data)} attachments for message {message.id}")
-            print(f"[DEBUG] Serialized {len(attachments_data)} attachments for message {message.id}")
+            logger.info(
+                f"[WebSocket] Serialized {len(attachments_data)} attachments for message {message.id}"
+            )
+            print(
+                f"[DEBUG] Serialized {len(attachments_data)} attachments for message {message.id}"
+            )
         except Exception as e:
             logger.warning(f"Failed to fetch attachments for message {message.id}: {e}")
             print(f"[DEBUG] Failed to fetch attachments: {e}")
             import traceback
+
             traceback.print_exc()
 
     # Include first attachment of replied-to message for image preview in reply quotes
@@ -1288,14 +2101,24 @@ def _serialize_message_brief(message: Message) -> dict:
         "message_type": message.message_type,
         "text": message.text or "",
         "delivery_status": message.delivery_status,
-        "reply_to_text": message.reply_to.text if message.reply_to_id and message.reply_to else None,
-        "reply_to_message_type": message.reply_to.message_type if message.reply_to_id and message.reply_to else None,
-        "reply_to_has_attachments": Attachment.objects.filter(message_id=message.reply_to_id).exists() if message.reply_to_id else False,
+        "reply_to_text": message.reply_to.text
+        if message.reply_to_id and message.reply_to
+        else None,
+        "reply_to_message_type": message.reply_to.message_type
+        if message.reply_to_id and message.reply_to
+        else None,
+        "reply_to_has_attachments": Attachment.objects.filter(
+            message_id=message.reply_to_id
+        ).exists()
+        if message.reply_to_id
+        else False,
         "reply_to_first_attachment": reply_to_first_attachment,
         "attachments": attachments_data,
         "created_at": message.created_at.isoformat() if message.created_at else None,
     }
-    logger.info(f"[WebSocket] Serialized message {message.id} with {len(attachments_data)} attachments for WebSocket broadcast")
+    logger.info(
+        f"[WebSocket] Serialized message {message.id} with {len(attachments_data)} attachments for WebSocket broadcast"
+    )
     return payload
 
 
@@ -1308,7 +2131,9 @@ def _serialize_conversation_brief(conversation: Conversation) -> dict:
         "assigned_to_id": str(conversation.assigned_to_id) if conversation.assigned_to_id else None,
         "unread_count": conversation.unread_count,
         "message_count": conversation.message_count,
-        "last_message_at": conversation.last_message_at.isoformat() if conversation.last_message_at else None,
+        "last_message_at": conversation.last_message_at.isoformat()
+        if conversation.last_message_at
+        else None,
         "last_message_preview": conversation.last_message_preview,
         "last_message_direction": conversation.last_message_direction,
     }
@@ -1343,9 +2168,9 @@ def _emit_delivery_updated(account: ConnectedAccount, message_ids: list[str], st
         return
     # Resolve conversation ids for the affected messages (one query).
     conv_ids = set(
-        Message.objects
-        .filter(connected_account=account, external_id__in=message_ids)
-        .values_list("conversation_id", flat=True)
+        Message.objects.filter(connected_account=account, external_id__in=message_ids).values_list(
+            "conversation_id", flat=True
+        )
     )
     for cid in conv_ids:
         _broadcast(
@@ -1362,8 +2187,11 @@ def _emit_delivery_updated(account: ConnectedAccount, message_ids: list[str], st
 
 
 def _emit_reaction_updated(
-    account: ConnectedAccount, message_id: str, conversation_id: str,
-    action: str, emoji: str,
+    account: ConnectedAccount,
+    message_id: str,
+    conversation_id: str,
+    action: str,
+    emoji: str,
 ) -> None:
     """Broadcast a reaction add/remove so the inbox updates live."""
     payload = {

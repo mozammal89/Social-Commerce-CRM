@@ -54,6 +54,48 @@
     </div>
   </template>
 
+  <!-- Suggested merges (Tier 3 duplicate review) -->
+  <template x-if="!loading && !error && suggestions.length > 0">
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-transparent d-flex align-items-center gap-2 py-3">
+        <i class="bi bi-git text-warning"></i>
+        <h6 class="mb-0 fw-bold">Possible duplicate customers</h6>
+        <span class="badge bg-warning-subtle text-warning rounded-pill" x-text="suggestions.length"></span>
+        <button class="btn btn-sm btn-ghost ms-auto py-0 px-2" @click="dismissAllSuggestions()"
+                title="Hide for this session">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <div class="card-body py-0">
+        <template x-for="(s, idx) in visibleSuggestions" :key="s.primary_id + ':' + s.duplicate_id">
+          <div class="d-flex flex-wrap align-items-center gap-2 py-2 border-bottom"
+               x-show="!isSuggestionDismissed(s)">
+            <span class="badge text-bg-light" :title="'Confidence: ' + Math.round(s.score * 100) + '%'"
+                  x-text="s.reason === 'identical_avatar' ? 'Same photo' : 'Same name'"></span>
+            <span class="fw-semibold" x-text="s.primary_name || s.primary_id.slice(0,8)"></span>
+            <i class="bi bi-arrow-left-right text-muted small"></i>
+            <span class="fw-semibold" x-text="s.duplicate_name || s.duplicate_id.slice(0,8)"></span>
+            <div class="ms-auto d-flex gap-1">
+              <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                      :disabled="mergingSuggestion === idx"
+                      @click="acceptSuggestion(s, idx)">
+                <i class="bi" :class="mergingSuggestion === idx ? 'bi-arrow-repeat spin' : 'bi-git'"></i>
+                <span x-text="mergingSuggestion === idx ? 'Merging…' : 'Merge'"></span>
+              </button>
+              <button class="btn btn-sm btn-ghost py-0 px-2" @click="dismissSuggestion(s)"
+                      title="Dismiss this suggestion">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+          </div>
+        </template>
+        <template x-if="visibleSuggestions.every(s => isSuggestionDismissed(s))">
+          <div class="text-center text-muted small py-3">All suggestions reviewed.</div>
+        </template>
+      </div>
+    </div>
+  </template>
+
   <!-- Customer list -->
   <template x-if="!loading && customers.length > 0">
     <div class="card border-0 shadow-sm">

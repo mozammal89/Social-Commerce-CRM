@@ -331,14 +331,171 @@ def _validate_single_account(account: ConnectedAccount, summary: dict[str, int])
                 "error_message",
                 "last_synced_at",
                 "updated_at",
-            ]
+            ],
         )
         summary["healthy"] += 1
+    elif _is_transient_error(result):
+        # Network blip, timeout, 5xx, rate limit — DON'T mark expired.
+        # The channel stays connected; tomorrow's task retries. This
+        # prevents false-positive expirations that the user then has to
+        # manually "Test Connection" to clear.
+        logger.warning(
+            "Transient verify failure for account %s (status unchanged): %s",
+            account.id,
+            result.error_message,
+        )
+        summary["skipped"] = summary.get("skipped", 0) + 1
     else:
-        # Token is dead and either couldn't be refreshed or refresh
-        # wasn't available. Mark expired so the user reconnects.
+        # Clear auth rejection (401/403/explicit "token expired"). Token
+        # is dead and either couldn't be refreshed or refresh wasn't
+        # available. Mark expired so the user reconnects.
         ChannelService.mark_account_expired(
             account=account,
             reason=result.error_message or "Token verification failed.",
         )
         summary["expired"] += 1
+
+
+def _is_transient_error(result) -> bool:
+    """Heuristic: does this verify failure look transient (retry later)
+    rather than a definitive auth rejection (mark expired)?
+
+    Auth-rejection signals (NOT transient):
+      - error_code == "auth_failed" (adapter confirmed token is invalid)
+      - HTTP-derivable codes: 401, 403, FB code 190, "access token"
+    Transient signals (DON'T expire):
+      - error_code == "error" (generic exception — network, timeout, 5xx)
+      - rate-limit messages
+      - connection/timeout messages
+    """
+    if result.valid:
+        return False
+    code = (result.error_code or "").lower()
+    msg = (result.error_message or "").lower()
+
+    # Generic error code → assume transient (network/timeout/5xx).
+    # Adapters return "auth_failed" for explicit auth rejections.
+    if code == "error":
+        # But some error messages indicate auth problems even with a
+        # generic code — check for known auth-failure phrases.
+        auth_signals = ("access token", "unauthorized", "forbidden", "invalid token")
+        return not any(s in msg for s in auth_signals)
+
+    # Explicit auth failure → not transient.
+    return False
+
+
+# ===========================================================================
+# 4. Customer profile enrichment
+# ===========================================================================
+@shared_task(
+    name="apps.messaging.tasks.enrich_customer_identity",
+    autoretry_for=(Exception,),
+    retry_backoff=60,
+    retry_backoff_max=600,
+    retry_jitter=True,
+    max_retries=3,
+)
+def enrich_customer_identity(identity_id) -> None:
+    """Fetch and apply a fresh channel profile for one customer identity.
+
+    Thin async wrapper around :meth:`CustomerProfileService.enrich_identity`
+    — the service does all the real work (adapter call, source-of-truth
+    rule, propagation to the customer profile) and is idempotent + safe
+    to retry.
+
+    Triggered from two places:
+
+    * **Lazy enrichment** — enqueued by
+      :meth:`CustomerService.get_or_create_by_identity` right after a new
+      identity is created, so a Facebook customer messaging for the first
+      time gets a real name+avatar within seconds instead of waiting for
+      the daily sync. Skipped when the webhook payload already carried a
+      display_name (WhatsApp case) to avoid redundant API work.
+
+    * **On-demand refresh** — the future
+      ``POST /customers/{id}/identities/{iid}/refresh/`` endpoint.
+
+    Adapter-side failures (network, API error, missing permission) are
+    swallowed by the service (it returns ``False`` and leaves
+    ``last_synced_at`` NULL so the daily batch retries). The autoretry
+    here therefore only kicks in for infrastructure errors (DB down,
+    broker hiccup) — exactly what we want.
+    """
+    from .services import CustomerProfileService
+
+    CustomerProfileService.enrich_identity(identity_id=identity_id)
+
+
+@shared_task(name="apps.messaging.tasks.sync_customer_profiles")
+def sync_customer_profiles() -> dict[str, Any]:
+    """Daily batch refresh of customer profiles from channel APIs.
+
+    Walks every active store and refreshes identities whose
+    ``last_synced_at`` is older than
+    ``CustomerProfileService.SYNC_RESCAN_WINDOW_DAYS`` (7 days) or NULL
+    (never synced — e.g. lazy enrichment in Step 4 failed or hasn't run
+    yet). Delegates the per-store work to
+    :meth:`CustomerProfileService.sync_store_profiles`, which already
+    batches, swallows per-row errors, and respects the source-of-truth
+    rule (agent-edited fields are never overwritten).
+
+    Scheduled at 04:30 daily — after the token-validation task (04:00)
+    so we only hit channel APIs with healthy tokens, and after the
+    retention purge (03:00) so we don't sync profiles whose conversations
+    are about to be aged out.
+
+    Returns ``{stores_checked, stores_synced, identities_checked,
+    identities_refreshed, identities_skipped, identities_failed}`` for
+    monitoring/alerting.
+    """
+    from apps.stores.models import Store
+
+    from .services import CustomerProfileService
+
+    summary: dict[str, int] = {
+        "stores_checked": 0,
+        "stores_synced": 0,
+        "identities_checked": 0,
+        "identities_refreshed": 0,
+        "identities_skipped": 0,
+        "identities_failed": 0,
+    }
+
+    # Only sync for active, non-deleted stores. Soft-deleted or paused
+    # stores are skipped — their connected accounts are typically
+    # disabled too, and profile fetches would just fail with auth errors.
+    store_qs = (
+        Store.objects.filter(is_deleted=False, status="active")
+        .values_list("id", flat=True)
+        .iterator()
+    )
+    for store_id in store_qs:
+        summary["stores_checked"] += 1
+        try:
+            result = CustomerProfileService.sync_store_profiles(store_id=store_id)
+        except Exception:
+            # A store-level failure (e.g. corrupted credentials) must not
+            # abort the batch. sync_store_profiles already handles
+            # per-identity exceptions; this is the outer safety net.
+            logger.exception("sync_customer_profiles: store %s raised unexpectedly", store_id)
+            continue
+
+        summary["identities_checked"] += result.get("checked", 0)
+        summary["identities_refreshed"] += result.get("refreshed", 0)
+        summary["identities_skipped"] += result.get("skipped", 0)
+        summary["identities_failed"] += result.get("failed", 0)
+        if result.get("refreshed", 0) > 0:
+            summary["stores_synced"] += 1
+
+    logger.info(
+        "Customer profile sync done: stores_checked=%d stores_synced=%d "
+        "identities_checked=%d refreshed=%d skipped=%d failed=%d",
+        summary["stores_checked"],
+        summary["stores_synced"],
+        summary["identities_checked"],
+        summary["identities_refreshed"],
+        summary["identities_skipped"],
+        summary["identities_failed"],
+    )
+    return summary
