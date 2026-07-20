@@ -331,17 +331,58 @@ def _validate_single_account(account: ConnectedAccount, summary: dict[str, int])
                 "error_message",
                 "last_synced_at",
                 "updated_at",
-            ]
+            ],
         )
         summary["healthy"] += 1
+    elif _is_transient_error(result):
+        # Network blip, timeout, 5xx, rate limit — DON'T mark expired.
+        # The channel stays connected; tomorrow's task retries. This
+        # prevents false-positive expirations that the user then has to
+        # manually "Test Connection" to clear.
+        logger.warning(
+            "Transient verify failure for account %s (status unchanged): %s",
+            account.id,
+            result.error_message,
+        )
+        summary["skipped"] = summary.get("skipped", 0) + 1
     else:
-        # Token is dead and either couldn't be refreshed or refresh
-        # wasn't available. Mark expired so the user reconnects.
+        # Clear auth rejection (401/403/explicit "token expired"). Token
+        # is dead and either couldn't be refreshed or refresh wasn't
+        # available. Mark expired so the user reconnects.
         ChannelService.mark_account_expired(
             account=account,
             reason=result.error_message or "Token verification failed.",
         )
         summary["expired"] += 1
+
+
+def _is_transient_error(result) -> bool:
+    """Heuristic: does this verify failure look transient (retry later)
+    rather than a definitive auth rejection (mark expired)?
+
+    Auth-rejection signals (NOT transient):
+      - error_code == "auth_failed" (adapter confirmed token is invalid)
+      - HTTP-derivable codes: 401, 403, FB code 190, "access token"
+    Transient signals (DON'T expire):
+      - error_code == "error" (generic exception — network, timeout, 5xx)
+      - rate-limit messages
+      - connection/timeout messages
+    """
+    if result.valid:
+        return False
+    code = (result.error_code or "").lower()
+    msg = (result.error_message or "").lower()
+
+    # Generic error code → assume transient (network/timeout/5xx).
+    # Adapters return "auth_failed" for explicit auth rejections.
+    if code == "error":
+        # But some error messages indicate auth problems even with a
+        # generic code — check for known auth-failure phrases.
+        auth_signals = ("access token", "unauthorized", "forbidden", "invalid token")
+        return not any(s in msg for s in auth_signals)
+
+    # Explicit auth failure → not transient.
+    return False
 
 
 # ===========================================================================

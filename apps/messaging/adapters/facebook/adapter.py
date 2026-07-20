@@ -230,6 +230,39 @@ class FacebookAdapter(BaseChannelAdapter):
                     now + timedelta(seconds=int(expires_in))
                 ).isoformat()
 
+        # --- Path B: raw page_access_token pasted directly.
+        # Try to exchange it — the user often pastes a short-lived USER
+        # token (from the Meta App Dashboard) into this field, thinking
+        # it's a page token. If the exchange succeeds, it WAS a user
+        # token and we proceed to fetch a real long-lived page token via
+        # /me/accounts. If the exchange fails (token is already
+        # long-lived, or is a genuine page token that can't be
+        # exchanged), we use it as-is.
+        if page_token and not user_token and not short:
+            try:
+                exchanged = client.exchange_long_lived_token(
+                    app_id=app_id,
+                    app_secret=app_secret,
+                    short_lived_token=page_token,
+                )
+                user_token = exchanged.get("access_token", "")
+                expires_in = exchanged.get("expires_in")
+                if expires_in:
+                    normalized["user_token_expires_at"] = (
+                        now + timedelta(seconds=int(expires_in))
+                    ).isoformat()
+                logger.info(
+                    "authenticate_account: raw page_access_token was actually a "
+                    "user token — exchanged for long-lived + fetching page token."
+                )
+            except AuthenticationError:
+                # Not a user token (already long-lived, or is a real page
+                # token). Use as-is — no exchange possible.
+                logger.debug(
+                    "authenticate_account: page_access_token could not be "
+                    "exchanged — using as-is (likely already a page token)."
+                )
+
         # If we have (or just obtained) a long-lived user token, use it
         # to fetch the proper long-lived page access token.
         if user_token:

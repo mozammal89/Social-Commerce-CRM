@@ -537,23 +537,47 @@ function inboxApp() {
          */
         async refreshIdentity(identityId) {
             if (!this.customer.id || !identityId) return;
-            this.refreshingIdentity = identityId;
-            this.refreshNotice = '';
             try {
-                const res = await api(
+                await api(
                     `${this.apiBase}/customers/${this.customer.id}/identities/${identityId}/refresh/`,
                     { method: 'POST', storeId: this.storeId },
                 );
-                this.refreshNotice = res.detail || 'Refresh queued. Profile will update shortly.';
+                return true;
+            } catch (err) {
+                this.notify(err.message || 'Could not queue profile refresh.', 'error');
+                return false;
+            }
+        },
+
+        /**
+         * Refresh ALL channel identities for the active customer at once.
+         * Used by the single "Refresh profile" button in the customer
+         * panel header — one click triggers a sync for every connected
+         * channel (Facebook, WhatsApp, etc.). Shows a spinner on the
+         * button via `refreshingIdentity` (set to a non-null sentinel
+         * while any refresh is in-flight), then re-fetches the customer
+         * to surface the new data.
+         */
+        async refreshAllIdentities() {
+            if (!this.customer.id || !this.customer.channel_identities?.length) return;
+            this.refreshingIdentity = 'all';  // sentinel: non-null spins the header button
+            this.refreshNotice = '';
+            try {
+                // Fire all refresh requests in parallel — each enqueues
+                // an independent Celery task on the backend.
+                const results = await Promise.allSettled(
+                    this.customer.channel_identities.map(ci => this.refreshIdentity(ci.id))
+                );
+                const ok = results.filter(r => r.status === 'fulfilled' && r.value).length;
+                const total = this.customer.channel_identities.length;
+                this.refreshNotice = `Refreshed ${ok}/${total} channel${total === 1 ? '' : 's'}. Profile will update shortly.`;
                 // Re-fetch after a short delay to pick up the refreshed data.
-                // The Celery task typically completes in 1-3s; poll once.
                 setTimeout(() => {
                     this.loadCustomer(this.customer.id);
                     this.refreshingIdentity = null;
                 }, 2500);
             } catch (err) {
                 this.refreshingIdentity = null;
-                this.refreshNotice = '';
                 this.notify(err.message || 'Could not queue profile refresh.', 'error');
             }
         },

@@ -433,7 +433,16 @@
               <div class="customer-avatar-lg"
                    :style="customer.avatar ? `background-image: url('${customer.avatar}')` : ''"
                    x-text="customer.avatar ? '' : (customer.display_name || '?').charAt(0).toUpperCase()"></div>
-              <h5 class="text-center mb-1" x-text="customer.display_name || customer.first_name || 'Customer'"></h5>
+              <div class="d-flex align-items-center justify-content-center gap-2 mb-1">
+                <h5 class="mb-0" x-text="customer.display_name || customer.first_name || 'Customer'"></h5>
+                <button class="btn btn-sm btn-ghost py-0 px-1"
+                        :class="{ 'spin-slow': refreshingIdentity !== null }"
+                        :disabled="refreshingIdentity !== null || !customer.channel_identities?.length"
+                        @click="refreshAllIdentities()"
+                        :title="refreshingIdentity !== null ? 'Refreshing…' : 'Refresh profile from connected channels'">
+                  <i class="bi bi-arrow-clockwise"></i>
+                </button>
+              </div>
               <p class="text-center text-muted small mb-3" x-text="customer.email || customer.phone || ''"></p>
 
               <div class="customer-section">
@@ -464,19 +473,9 @@
                       <i class="bi" :class="channelIcon({channel: ci.channel})"></i>
                       <span x-text="ci.channel?.name || 'Channel'"></span>
                     </span>
-                    <span class="customer-attr-right">
-                      <span class="value" x-text="ci.display_name || ci.external_id"></span>
-                      <button class="btn btn-sm btn-ghost py-0 px-1 align-self-center"
-                              :class="{ 'spin-slow': refreshingIdentity === ci.id }"
-                              :disabled="refreshingIdentity === ci.id"
-                              @click="refreshIdentity(ci.id)"
-                              :title="refreshingIdentity === ci.id ? 'Refreshing…' : 'Refresh profile from ' + (ci.channel?.name || 'channel')">
-                        <i class="bi" :class="refreshingIdentity === ci.id ? 'bi-arrow-repeat' : 'bi-arrow-clockwise'"></i>
-                      </button>
-                    </span>
+                    <span class="value" x-text="ci.display_name || ci.external_id"></span>
                   </div>
                 </template>
-                <p class="small text-muted mt-1 mb-0" x-show="refreshNotice" x-text="refreshNotice" x-transition></p>
               </div>
 
               <div class="customer-section" x-show="customer.tags && customer.tags.length">

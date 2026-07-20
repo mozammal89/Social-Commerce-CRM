@@ -580,17 +580,6 @@
     text-align: right;
     word-break: break-all;
 }
-/* Right-aligned group: value + optional action button (e.g. refresh). */
-.customer-attr-right {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    text-align: right;
-    min-width: 0;
-}
-.customer-attr-right .value {
-    min-width: 0;
-}
 
 /* ================================================================
  * Empty / loading states
