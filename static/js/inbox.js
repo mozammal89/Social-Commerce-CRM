@@ -61,6 +61,22 @@ const CHANNEL_ICONS = {
     other: 'bi-chat',
 };
 
+// Brand colors per channel — applied to icons so users can scan the
+// conversation list / customer panel and instantly spot which channel a
+// thread belongs to. Matches the official brand palette for each
+// platform; falls back to the muted text color for unknown channels.
+const CHANNEL_COLORS = {
+    facebook_messenger: '#0084FF',  // Messenger blue
+    whatsapp: '#25D366',            // WhatsApp green
+    instagram: '#E1306C',           // Instagram pink/red
+    telegram: '#0088CC',            // Telegram blue
+    email: '#EA4335',               // Gmail-style red
+    sms: '#4F46E5',                 // Indigo (generic)
+    tiktok: '#000000',              // TikTok black
+    live_chat: '#0EA5E9',           // Sky blue
+    other: 'var(--text-muted)',
+};
+
 const STATUS_META = {
     open: { label: 'Open', cls: 'status-badge--active', icon: 'bi-chat-dots' },
     pending: { label: 'Pending', cls: 'status-badge--pending', icon: 'bi-clock' },
@@ -298,7 +314,12 @@ function inboxApp() {
                 if (this.activeConversation && this.activeConversation.customer_id) {
                     this.loadCustomer(this.activeConversation.customer_id);
                 }
-                this.$nextTick(() => this.scrollToBottom());
+                // Use the layout-settled scroll so the first paint of
+                // the messages is also at the bottom. For single-page
+                // conversations this is the final state; for multi-page
+                // ones the auto-fill chain will re-scroll after each
+                // prepend via _scrollToBottomSettled.
+                this.$nextTick(() => this._scrollToBottomSettled());
             } catch (err) {
                 this.threadError = err.message;
             } finally {
@@ -335,7 +356,15 @@ function inboxApp() {
         },
 
         _loadPreviousPageSilent() {
-            // Load previous page without updating loading state (used internally)
+            // Load previous page during the INITIAL auto-fill (not user
+            // scrolling). The user just clicked a conversation, so they
+            // want to see the most recent messages — we ALWAYS scroll to
+            // the bottom after prepending older ones. We do NOT try to
+            // "preserve" the scroll offset because (a) the user is at
+            // the bottom anyway, and (b) capturing an offset before an
+            // async network call and applying it after is racy: the
+            // viewport may have moved, layout may have shifted, etc.
+            // Forcing scroll-to-bottom is simpler and deterministic.
             const prevPage = this.currentPage - 1;
             if (prevPage < 1) {
                 this.hasMoreMessages = false;
@@ -346,18 +375,40 @@ function inboxApp() {
                 storeId: this.storeId
             }).then(data => {
                 if (data.results && data.results.length > 0) {
-                    // Prepend messages (older messages go at the beginning)
+                    // Prepend older messages.
                     this.messages = [...data.results, ...this.messages];
                     this.currentPage = prevPage;
                     this.hasMoreMessages = prevPage > 1;
 
-                    // Check again after loading
-                    this.$nextTick(() => {
+                    // Force scroll to bottom AFTER the new content has
+                    // been laid out. Double-rAF guarantees the browser
+                    // has painted the new DOM (a single $nextTick or
+                    // rAF can fire before layout settles, which is what
+                    // made the previous "preserve distance" fix flaky).
+                    this.$nextTick(() => this._scrollToBottomSettled(() => {
                         setTimeout(() => this._checkAndFillThread(), 50);
-                    });
+                    }));
                 }
             }).catch(err => {
                 console.error('[Inbox] Failed to load previous page silently:', err);
+            });
+        },
+
+        /**
+         * Scroll to bottom after the browser has definitely laid out
+         * the current DOM. Uses double requestAnimationFrame so the
+         * second rAF fires in the frame AFTER paint — guaranteeing
+         * scrollHeight reflects the just-rendered messages. The
+         * optional callback runs after the scroll, so callers can
+         * chain follow-up work (e.g. another auto-fill iteration).
+         */
+        _scrollToBottomSettled(cb) {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    const el = document.getElementById('thread-messages');
+                    if (el) el.scrollTop = el.scrollHeight;
+                    if (typeof cb === 'function') cb();
+                });
             });
         },
 
@@ -740,6 +791,11 @@ function inboxApp() {
         /* ---- display helpers (used in template) ---- */
         channelIcon(conv) {
             return CHANNEL_ICONS[conv.channel?.channel_type] || 'bi-chat';
+        },
+        /** Brand color for the channel's icon. Use via:
+         *  `<i class="bi" :class="channelIcon(conv)" :style="{ color: channelColor(conv) }"></i>` */
+        channelColor(conv) {
+            return CHANNEL_COLORS[conv.channel?.channel_type] || 'var(--text-muted)';
         },
         statusMeta(status) {
             return STATUS_META[status] || STATUS_META.open;
