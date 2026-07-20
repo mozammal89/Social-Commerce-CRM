@@ -155,6 +155,14 @@ class FacebookAdapter(BaseChannelAdapter):
     # Identity / profile
     # ------------------------------------------------------------------
     def fetch_identity_profile(self, *, account, external_id) -> dict[str, Any]:
+        """Fetch the FB Messenger profile for a PSID.
+
+        Maps the Graph API's ``locale`` (e.g. ``"en_US"``) to an ISO 639-1
+        language code (``"en"``) and the numeric ``timezone`` offset (in
+        hours, e.g. ``-5`` or ``3.5``) to a normalized ``"UTC±HH:MM"``
+        string. Both require the ``user_profile`` permission on the Page
+        token; when absent the Graph API omits them and we return ``""``.
+        """
         profile = client.fetch_profile(account=account, psid=external_id)
         first = profile.get("first_name", "")
         last = profile.get("last_name", "")
@@ -164,6 +172,8 @@ class FacebookAdapter(BaseChannelAdapter):
             "avatar_url": profile.get("profile_pic", ""),
             "first_name": first,
             "last_name": last,
+            "language": _locale_to_language(profile.get("locale", "")),
+            "timezone": _offset_to_tz(profile.get("timezone")),
             "extra": profile,
         }
 
@@ -403,3 +413,59 @@ class FacebookAdapter(BaseChannelAdapter):
             "Credentials for account %s is not a dict: %s", account.id, type(creds).__name__
         )
         return default
+
+
+# ----------------------------------------------------------------------
+# Module-level profile normalization helpers
+#
+# Pure functions so they're trivially unit-testable. Used by
+# ``fetch_identity_profile`` to translate Facebook's locale/offset
+# representations into the channel-agnostic ``language`` / ``timezone``
+# contract documented on ``BaseChannelAdapter.fetch_identity_profile``.
+# ----------------------------------------------------------------------
+
+
+def _locale_to_language(locale: str) -> str:
+    """Extract an ISO 639-1 language code from a Facebook locale.
+
+    Facebook's ``locale`` field uses the ``<lang>_<region>`` form, e.g.
+    ``"en_US"``, ``"pt_BR"``, ``"fr_FR"``. We return the lowercase
+    language portion (``"en"``, ``"pt"``, ``"fr"``). Returns ``""`` for
+    an empty or unparseable input.
+    """
+    if not locale or not isinstance(locale, str):
+        return ""
+    lang = locale.split("_", 1)[0].split("-", 1)[0].strip().lower()
+    return lang if lang else ""
+
+
+def _offset_to_tz(offset) -> str:
+    """Convert a Facebook numeric timezone offset (hours) to a UTC offset string.
+
+    Facebook exposes the user's timezone as a numeric offset in hours
+    from UTC (e.g. ``-5``, ``3.5``, ``0``) — not an IANA name. We
+    normalize it to a ``"UTC±HH:MM"`` string so downstream consumers get
+    a consistent, sortable format. The raw value is preserved in
+    ``extra`` for debugging/audit.
+
+    Examples:
+        -5     -> "UTC-05:00"
+         3.5   -> "UTC+03:30"
+         0     -> "UTC+00:00"
+        None   -> ""
+    """
+    if offset is None or offset == "":
+        return ""
+    try:
+        hours = float(offset)
+    except (TypeError, ValueError):
+        return ""
+    sign = "+" if hours >= 0 else "-"
+    hours = abs(hours)
+    whole = int(hours)
+    minutes = round((hours - whole) * 60)
+    # Handle minute rounding carry (e.g. 59.5 -> 59:30, not 60:00).
+    if minutes == 60:
+        whole += 1
+        minutes = 0
+    return f"UTC{sign}{whole:02d}:{minutes:02d}"

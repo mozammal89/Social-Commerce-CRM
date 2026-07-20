@@ -65,6 +65,15 @@ app.conf.beat_schedule = {
         "task": "apps.messaging.tasks.validate_channel_tokens",
         "schedule": crontab(hour=4, minute=0),  # 04:00 daily
     },
+    # Customer profile sync: refresh channel-side profile data (name,
+    # avatar, language, timezone) for identities whose last_synced_at is
+    # older than 7 days or NULL. Runs at 04:30 daily — after the token
+    # validation so only healthy tokens are used against channel APIs.
+    # Agent-edited fields are never overwritten (source-of-truth rule).
+    "sync-customer-profiles-daily": {
+        "task": "apps.messaging.tasks.sync_customer_profiles",
+        "schedule": crontab(hour=4, minute=30),  # 04:30 daily
+    },
 }
 
 

@@ -580,6 +580,17 @@
     text-align: right;
     word-break: break-all;
 }
+/* Right-aligned group: value + optional action button (e.g. refresh). */
+.customer-attr-right {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    text-align: right;
+    min-width: 0;
+}
+.customer-attr-right .value {
+    min-width: 0;
+}
 
 /* ================================================================
  * Empty / loading states
@@ -813,4 +824,15 @@
 /* Desktop: hide mobile back button */
 .mobile-back-btn {
     display: none;
+}
+
+/* Slow spin for the per-identity "Refresh profile" button while a
+   refresh is queued/in-flight. The inline button already has the
+   Bootstrap icon swap; this just rotates it. */
+.spin-slow i {
+    animation: spin-slow 1.4s linear infinite;
+}
+@keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }

@@ -56,7 +56,9 @@ class WhatsAppAdapter(BaseChannelAdapter):
         )
         return ok, challenge
 
-    def parse_webhook(self, *, headers, body, account) -> list[NormalizedIncomingEvent | DeliveryUpdate]:
+    def parse_webhook(
+        self, *, headers, body, account
+    ) -> list[NormalizedIncomingEvent | DeliveryUpdate]:
         return webhook.parse(body=body)
 
     # ------------------------------------------------------------------
@@ -64,7 +66,9 @@ class WhatsAppAdapter(BaseChannelAdapter):
     # ------------------------------------------------------------------
     def send_message(self, *, account, recipient_external_id, message) -> SendResult:
         if not message.has_content:
-            return SendResult(success=False, status=DeliveryStatus.FAILED.value, error_message="Empty message")
+            return SendResult(
+                success=False, status=DeliveryStatus.FAILED.value, error_message="Empty message"
+            )
 
         # Template send vs free-form send have different payload shapes.
         if message.template_name:
@@ -85,7 +89,9 @@ class WhatsAppAdapter(BaseChannelAdapter):
         # Cloud API: {"messaging_product":"whatsapp","messages":[{"id":"..."}]}
         messages = (data or {}).get("messages") or []
         external_id = messages[0].get("id") if messages else None
-        return SendResult(success=True, external_id=external_id, status=DeliveryStatus.SENT.value, raw=data)
+        return SendResult(
+            success=True, external_id=external_id, status=DeliveryStatus.SENT.value, raw=data
+        )
 
     def _build_text_payload(self, phone: str, message: OutboundMessage) -> dict[str, Any]:
         """Build a free-form text/media send payload."""
@@ -119,7 +125,9 @@ class WhatsAppAdapter(BaseChannelAdapter):
         }
         if message.template_variables:
             components = []
-            body_params = [{"type": "text", "text": str(v)} for v in message.template_variables.values()]
+            body_params = [
+                {"type": "text", "text": str(v)} for v in message.template_variables.values()
+            ]
             if body_params:
                 components.append({"type": "body", "parameters": body_params})
             template["components"] = components
@@ -135,14 +143,36 @@ class WhatsAppAdapter(BaseChannelAdapter):
     # Identity / profile
     # ------------------------------------------------------------------
     def fetch_identity_profile(self, *, account, external_id) -> dict[str, Any]:
-        # Cloud API contact lookup is best-effort and may be unavailable;
-        # the inbound webhook usually carries the name already.
+        """Fetch the WhatsApp Cloud API profile for a phone number.
+
+        The Cloud API's contacts lookup (``POST /{phone_id}/contacts``)
+        returns only the saved-contact ``name`` — no avatar, no locale,
+        no timezone. (Avatar URLs are available only via the BSPs, not
+        the Cloud API.) The contract requires us to return ``language``
+        and ``timezone`` keys, so we set them to ``""`` explicitly.
+        """
         data = client.fetch_contacts(account=account, phones=[external_id])
         contacts = (data or {}).get("contacts") or []
         if contacts:
             name = contacts[0].get("name", "")
-            return {"display_name": name or external_id, "avatar_url": "", "extra": contacts[0]}
-        return {"display_name": external_id, "avatar_url": "", "extra": {}}
+            return {
+                "display_name": name or external_id,
+                "avatar_url": "",
+                "first_name": "",
+                "last_name": "",
+                "language": "",
+                "timezone": "",
+                "extra": contacts[0],
+            }
+        return {
+            "display_name": external_id,
+            "avatar_url": "",
+            "first_name": "",
+            "last_name": "",
+            "language": "",
+            "timezone": "",
+            "extra": {},
+        }
 
     # ------------------------------------------------------------------
     # Account connection

@@ -8,7 +8,7 @@ adapter methods stay focused on payload mapping.
 
 References (Graph API v18.0+):
 * Send API:        POST /{page-id}/messages
-* Profile API:     GET  /{sender-psid}?fields=first_name,last_name,profile_pic
+* Profile API:     GET  /{sender-psid}?fields=first_name,last_name,profile_pic,locale,timezone
 * Long-lived token: https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow
 
 All requests are made with the ``requests`` library and time out at 20s
@@ -109,25 +109,58 @@ def fetch_profile(
     account: "ConnectedAccount",
     psid: str,
 ) -> dict[str, Any]:
-    """GET the sender's public profile (name + avatar).
+    """GET the sender's public profile (best-effort, multi-tier).
 
-    Returns ``{first_name, last_name, profile_pic}`` or an empty dict on
-    failure (profile fetch is best-effort and must not block ingestion).
+    The fields available via ``GET /{psid}?fields=...`` depend heavily on
+    the Page token's permissions and the API version:
+
+      * ``profile_pic`` — almost always available with ``pages_messaging``.
+      * ``first_name``/``last_name`` — require the customer-chat plugin or
+        the older Customer Profile API; frequently rejected with
+        ``(#100) Tried accessing nonexisting field (first_name)`` on
+        modern tokens.
+      * ``locale``/``timezone`` — require the ``user_profile`` permission,
+        rare in practice.
+
+    So we try the full set first; on a field-rejection error we fall back
+    to ``profile_pic`` only; if that fails too we return ``{}`` (the
+    adapter then uses the PSID as the display name). Never raises.
+
+    Returns the parsed profile dict (subset of requested fields) or ``{}``.
+    """
+    return (
+        _fetch_profile_fields(account, psid, "first_name,last_name,profile_pic,locale,timezone")
+        or _fetch_profile_fields(account, psid, "profile_pic")
+        or {}
+    )
+
+
+def _fetch_profile_fields(
+    account: "ConnectedAccount", psid: str, fields: str
+) -> dict[str, Any] | None:
+    """One attempt to fetch ``fields`` for ``psid``. Returns ``None`` on
+    failure so the caller can fall back; returns the parsed dict on
+    success (which may be empty if the API returned 200 with no fields).
     """
     url = f"{GRAPH_API_BASE}/{psid}"
-    params = {
-        "fields": "first_name,last_name,profile_pic",
-        "access_token": _page_token(account),
-    }
+    params = {"fields": fields, "access_token": _page_token(account)}
     try:
         resp = requests.get(url, params=params, timeout=DEFAULT_TIMEOUT)
     except requests.RequestException as exc:
         logger.warning("Facebook profile fetch failed for psid=%s: %s", psid, exc)
-        return {}
+        return None
 
     if resp.status_code != 200:
-        logger.warning("Facebook profile fetch non-200 for psid=%s: %s", psid, resp.text[:200])
-        return {}
+        # Log once for visibility; the caller's fallback hides this from
+        # the end user. fbtrace_id is included so support can trace it.
+        logger.info(
+            "Facebook profile fetch (fields=%s) non-200 for psid=%s: %s",
+            fields,
+            psid,
+            resp.text[:200],
+        )
+        return None
+    print('----------------- url, params, resp.json', url, params, resp.json())
     return resp.json()
 
 

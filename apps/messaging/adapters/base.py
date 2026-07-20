@@ -126,11 +126,35 @@ class BaseChannelAdapter(abc.ABC):
     ) -> dict[str, Any]:
         """Fetch the platform-side profile for a customer id.
 
-        Returns a dict with at least ``display_name`` and ``avatar_url``
-        (empty strings when unavailable) plus any platform-specific
-        fields under ``extra``. Adapters that can't fetch profiles
-        (e.g. WhatsApp Cloud API without a contacts lookup) should
-        return an empty-ish dict rather than raising.
+        Returns a dict with the following keys. Adapters MUST include all
+        keys, using empty strings when the platform does not expose the
+        field — never raise on "profile not found", return an empty-ish
+        dict so profile enrichment is always best-effort.
+
+        Required keys:
+            display_name : str   — human name or "" (fall back to external_id
+                                   at the service layer if empty)
+            avatar_url   : str   — public URL or "" (e.g. FB profile_pic)
+            first_name   : str   — "" if the platform only returns a full name
+            last_name    : str   — "" if the platform only returns a full name
+            language     : str   — ISO 639-1 code (e.g. "en") or "" if unknown.
+                                   Channels exposing a full locale (e.g. FB's
+                                   "en_US") should extract the language part.
+            timezone     : str   — IANA name (e.g. "America/New_York") when
+                                   available, a UTC offset string (e.g.
+                                   "UTC-05:00") when the channel only exposes
+                                   an offset, or "" if unknown.
+            extra        : dict  — the full raw profile payload, kept for
+                                   debugging/audit. Always a dict ({} when
+                                   nothing was fetched).
+
+        Channel capability matrix:
+            Facebook Messenger — name, avatar via GET /{psid}; locale + numeric
+                                 tz offset available with user_profile permission
+            WhatsApp Cloud API — name only (via contacts lookup); no avatar,
+                                 no locale, no timezone
+            Instagram          — username, name, profile pic (future)
+            Telegram           — first/last name, username, language_code (future)
         """
 
     # ------------------------------------------------------------------

@@ -119,6 +119,8 @@ function inboxApp() {
 
         customer: {},              // Always an object to prevent null reference errors
         loadingCustomer: false,
+        refreshingIdentity: null,  // identity_id currently being refreshed (for spinner)
+        refreshNotice: '',         // transient feedback message under Channels
 
         channels: [],               // connected accounts (for the channel filter)
 
@@ -524,6 +526,36 @@ function inboxApp() {
             try {
                 this.customer = await api(`${this.apiBase}/customers/${customerId}/`, { storeId: this.storeId });
             } catch { this.customer = {}; } finally { this.loadingCustomer = false; }
+        },
+
+        /**
+         * Trigger an on-demand profile refresh for one channel identity.
+         * Enqueues the enrich_customer_identity Celery task and polls
+         * the customer endpoint a few seconds later to surface the new
+         * name/avatar. Source-of-truth rule still applies (agent-edited
+         * fields are never overwritten by the sync).
+         */
+        async refreshIdentity(identityId) {
+            if (!this.customer.id || !identityId) return;
+            this.refreshingIdentity = identityId;
+            this.refreshNotice = '';
+            try {
+                const res = await api(
+                    `${this.apiBase}/customers/${this.customer.id}/identities/${identityId}/refresh/`,
+                    { method: 'POST', storeId: this.storeId },
+                );
+                this.refreshNotice = res.detail || 'Refresh queued. Profile will update shortly.';
+                // Re-fetch after a short delay to pick up the refreshed data.
+                // The Celery task typically completes in 1-3s; poll once.
+                setTimeout(() => {
+                    this.loadCustomer(this.customer.id);
+                    this.refreshingIdentity = null;
+                }, 2500);
+            } catch (err) {
+                this.refreshingIdentity = null;
+                this.refreshNotice = '';
+                this.notify(err.message || 'Could not queue profile refresh.', 'error');
+            }
         },
 
         /* ================================================================
