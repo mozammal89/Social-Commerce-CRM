@@ -1,149 +1,170 @@
 /**
- * Role & Permission management UI scripts
- * Handles form auto-submit, search debouncing, and AJAX filtering
+ * Role & Permission UI — shared app bootstrap.
+ *
+ * Provides:
+ *   - Auto-submit on debounced input changes
+ *   - Confirmation dialog for destructive actions
+ *   - Reusable fetch wrapper with CSRF
+ *
+ * Loaded as a module by every page in the role/permission UI.
  */
 
-console.log('RP app.js loaded');
+const getCsrfToken = () => {
+  const el = document.querySelector('input[name="csrfmiddlewaretoken"]');
+  return el ? el.value : '';
+};
 
-// Debounce utility function
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
+const parseError = async (response) => {
+  let message = `Request failed (${response.status})`;
+  try {
+    const data = await response.json();
+    if (data && data.error) message = data.error;
+  } catch (_) { /* non-JSON body */ }
+  return new Error(message);
+};
+
+export const api = {
+  async get(url, options = {}) {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+      credentials: 'same-origin',
+      ...options,
+    });
+    if (!response.ok) throw await parseError(response);
+    return response.json();
+  },
+
+  async post(url, body, options = {}) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCsrfToken(),
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(body),
+      ...options,
+    });
+    if (!response.ok) throw await parseError(response);
+    return response.json();
+  },
+};
+
+const debounce = (fn, delay = 300) => {
+  let timer = null;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(null, args), delay);
+  };
+};
+
+const initAutoSubmit = () => {
+  document.querySelectorAll('[data-auto-submit]').forEach((el) => {
+    const delay = Number(el.dataset.debounce) || 0;
+    const submit = () => {
+      if (el.form) {
+        if (el.form.requestSubmit) el.form.requestSubmit();
+        else el.form.submit();
+      }
     };
-}
-
-// AJAX form submission
-async function submitFormAjax(form) {
-    console.log('Submitting form via AJAX...');
-    const formData = new FormData(form);
-    const params = new URLSearchParams(formData).toString();
-    const url = `${window.location.pathname}?${params}`;
-
-    // Show loading state
-    const resultsContainer = document.querySelector('[data-results-container]');
-    if (resultsContainer) {
-        resultsContainer.style.opacity = '0.5';
-    }
-
-    try {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-        });
-
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-
-        const html = await response.text();
-        console.log('AJAX response received');
-
-        // Parse the response
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-
-        // Update the results container
-        const newResults = doc.querySelector('[data-results-container]');
-        const currentResults = document.querySelector('[data-results-container]');
-
-        if (newResults && currentResults) {
-            currentResults.innerHTML = newResults.innerHTML;
-        } else {
-            console.error('Could not find results containers');
-        }
-
-        // Update URL without reloading
-        window.history.replaceState({}, '', url);
-
-    } catch (error) {
-        console.error('Error loading results:', error);
-        // Fallback to regular form submission on error
-        form.submit();
-    } finally {
-        if (resultsContainer) {
-            resultsContainer.style.opacity = '1';
-        }
-    }
-}
-
-// Initialize auto-submit functionality
-function initOverrideFilters() {
-    console.log('Initializing override filters...');
-
-    const filterForm = document.getElementById('filterForm');
-
-    if (!filterForm) {
-        console.error('Filter form #filterForm not found');
-        return;
-    }
-
-    console.log('Filter form found, attaching event listeners...');
-
-    // Prevent normal form submission
-    filterForm.addEventListener('submit', function(e) {
-        console.log('Form submit event intercepted');
-        e.preventDefault();
-        e.stopPropagation();
-        submitFormAjax(filterForm);
-        return false;
-    });
-
-    // Attach listeners to all inputs and selects
-    const inputs = filterForm.querySelectorAll('input, select');
-    console.log(`Found ${inputs.length} inputs to attach to`);
-
-    inputs.forEach((input, index) => {
-        const inputName = input.name || input.id || 'unnamed';
-        const debounceTime = parseInt(input.dataset.debounce || '0', 10);
-
-        if (debounceTime > 0) {
-            // Debounced input (search boxes)
-            input.addEventListener('input', debounce(function() {
-                console.log(`Debounced input changed: ${inputName}`);
-                submitFormAjax(filterForm);
-            }, debounceTime));
-            console.log(`Attached debounced listener to: ${inputName} (${debounceTime}ms)`);
-        } else {
-            // Immediate submit (select dropdowns)
-            input.addEventListener('change', function() {
-                console.log(`Filter changed: ${inputName}`);
-                submitFormAjax(filterForm);
-            });
-            console.log(`Attached change listener to: ${inputName}`);
-        }
-    });
-
-    console.log('Override filters initialized successfully');
-}
-
-// Wait for DOM to be ready
-function initWhenReady() {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initOverrideFilters);
+    if (el.type === 'search' || el.tagName === 'INPUT') {
+      el.addEventListener('input', debounce(submit, delay || 300));
     } else {
-        // DOM is already ready
-        initOverrideFilters();
+      el.addEventListener('change', submit);
     }
+  });
+};
+
+const initExpandCollapse = () => {
+  const expandAll = document.querySelector('[data-action="expand-all"]');
+  const collapseAll = document.querySelector('[data-action="collapse-all"]');
+  if (!expandAll && !collapseAll) return;
+
+  const groups = () => document.querySelectorAll('details.permission-group');
+  expandAll?.addEventListener('click', () => groups().forEach((g) => g.open = true));
+  collapseAll?.addEventListener('click', () => groups().forEach((g) => g.open = false));
+};
+
+const initConfirmations = () => {
+  document.querySelectorAll('[data-action="delete-role"]').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const name = btn.dataset.roleName || 'this role';
+      const proceed = () => btn.form.submit();
+      if (typeof window.confirmAction === 'function') {
+        const ok = await window.confirmAction({
+          title: `Delete "${name}"?`,
+          message: 'Active members will lose access until they are reassigned. This action cannot be undone.',
+          confirmText: 'Delete',
+          confirmClass: 'btn-danger',
+        });
+        if (ok) proceed();
+      } else if (window.confirm(`Delete "${name}"?\n\nActive members will lose access until they are reassigned. This action cannot be undone.`)) {
+        proceed();
+      }
+    });
+  });
+};
+
+const initCloneButtons = () => {
+  document.querySelectorAll('[data-action="clone-role"]').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const name = btn.dataset.roleName || 'this role';
+
+      const submitClone = (newName) => {
+        if (!newName) return;
+        const roleId = btn.dataset.roleId;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/dashboard/roles/${roleId}/clone/`;
+
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = 'csrfmiddlewaretoken';
+        csrf.value = getCsrfToken();
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'hidden';
+        nameInput.name = 'new_name';
+        nameInput.value = newName;
+
+        form.append(csrf, nameInput);
+        document.body.appendChild(form);
+        form.submit();
+      };
+
+      if (typeof window.confirmAction === 'function' && typeof window.confirmAction.prompt === 'function') {
+        const newName = await window.confirmAction.prompt({
+          title: 'Clone role',
+          label: 'Name for the cloned role',
+          placeholder: `${name} (copy)`,
+          confirmText: 'Clone',
+          confirmClass: 'btn-primary',
+          required: true,
+        });
+        submitClone(newName);
+      } else {
+        const newName = window.prompt(`Name for the cloned role:`, `${name} (copy)`);
+        submitClone(newName);
+      }
+    });
+  });
+};
+
+const init = () => {
+  initAutoSubmit();
+  initExpandCollapse();
+  initConfirmations();
+  initCloneButtons();
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
 }
-
-// Start initialization
-initWhenReady();
-
-// Also try after a short delay in case of timing issues
-setTimeout(function() {
-    console.log('Retrying initialization...');
-    initOverrideFilters();
-}, 500);
-
-// Export for global access
-window.RP = window.RP || {};
-window.RP.initOverrideFilters = initOverrideFilters;
-window.RP.submitFormAjax = submitFormAjax;
