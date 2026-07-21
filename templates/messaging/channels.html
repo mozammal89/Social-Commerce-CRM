@@ -17,7 +17,7 @@
   <div class="section-header mb-4 d-flex align-items-center justify-content-between gap-2">
     <div>
       <h1 class="section-title"><i class="bi bi-broadcast me-2"></i>Connected Channels</h1>
-      <p class="section-subtitle">Connect Facebook Pages and WhatsApp numbers, then manage them here.</p>
+      <p class="section-subtitle">Connect Facebook, WhatsApp, Instagram, Telegram, TikTok and more — then manage them here.</p>
     </div>
     <div class="dropdown">
       <button class="btn btn-outline-primary btn-sm d-flex align-items-center gap-1" data-bs-toggle="dropdown">
@@ -36,6 +36,21 @@
         <li>
           <button class="dropdown-item d-flex align-items-center gap-2" @click="openGuide('facebook_messenger')">
             <i class="bi bi-messenger text-primary"></i> Facebook Messenger
+          </button>
+        </li>
+        <li>
+          <button class="dropdown-item d-flex align-items-center gap-2" @click="openGuide('instagram')">
+            <i class="bi bi-instagram" style="color:#E1306C;"></i> Instagram Direct
+          </button>
+        </li>
+        <li>
+          <button class="dropdown-item d-flex align-items-center gap-2" @click="openGuide('telegram')">
+            <i class="bi bi-telegram" style="color:#0088CC;"></i> Telegram
+          </button>
+        </li>
+        <li>
+          <button class="dropdown-item d-flex align-items-center gap-2" @click="openGuide('tiktok')">
+            <i class="bi bi-tiktok"></i> TikTok Business
           </button>
         </li>
         <li><hr class="dropdown-divider"></li>
@@ -79,7 +94,7 @@
       <div class="empty-state text-center py-5">
         <div class="empty-state-icon"><i class="bi bi-plug"></i></div>
         <h5 class="empty-state-title">No channels connected yet</h5>
-        <p class="empty-state-description">Connect Facebook Messenger or WhatsApp to start receiving messages.</p>
+        <p class="empty-state-description">Connect Messenger, WhatsApp, Instagram, Telegram, or TikTok to start receiving messages.</p>
       </div>
     </template>
 
@@ -275,30 +290,24 @@
             <div class="col-md-5">
               <label class="form-label">Account Name <span class="text-danger">*</span></label>
               <input type="text" class="form-control" x-model="connectName"
-                     :placeholder="connectChannel?.channel_type === 'whatsapp' ? 'e.g. Sales WhatsApp' : 'e.g. Main Facebook Page'">
+                     :placeholder="connectMeta(connectChannel?.channel_type).namePlaceholder">
             </div>
             <div class="col-md-7">
               <label class="form-label">
-                <span x-text="connectChannel?.channel_type === 'whatsapp' ? 'WABA ID (WhatsApp Business Account)' : 'Facebook Page Numeric ID'"></span>
+                <span x-text="connectMeta(connectChannel?.channel_type).externalIdLabel"></span>
                 <span class="text-danger">*</span>
               </label>
               <input type="text" class="form-control" x-model="connectExternalId"
-                     :placeholder="connectChannel?.channel_type === 'whatsapp' ? 'e.g. 123456789012345' : 'e.g. 1029384756'">
-              <div class="form-text" style="font-size: 0.75rem;">
-                <span x-show="connectChannel?.channel_type === 'whatsapp'">
-                  From Meta Business Settings → Your Business Information
-                </span>
-                <span x-show="connectChannel?.channel_type === 'facebook_messenger'">
-                  From Facebook Page Settings → About section (Page ID)
-                </span>
-              </div>
+                     :placeholder="connectMeta(connectChannel?.channel_type).externalIdPlaceholder">
+              <div class="form-text" style="font-size: 0.75rem;" x-text="connectMeta(connectChannel?.channel_type).externalIdHelp"></div>
             </div>
           </div>
 
           <!-- Platform-specific credentials -->
           <hr>
           <!-- Channel-specific connect help banner -->
-          <div class="alert alert-info border-0 small d-flex gap-2 align-items-start"
+          <div class="alert alert-info border-0 small"
+               style="display:flex;gap:.5rem;align-items:flex-start;"
                x-show="connectChannel?.channel_type === 'whatsapp'">
             <i class="bi bi-info-circle-fill text-info"></i>
             <div>
@@ -309,7 +318,8 @@
               </button>
             </div>
           </div>
-          <div class="alert alert-info border-0 small d-flex gap-2 align-items-start"
+          <div class="alert alert-info border-0 small"
+               style="display:flex;gap:.5rem;align-items:flex-start;"
                x-show="connectChannel?.channel_type === 'facebook_messenger'">
             <i class="bi bi-info-circle-fill text-info"></i>
             <div>
@@ -318,6 +328,46 @@
               automatically and refreshed in the background.
               <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="openGuide('facebook_messenger')">
                 See the Messenger setup guide &rarr;
+              </button>
+            </div>
+          </div>
+          <div class="alert alert-info border-0 small"
+               style="display:flex;gap:.5rem;align-items:flex-start;"
+               x-show="connectChannel?.channel_type === 'instagram'">
+            <i class="bi bi-info-circle-fill text-info"></i>
+            <div>
+              <strong>Connecting an Instagram Professional account?</strong>
+              Instagram DMs run on Meta's Messenger Platform, so you'll need a Meta App with the
+              <code>instagram_manage_messages</code> permission and a Page Access Token for the Page
+              linked to your Instagram account.
+              <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="openGuide('instagram')">
+                See the Instagram setup guide &rarr;
+              </button>
+            </div>
+          </div>
+          <div class="alert alert-info border-0 small"
+               style="display:flex;gap:.5rem;align-items:flex-start;"
+               x-show="connectChannel?.channel_type === 'telegram'">
+            <i class="bi bi-info-circle-fill text-info"></i>
+            <div>
+              <strong>Connecting a Telegram bot?</strong>
+              Create a bot with <a href="https://t.me/BotFather" target="_blank">@BotFather</a> and paste
+              the token it gives you. The webhook is registered with Telegram automatically on connect.
+              <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="openGuide('telegram')">
+                See the Telegram setup guide &rarr;
+              </button>
+            </div>
+          </div>
+          <div class="alert alert-info border-0 small"
+               style="display:flex;gap:.5rem;align-items:flex-start;"
+               x-show="connectChannel?.channel_type === 'tiktok'">
+            <i class="bi bi-info-circle-fill text-info"></i>
+            <div>
+              <strong>Connecting a TikTok Business account?</strong>
+              Authorize the CRM in the TikTok for Developers portal and paste the access/refresh tokens
+              returned by the OAuth flow. Tokens are auto-refreshed before they expire.
+              <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="openGuide('tiktok')">
+                See the TikTok setup guide &rarr;
               </button>
             </div>
           </div>
@@ -879,19 +929,403 @@
        </div>
      </div>
    </div>
-   <div class="modal-backdrop fade" :class="{ show: showGuide && guideChannel === 'facebook_messenger' }"
-        :style="{ display: (showGuide && guideChannel === 'facebook_messenger') ? 'block' : 'none' }"
-        x-show="showGuide && guideChannel === 'facebook_messenger'" style="display:none;" @click="closeGuide()"></div>
+    <div class="modal-backdrop fade" :class="{ show: showGuide && guideChannel === 'facebook_messenger' }"
+         :style="{ display: (showGuide && guideChannel === 'facebook_messenger') ? 'block' : 'none' }"
+         x-show="showGuide && guideChannel === 'facebook_messenger'" style="display:none;" @click="closeGuide()"></div>
+
+    <!-- ================================================================
+       Instagram Direct — setup guide
+       (shown when openGuide('instagram') is called)
+    ================================================================ -->
+    <div class="modal fade" :class="{ show: showGuide && guideChannel === 'instagram' }"
+         :style="{ display: (showGuide && guideChannel === 'instagram') ? 'block' : 'none' }"
+         tabindex="-1" @keydown.escape.window="closeGuide()">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 720px;">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="bi bi-instagram me-2" style="color:#E1306C;"></i>Instagram Direct Setup Guide
+            </h5>
+            <button type="button" class="btn-close" @click="closeGuide()"></button>
+          </div>
+          <div class="modal-body">
+
+            <!-- Intro -->
+            <div class="alert alert-info border-0 d-flex gap-3">
+              <i class="bi bi-instagram fs-4" style="color:#E1306C;"></i>
+              <div>
+                <strong>Connect an Instagram Professional account to the CRM</strong>
+                <p class="mb-0 mt-1 small">Instagram DMs run on Meta's Messenger Platform, so setup mirrors the Messenger flow. Once connected, every DM your account receives appears in the unified inbox — and your team can reply from the CRM.</p>
+              </div>
+            </div>
+
+            <!-- Requirements -->
+            <div class="alert alert-warning border-0 small d-flex gap-2">
+              <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+              <div>
+                <strong>Requirements.</strong> You need an <em>Instagram Business or Creator account</em> linked to a Facebook Page. Personal accounts cannot use the messaging API.
+              </div>
+            </div>
+
+            <!-- Benefits -->
+            <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-stars me-1 text-primary"></i>What you get</h6>
+            <ul class="small text-muted ps-3 mb-3">
+              <li><strong>Multi-agent inbox</strong> — your whole team can reply to the same DMs.</li>
+              <li><strong>Unified inbox</strong> — Instagram + Messenger + WhatsApp in one view.</li>
+              <li><strong>Customer profiles</strong> — every chat attached to a unified customer record.</li>
+              <li><strong>Notes & assignments</strong> — hand off conversations internally.</li>
+              <li><strong>Automation</strong> — auto-replies and template messages.</li>
+            </ul>
+
+            <!-- Step-by-step -->
+            <h6 class="fw-bold mb-3"><i class="bi bi-list-ol me-1 text-primary"></i>Step-by-step setup</h6>
+            <div class="accordion" id="igMigrationSteps">
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#igStep1">
+                    Step 1 — Switch to an Instagram Professional account (if needed)
+                  </button>
+                </h2>
+                <div id="igStep1" class="accordion-collapse collapse" data-bs-parent="#igMigrationSteps">
+                  <div class="accordion-body small">
+                    In the Instagram app &rarr; Settings &rarr; Account type and tools &rarr; <strong>Switch to professional account</strong>. Then link it to a Facebook Page (Settings &rarr; Business/Creator &rarr; Linked Facebook Page).
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#igStep2">
+                    Step 2 — Create a Meta App with Instagram messaging
+                  </button>
+                </h2>
+                <div id="igStep2" class="accordion-collapse collapse" data-bs-parent="#igMigrationSteps">
+                  <div class="accordion-body small">
+                    Go to the <a href="https://developers.facebook.com/apps/" target="_blank">Meta for Developers dashboard</a> &rarr; <strong>My Apps</strong> &rarr; <strong>Create App</strong>. Choose the <em>Business</em> type and add the <strong>Messenger</strong> product. Under its settings, find the <em>Instagram</em> section and add the test account.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#igStep3">
+                    Step 3 — Get your Instagram Account ID (ig-user-id)
+                  </button>
+                </h2>
+                <div id="igStep3" class="accordion-collapse collapse" data-bs-parent="#igMigrationSteps">
+                  <div class="accordion-body small">
+                    In the Meta App dashboard &rarr; <strong>Messenger</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Access Tokens</strong>, select the Instagram account to surface its <code>ig-user-id</code>. This is what you paste as the "Instagram Account ID" in the connect form.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#igStep4">
+                    Step 4 — Generate a Page Access Token with Instagram permissions
+                  </button>
+                </h2>
+                <div id="igStep4" class="accordion-collapse collapse" data-bs-parent="#igMigrationSteps">
+                  <div class="accordion-body small">
+                    Generate a Page Access Token (or a user token — the CRM will exchange it for a long-lived one) with these permissions:
+                    <code>instagram_basic</code>, <code>instagram_manage_messages</code>, <code>pages_show_list</code>, <code>pages_messaging</code>.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#igStep5">
+                    Step 5 — Copy your App Secret and subscribe the webhook
+                  </button>
+                </h2>
+                <div id="igStep5" class="accordion-collapse collapse" data-bs-parent="#igMigrationSteps">
+                  <div class="accordion-body small">
+                    Copy the <strong>App Secret</strong> from Settings &rarr; Basic. In Messenger &rarr; Settings &rarr; Webhooks, paste the <strong>Webhook URL</strong> and <strong>Verify Token</strong> from the channel card and subscribe to the <code>messages</code>, <code>messaging_postbacks</code> and <code>message_deliveries</code> fields for the Instagram account.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 24-hour window note -->
+            <hr class="my-4">
+            <h6 class="fw-bold mb-2"><i class="bi bi-clock-history me-1 text-secondary"></i>The 24-hour messaging window</h6>
+            <p class="small text-muted mb-0">
+              Instagram (like Messenger) only allows free-form replies within 24 hours of the customer's last message.
+              Outside that window you must use a pre-approved message template. The CRM surfaces this clearly in the composer.
+            </p>
+
+          </div>
+          <div class="modal-footer">
+            <a href="https://developers.facebook.com/docs/messenger-platform/instagram" target="_blank" class="btn btn-ghost me-auto small">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Official Instagram Messaging docs
+            </a>
+            <button class="btn btn-primary" @click="closeGuide()">Got it</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop fade" :class="{ show: showGuide && guideChannel === 'instagram' }"
+         :style="{ display: (showGuide && guideChannel === 'instagram') ? 'block' : 'none' }"
+         x-show="showGuide && guideChannel === 'instagram'" style="display:none;" @click="closeGuide()"></div>
+
+    <!-- ================================================================
+       Telegram — setup guide
+       (shown when openGuide('telegram') is called)
+    ================================================================ -->
+    <div class="modal fade" :class="{ show: showGuide && guideChannel === 'telegram' }"
+         :style="{ display: (showGuide && guideChannel === 'telegram') ? 'block' : 'none' }"
+         tabindex="-1" @keydown.escape.window="closeGuide()">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 720px;">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="bi bi-telegram me-2" style="color:#0088CC;"></i>Telegram Bot Setup Guide
+            </h5>
+            <button type="button" class="btn-close" @click="closeGuide()"></button>
+          </div>
+          <div class="modal-body">
+
+            <!-- Intro -->
+            <div class="alert alert-info border-0 d-flex gap-3">
+              <i class="bi bi-telegram fs-4" style="color:#0088CC;"></i>
+              <div>
+                <strong>Connect a Telegram bot to the CRM</strong>
+                <p class="mb-0 mt-1 small">Telegram bots are created with <a href="https://t.me/BotFather" target="_blank">@BotFather</a>. There's no OAuth flow — the bot token <em>is</em> the credential. The CRM auto-registers the webhook with Telegram on connect.</p>
+              </div>
+            </div>
+
+            <!-- Benefits -->
+            <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-stars me-1 text-primary"></i>What you get</h6>
+            <ul class="small text-muted ps-3 mb-3">
+              <li><strong>Multi-agent inbox</strong> — your whole team replies from the same bot.</li>
+              <li><strong>Unified inbox</strong> — Telegram + Messenger + WhatsApp in one view.</li>
+              <li><strong>Rich media</strong> — photos, videos, documents, stickers, voice notes, locations.</li>
+              <li><strong>Buttons</strong> — inline keyboard taps are surfaced as messages.</li>
+              <li><strong>Customer profiles</strong> — every chat attached to a unified customer record.</li>
+            </ul>
+
+            <!-- Step-by-step -->
+            <h6 class="fw-bold mb-3"><i class="bi bi-list-ol me-1 text-primary"></i>Step-by-step setup</h6>
+            <div class="accordion" id="tgMigrationSteps">
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#tgStep1">
+                    Step 1 — Create a bot with @BotFather
+                  </button>
+                </h2>
+                <div id="tgStep1" class="accordion-collapse collapse" data-bs-parent="#tgMigrationSteps">
+                  <div class="accordion-body small">
+                    Open <a href="https://t.me/BotFather" target="_blank">@BotFather</a> in Telegram and send <code>/newbot</code>. Choose a display name and a unique @username ending in <code>bot</code>. BotFather replies with a bot token like <code>123456789:ABC-DEF…</code>.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#tgStep2">
+                    Step 2 — (Optional) Set a webhook secret token
+                  </button>
+                </h2>
+                <div id="tgStep2" class="accordion-collapse collapse" data-bs-parent="#tgMigrationSteps">
+                  <div class="accordion-body small">
+                    Send <code>/setwebhook</code> to BotFather, or use the Bot API directly — but it's easier to let the CRM register the webhook on connect. For added security, pick a random string and paste it as the <em>Webhook Secret Token</em> field in the connect form: Telegram will echo it back in every webhook for verification.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#tgStep3">
+                    Step 3 — Paste the token into the CRM
+                  </button>
+                </h2>
+                <div id="tgStep3" class="accordion-collapse collapse" data-bs-parent="#tgMigrationSteps">
+                  <div class="accordion-body small">
+                    Click <strong>Connect</strong> on the Telegram card and paste the bot token. The "Bot ID" field is the numeric prefix of the token (everything before the colon) — leave it blank and the CRM fills it in automatically.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#tgStep4">
+                    Step 4 — The webhook registers itself
+                  </button>
+                </h2>
+                <div id="tgStep4" class="accordion-collapse collapse" data-bs-parent="#tgMigrationSteps">
+                  <div class="accordion-body small">
+                    On connect, the CRM calls Telegram's <code>setWebhook</code> with the per-account webhook URL shown on the channel card. No manual webhook subscription is needed. If you'd rather register it yourself, leave the <em>Webhook URL</em> field blank and call <code>setWebhook</code> manually.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#tgStep5">
+                    Step 5 — Start a chat with your bot
+                  </button>
+                </h2>
+                <div id="tgStep5" class="accordion-collapse collapse" data-bs-parent="#tgMigrationSteps">
+                  <div class="accordion-body small">
+                    Telegram bots can't message users first — a customer must press <strong>/start</strong> in your bot once. After that, every message they send lands in the unified inbox and your team can reply freely.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Privacy note -->
+            <hr class="my-4">
+            <h6 class="fw-bold mb-2"><i class="bi bi-shield-check me-1 text-success"></i>Privacy &amp; limitations</h6>
+            <p class="small text-muted mb-0">
+              Bots cannot see message delivery/read receipts for private chats, and they can only message users who have started a conversation. The CRM stores your full conversation history even if the bot is later reconnected or renamed.
+            </p>
+
+          </div>
+          <div class="modal-footer">
+            <a href="https://core.telegram.org/bots/api" target="_blank" class="btn btn-ghost me-auto small">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Official Telegram Bot API docs
+            </a>
+            <button class="btn btn-primary" @click="closeGuide()">Got it</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop fade" :class="{ show: showGuide && guideChannel === 'telegram' }"
+         :style="{ display: (showGuide && guideChannel === 'telegram') ? 'block' : 'none' }"
+         x-show="showGuide && guideChannel === 'telegram'" style="display:none;" @click="closeGuide()"></div>
+
+    <!-- ================================================================
+       TikTok Business — setup guide
+       (shown when openGuide('tiktok') is called)
+    ================================================================ -->
+    <div class="modal fade" :class="{ show: showGuide && guideChannel === 'tiktok' }"
+         :style="{ display: (showGuide && guideChannel === 'tiktok') ? 'block' : 'none' }"
+         tabindex="-1" @keydown.escape.window="closeGuide()">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 720px;">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="bi bi-tiktok me-2"></i>TikTok Business Setup Guide
+            </h5>
+            <button type="button" class="btn-close" @click="closeGuide()"></button>
+          </div>
+          <div class="modal-body">
+
+            <!-- Intro -->
+            <div class="alert alert-info border-0 d-flex gap-3">
+              <i class="bi bi-tiktok fs-4"></i>
+              <div>
+                <strong>Connect a TikTok Business account to the CRM</strong>
+                <p class="mb-0 mt-1 small">TikTok's Business Messaging API (on the TikTok for Developers platform) uses standard OAuth 2.0. You authorize the CRM app and paste the access/refresh tokens it returns; the CRM refreshes them automatically before they expire.</p>
+              </div>
+            </div>
+
+            <!-- Requirements -->
+            <div class="alert alert-warning border-0 small d-flex gap-2">
+              <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+              <div>
+                <strong>Requirements.</strong> You need a TikTok Business Center account and a TikTok for Developers app with the <em>Business Messaging</em> scope approved. Access to the Messaging API is currently rolled out regionally.
+              </div>
+            </div>
+
+            <!-- Benefits -->
+            <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-stars me-1 text-primary"></i>What you get</h6>
+            <ul class="small text-muted ps-3 mb-3">
+              <li><strong>Multi-agent inbox</strong> — your whole team replies to the same TikTok DMs.</li>
+              <li><strong>Unified inbox</strong> — TikTok + Messenger + WhatsApp + more in one view.</li>
+              <li><strong>Rich media</strong> — images, videos, files and quick replies.</li>
+              <li><strong>Customer profiles</strong> — every chat attached to a unified customer record.</li>
+              <li><strong>Token auto-refresh</strong> — long-lived refresh tokens keep the channel alive.</li>
+            </ul>
+
+            <!-- Step-by-step -->
+            <h6 class="fw-bold mb-3"><i class="bi bi-list-ol me-1 text-primary"></i>Step-by-step setup</h6>
+            <div class="accordion" id="ttMigrationSteps">
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#ttStep1">
+                    Step 1 — Create a TikTok for Developers app
+                  </button>
+                </h2>
+                <div id="ttStep1" class="accordion-collapse collapse" data-bs-parent="#ttMigrationSteps">
+                  <div class="accordion-body small">
+                    Sign in at the <a href="https://developers.tiktok.com/" target="_blank">TikTok for Developers</a> portal and create an app. Copy the <strong>Client Key</strong> and <strong>Client Secret</strong> from the app's basic settings.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#ttStep2">
+                    Step 2 — Apply for the Business Messaging scope
+                  </button>
+                </h2>
+                <div id="ttStep2" class="accordion-collapse collapse" data-bs-parent="#ttMigrationSteps">
+                  <div class="accordion-body small">
+                    Under <em>Scopes</em>, add <code>business.msg.send</code> and the related read/profile scopes, then submit for review. TikTok enables messaging for your app once approved.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#ttStep3">
+                    Step 3 — Run the OAuth flow and capture the tokens
+                  </button>
+                </h2>
+                <div id="ttStep3" class="accordion-collapse collapse" data-bs-parent="#ttMigrationSteps">
+                  <div class="accordion-body small">
+                    Authorize the merchant's TikTok Business account via the OAuth 2.0 <em>Authorization Code</em> flow (your connect UI or a temporary script can do this). Exchange the code at <code>/v2/oauth/token/</code> to obtain the <strong>access_token</strong> (~24h) and <strong>refresh_token</strong> (~30 days).
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#ttStep4">
+                    Step 4 — Find your Business ID
+                  </button>
+                </h2>
+                <div id="ttStep4" class="accordion-collapse collapse" data-bs-parent="#ttMigrationSteps">
+                  <div class="accordion-body small">
+                    Open the <a href="https://business.tiktok.com/" target="_blank">TikTok Business Center</a> &rarr; Business Account Info. The <strong>Business ID</strong> shown there is what you paste as the "Business ID" in the connect form.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#ttStep5">
+                    Step 5 — Paste credentials &amp; register the webhook
+                  </button>
+                </h2>
+                <div id="ttStep5" class="accordion-collapse collapse" data-bs-parent="#ttMigrationSteps">
+                  <div class="accordion-body small">
+                    Click <strong>Connect</strong> on the TikTok card and paste the access token, refresh token, client key and client secret. Then in the TikTok for Developers dashboard &rarr; <strong>Webhooks</strong>, paste the <strong>Webhook URL</strong> from the channel card. The client secret is used to verify the <code>X-TT-Webhook-Signature</code> HMAC header on every event.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Token lifecycle note -->
+            <hr class="my-4">
+            <h6 class="fw-bold mb-2"><i class="bi bi-shield-check me-1 text-success"></i>Token lifecycle</h6>
+            <p class="small text-muted mb-0">
+              TikTok access tokens expire after ~24 hours, but the paired refresh token lasts ~30 days. The CRM refreshes the access token automatically before it expires and persists the new pair — you'll only need to re-authorize if the refresh token itself lapses.
+            </p>
+
+          </div>
+          <div class="modal-footer">
+            <a href="https://developers.tiktok.com/doc/business-messaging-api" target="_blank" class="btn btn-ghost me-auto small">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Official TikTok Business Messaging docs
+            </a>
+            <button class="btn btn-primary" @click="closeGuide()">Got it</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop fade" :class="{ show: showGuide && guideChannel === 'tiktok' }"
+         :style="{ display: (showGuide && guideChannel === 'tiktok') ? 'block' : 'none' }"
+         x-show="showGuide && guideChannel === 'tiktok'" style="display:none;" @click="closeGuide()"></div>
 
    <!-- ================================================================
       Generic help / fallback guide
       (shown when openGuide('generic') is called, or for channels
       without a dedicated guide)
    ================================================================ -->
-   <div class="modal fade" :class="{ show: showGuide && (guideChannel === 'generic' || (guideChannel && guideChannel !== 'whatsapp' && guideChannel !== 'facebook_messenger')) }"
-        :style="{ display: (showGuide && (guideChannel === 'generic' || (guideChannel && guideChannel !== 'whatsapp' && guideChannel !== 'facebook_messenger'))) ? 'block' : 'none' }"
-        tabindex="-1" @keydown.escape.window="closeGuide()">
-     <div class="modal-dialog modal-dialog-centered" style="max-width: 600px;">
+    <div class="modal fade" :class="{ show: showGenericGuide() }"
+         :style="{ display: showGenericGuide() ? 'block' : 'none' }"
+         tabindex="-1" @keydown.escape.window="closeGuide()">
+      <div class="modal-dialog modal-dialog-centered" style="max-width: 600px;">
        <div class="modal-content">
          <div class="modal-header">
            <h5 class="modal-title">
@@ -911,10 +1345,10 @@
              <li>Click <strong>Connect</strong> on the channel card and paste the values.</li>
              <li>Register the Webhook URL and Verify Token shown on the card.</li>
            </ol>
-           <div class="alert alert-info border-0 small mb-0">
-             <i class="bi bi-info-circle me-1"></i>
-             Need a specific channel's guide? Use the <strong>Setup Guides</strong> menu at the top right to open the WhatsApp or Messenger guide.
-           </div>
+            <div class="alert alert-info border-0 small mb-0">
+              <i class="bi bi-info-circle me-1"></i>
+              Need a specific channel's guide? Use the <strong>Setup Guides</strong> menu at the top right to open the WhatsApp, Messenger, Instagram, Telegram, or TikTok guide.
+            </div>
          </div>
          <div class="modal-footer">
            <button class="btn btn-primary" @click="closeGuide()">Got it</button>
@@ -922,9 +1356,9 @@
        </div>
      </div>
    </div>
-   <div class="modal-backdrop fade" :class="{ show: showGuide && (guideChannel === 'generic' || (guideChannel && guideChannel !== 'whatsapp' && guideChannel !== 'facebook_messenger')) }"
-        :style="{ display: (showGuide && (guideChannel === 'generic' || (guideChannel && guideChannel !== 'whatsapp' && guideChannel !== 'facebook_messenger'))) ? 'block' : 'none' }"
-        x-show="showGuide && (guideChannel === 'generic' || (guideChannel && guideChannel !== 'whatsapp' && guideChannel !== 'facebook_messenger'))" style="display:none;" @click="closeGuide()"></div>
+    <div class="modal-backdrop fade" :class="{ show: showGenericGuide() }"
+         :style="{ display: showGenericGuide() ? 'block' : 'none' }"
+         x-show="showGenericGuide()" style="display:none;" @click="closeGuide()"></div>
 
    <!-- Notifications use the global showNotification() system (main.js);
      no per-page toast markup needed. -->

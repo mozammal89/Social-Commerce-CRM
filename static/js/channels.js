@@ -36,7 +36,18 @@ async function api(path, { method = 'GET', body, storeId } = {}) {
 }
 
 /* Platform credential field definitions for the connect modal.
-   Each entry drives a labeled input; only matching fields are shown. */
+   Each entry drives a labeled input; only matching fields are shown.
+
+   The "secret" flag renders a field as a password input; the "optional"
+   flag controls the required-asterisk + the submitConnect validation.
+
+   Definitions mirror each adapter's ``authenticate_account`` contract:
+     - Instagram   uses Meta OAuth (same shape as FB Messenger, with an
+                   ig_user_id instead of page_id).
+     - Telegram    uses a single bot_token + optional webhook secret.
+     - TikTok      uses OAuth 2.0 (access_token + refresh_token) scoped
+                   to a business_id, with client_key/client_secret for
+                   webhook HMAC verification and token refresh. */
 const CREDENTIAL_FIELDS = {
     facebook_messenger: [
         { key: 'page_id', label: 'Page Scrape ID', placeholder: 'e.g. 1029384756', help: 'Optional: Page ID for API scraping (different from your Page Numeric ID above).', optional: true },
@@ -49,6 +60,23 @@ const CREDENTIAL_FIELDS = {
         { key: 'access_token', label: 'Permanent Access Token', placeholder: 'EAAG…', help: 'A permanent system-user access token for sending messages.', secret: true },
         { key: 'waba_id', label: 'WABA ID (optional)', placeholder: 'WhatsApp Business Account ID', help: 'Optional but recommended for advanced features.', optional: true },
         { key: 'app_secret', label: 'App Secret', placeholder: 'App secret', help: 'Used to verify webhook signatures.', secret: true, optional: true },
+    ],
+    instagram: [
+        { key: 'page_access_token', label: 'Page Access Token', placeholder: 'EAAG...', help: 'A long-lived Page access token for the Page linked to your Instagram Professional account.', secret: true },
+        { key: 'app_id', label: 'App ID', placeholder: 'Numeric app id', help: 'Your Meta App ID (the same app used for Messenger).', optional: true },
+        { key: 'app_secret', label: 'App Secret', placeholder: 'App secret', help: 'Used to verify webhook signatures.', secret: true },
+    ],
+    telegram: [
+        { key: 'bot_token', label: 'Bot Token', placeholder: '123456789:ABC-DEF...', help: 'The token issued by @BotFather when you created the bot.', secret: true },
+        { key: 'secret_token', label: 'Webhook Secret Token', placeholder: 'Optional random string', help: 'Optional. If set, Telegram sends it in the X-Telegram-Bot-Api-Secret-Token header for verification.', optional: true },
+        { key: 'webhook_url', label: 'Webhook URL', placeholder: 'https://your-host/.../telegram/<account-id>/', help: 'Optional. Auto-registered with Telegram on connect when provided.', optional: true },
+    ],
+    tiktok: [
+        { key: 'access_token', label: 'Access Token', placeholder: 'act.…', help: 'A freshly-exchanged OAuth access token for your TikTok Business account.', secret: true },
+        { key: 'refresh_token', label: 'Refresh Token', placeholder: 'rft.…', help: 'Paired with the access token; used to auto-refresh it before expiry.', secret: true },
+        { key: 'client_key', label: 'Client Key', placeholder: 'Numeric app key', help: 'Your TikTok app\'s client key (from the developer console).' },
+        { key: 'client_secret', label: 'Client Secret', placeholder: 'App secret', help: 'Your TikTok app\'s client secret; also used to sign webhook payloads.', secret: true },
+        { key: 'open_id', label: 'Open ID', placeholder: 'e.g. 7000…', help: 'Optional. The merchant\'s TikTok user id; auto-detected from the token when omitted.', optional: true },
     ],
 };
 
@@ -67,6 +95,22 @@ const CREDENTIAL_LABELS = {
     'access_token': 'Access Token',
     'waba_id': 'WABA ID',
     'verify_token': 'Verify Token',
+    // Instagram
+    'ig_user_id': 'Instagram Account ID',
+    // Telegram
+    'bot_token': 'Bot Token',
+    'bot_id': 'Bot ID',
+    'bot_username': 'Bot Username',
+    'secret_token': 'Webhook Secret Token',
+    'webhook_url': 'Webhook URL',
+    // TikTok
+    'client_key': 'Client Key',
+    'client_secret': 'Client Secret',
+    'business_id': 'Business ID',
+    'open_id': 'Open ID',
+    'refresh_token': 'Refresh Token',
+    'access_token_expires_at': 'Access Token Expires',
+    'refresh_token_expires_at': 'Refresh Token Expires',
     // Generic
     'token': 'Token',
     'secret': 'Secret',
@@ -79,8 +123,10 @@ const CHANNEL_ICONS = {
     whatsapp: 'bi-whatsapp',
     instagram: 'bi-instagram',
     telegram: 'bi-telegram',
+    tiktok: 'bi-tiktok',
     email: 'bi-envelope',
     sms: 'bi-chat-square-text',
+    live_chat: 'bi-chat-left-text',
     other: 'bi-chat',
 };
 
@@ -90,6 +136,54 @@ const STATUS_META = {
     error: { label: 'Error', cls: 'status-badge--danger' },
     pending: { label: 'Pending', cls: 'status-badge--pending' },
     expired: { label: 'Expired', cls: 'status-badge--inactive' },
+};
+
+/* Per-channel connect-modal metadata:
+     - externalIdLabel  : label for the External ID field
+     - externalIdPlaceholder : input placeholder
+     - externalIdHelp   : where to find the value
+     - namePlaceholder  : placeholder for the account-name field
+   Used by connectMeta(type) so the connect modal adapts to any channel
+   without per-channel template branches. */
+const CONNECT_META = {
+    facebook_messenger: {
+        externalIdLabel: 'Facebook Page Numeric ID',
+        externalIdPlaceholder: 'e.g. 1029384756',
+        externalIdHelp: 'From Facebook Page Settings → About section (Page ID).',
+        namePlaceholder: 'e.g. Main Facebook Page',
+    },
+    whatsapp: {
+        externalIdLabel: 'Phone Number ID',
+        externalIdPlaceholder: 'e.g. 1076498231564',
+        externalIdHelp: 'From WhatsApp Manager → Phone Numbers (NOT the E.164 number).',
+        namePlaceholder: 'e.g. Sales WhatsApp',
+    },
+    instagram: {
+        externalIdLabel: 'Instagram Account ID (ig-user-id)',
+        externalIdPlaceholder: 'e.g. 17841005822304914',
+        externalIdHelp: 'From Meta Business Settings → Instagram Accounts, or Instagram Graph API.',
+        namePlaceholder: 'e.g. Main Instagram Account',
+    },
+    telegram: {
+        externalIdLabel: 'Bot ID',
+        externalIdPlaceholder: 'e.g. 123456789',
+        externalIdHelp: 'The numeric prefix of the bot token (everything before the colon). Auto-detected on connect when blank.',
+        namePlaceholder: 'e.g. Support Bot',
+    },
+    tiktok: {
+        externalIdLabel: 'Business ID',
+        externalIdPlaceholder: 'e.g. 7001234567890',
+        externalIdHelp: 'From TikTok Business Center → Business Account Info.',
+        namePlaceholder: 'e.g. TikTok Business',
+    },
+};
+
+// Fallback for channels without an explicit entry (email, sms, live_chat, …).
+const CONNECT_META_DEFAULT = {
+    externalIdLabel: 'External Account ID',
+    externalIdPlaceholder: 'Platform account id',
+    externalIdHelp: 'The platform-side identifier for this account.',
+    namePlaceholder: 'e.g. My channel account',
 };
 
 function channelsApp() {
@@ -251,6 +345,29 @@ function channelsApp() {
             const type = accountOrChannel?.channel_type ||
                          accountOrChannel?.channel?.channel_type || '';
             return this.showGuide && this.guideChannel === type;
+        },
+
+        /* Channels with a dedicated setup-guide modal in the template.
+           Kept in sync with the markup so showGenericGuide() picks the
+           right modal. Add a new entry here when you ship a dedicated
+           guide modal for a channel. */
+        guideForChannel(type) {
+            return [
+                'whatsapp',
+                'facebook_messenger',
+                'instagram',
+                'telegram',
+                'tiktok',
+            ].includes(type);
+        },
+
+        /* True when the generic guide modal should be shown instead of a
+           dedicated one (i.e. the user opened a channel without its own
+           guide, or picked "General help"). Drives the generic modal's
+           visibility in the template. */
+        showGenericGuide() {
+            const t = this.guideChannel;
+            return this.showGuide && (t === 'generic' || (t && !this.guideForChannel(t)));
         },
 
         credentialFields() {
@@ -497,6 +614,14 @@ function channelsApp() {
 
         channelIcon(account) {
             return CHANNEL_ICONS[account.channel?.channel_type] || 'bi-chat';
+        },
+
+        /* Per-channel text for the connect modal (external-id label,
+           placeholder, help, account-name placeholder). Falls back to
+           a generic entry so any channel renders correctly without a
+           dedicated CONNECT_META entry. */
+        connectMeta(type) {
+            return CONNECT_META[type] || CONNECT_META_DEFAULT;
         },
 
         statusMeta(status) {

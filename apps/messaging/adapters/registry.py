@@ -48,9 +48,7 @@ def register(channel_type: str):
 
     def decorator(cls: type[BaseChannelAdapter]) -> type[BaseChannelAdapter]:
         if not issubclass(cls, BaseChannelAdapter):
-            raise TypeError(
-                f"{cls.__name__} must subclass BaseChannelAdapter to be registered."
-            )
+            raise TypeError(f"{cls.__name__} must subclass BaseChannelAdapter to be registered.")
         existing = _ADAPTERS.get(channel_type)
         if existing is not None and existing is not cls:
             raise ValueError(
@@ -107,6 +105,9 @@ def _import_adapters() -> None:
     adapter_packages = [
         "apps.messaging.adapters.facebook",
         "apps.messaging.adapters.whatsapp",
+        "apps.messaging.adapters.instagram",
+        "apps.messaging.adapters.telegram",
+        "apps.messaging.adapters.tiktok",
     ]
     for dotted in adapter_packages:
         try:

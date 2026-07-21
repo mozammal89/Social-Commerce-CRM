@@ -37,21 +37,21 @@ class ChannelType(models.TextChoices):
 # ConnectedAccount lifecycle.
 # ---------------------------------------------------------------------------
 class ConnectedAccountStatus(models.TextChoices):
-    PENDING = "pending", "Pending"            # OAuth flow started, not yet authorized
-    CONNECTED = "connected", "Connected"      # Fully authorized & usable
+    PENDING = "pending", "Pending"  # OAuth flow started, not yet authorized
+    CONNECTED = "connected", "Connected"  # Fully authorized & usable
     DISCONNECTED = "disconnected", "Disconnected"  # Disabled by the store owner
-    ERROR = "error", "Error"                  # Repeated API failures / needs attention
-    EXPIRED = "expired", "Expired"            # Token revoked or expired
+    ERROR = "error", "Error"  # Repeated API failures / needs attention
+    EXPIRED = "expired", "Expired"  # Token revoked or expired
 
 
 # ---------------------------------------------------------------------------
 # Conversations.
 # ---------------------------------------------------------------------------
 class ConversationStatus(models.TextChoices):
-    OPEN = "open", "Open"            # Actively being handled
+    OPEN = "open", "Open"  # Actively being handled
     PENDING = "pending", "Pending"  # Awaiting customer reply
     RESOLVED = "resolved", "Resolved"  # Agent considers it done
-    CLOSED = "closed", "Closed"      # Archived, no further action
+    CLOSED = "closed", "Closed"  # Archived, no further action
     SPAM = "spam", "Spam"
 
 
@@ -74,15 +74,15 @@ class ConversationPriority(models.TextChoices):
 # Messages.
 # ---------------------------------------------------------------------------
 class MessageDirection(models.TextChoices):
-    INBOUND = "inbound", "Inbound"    # customer -> business
+    INBOUND = "inbound", "Inbound"  # customer -> business
     OUTBOUND = "outbound", "Outbound"  # business -> customer
 
 
 class SenderType(models.TextChoices):
     CUSTOMER = "customer", "Customer"
-    AGENT = "agent", "Agent"          # A human team member
-    SYSTEM = "system", "System"       # Automated / platform-generated
-    BOT = "bot", "Bot"                # Rule-based or AI responder
+    AGENT = "agent", "Agent"  # A human team member
+    SYSTEM = "system", "System"  # Automated / platform-generated
+    BOT = "bot", "Bot"  # Rule-based or AI responder
 
 
 class MessageType(models.TextChoices):
@@ -93,21 +93,21 @@ class MessageType(models.TextChoices):
     DOCUMENT = "document", "Document"
     FILE = "file", "File"
     STICKER = "sticker", "Sticker"
-    TEMPLATE = "template", "Template"      # Pre-approved message template
+    TEMPLATE = "template", "Template"  # Pre-approved message template
     LOCATION = "location", "Location"
-    BUTTONS = "buttons", "Buttons"          # Interactive button payload
+    BUTTONS = "buttons", "Buttons"  # Interactive button payload
     QUICK_REPLY = "quick_reply", "Quick Reply"
-    SYSTEM = "system", "System"            # e.g. "X started a chat"
+    SYSTEM = "system", "System"  # e.g. "X started a chat"
     REACTION = "reaction", "Reaction"
     OTHER = "other", "Other"
 
 
 class DeliveryStatus(models.TextChoices):
-    PENDING = "pending", "Pending"          # Queued / not yet handed to platform
-    SENT = "sent", "Sent"                    # Platform accepted the send
-    DELIVERED = "delivered", "Delivered"     # Reached the recipient device
-    READ = "read", "Read"                    # Recipient opened it
-    FAILED = "failed", "Failed"             # Permanent failure
+    PENDING = "pending", "Pending"  # Queued / not yet handed to platform
+    SENT = "sent", "Sent"  # Platform accepted the send
+    DELIVERED = "delivered", "Delivered"  # Reached the recipient device
+    READ = "read", "Read"  # Recipient opened it
+    FAILED = "failed", "Failed"  # Permanent failure
     UNDELIVERED = "undelivered", "Undelivered"  # Platform couldn't deliver
 
 
@@ -126,7 +126,7 @@ class AttachmentType(models.TextChoices):
 # ---------------------------------------------------------------------------
 class MessageTemplateStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
-    PENDING = "pending", "Pending"          # Submitted for platform approval
+    PENDING = "pending", "Pending"  # Submitted for platform approval
     APPROVED = "approved", "Approved"
     REJECTED = "rejected", "Rejected"
 
@@ -197,43 +197,79 @@ class ChannelCapability:
 # Default capability sets per built-in channel, used by ``sync_channels``.
 DEFAULT_CAPABILITIES = {
     "facebook-messenger": [
-        ChannelCapability.TEXT, ChannelCapability.IMAGES, ChannelCapability.AUDIO,
-        ChannelCapability.VIDEO, ChannelCapability.DOCUMENTS, ChannelCapability.STICKERS,
-        ChannelCapability.LOCATION, ChannelCapability.QUICK_REPLIES, ChannelCapability.BUTTONS,
-        ChannelCapability.TEMPLATES, ChannelCapability.TYPING_INDICATOR,
-        ChannelCapability.READ_RECEIPTS, ChannelCapability.DELIVERY_STATUS,
+        ChannelCapability.TEXT,
+        ChannelCapability.IMAGES,
+        ChannelCapability.AUDIO,
+        ChannelCapability.VIDEO,
+        ChannelCapability.DOCUMENTS,
+        ChannelCapability.STICKERS,
+        ChannelCapability.LOCATION,
+        ChannelCapability.QUICK_REPLIES,
+        ChannelCapability.BUTTONS,
+        ChannelCapability.TEMPLATES,
+        ChannelCapability.TYPING_INDICATOR,
+        ChannelCapability.READ_RECEIPTS,
+        ChannelCapability.DELIVERY_STATUS,
     ],
     "whatsapp": [
-        ChannelCapability.TEXT, ChannelCapability.IMAGES, ChannelCapability.AUDIO,
-        ChannelCapability.VIDEO, ChannelCapability.DOCUMENTS, ChannelCapability.STICKERS,
-        ChannelCapability.LOCATION, ChannelCapability.TEMPLATES, ChannelCapability.BUTTONS,
-        ChannelCapability.READ_RECEIPTS, ChannelCapability.DELIVERY_STATUS,
+        ChannelCapability.TEXT,
+        ChannelCapability.IMAGES,
+        ChannelCapability.AUDIO,
+        ChannelCapability.VIDEO,
+        ChannelCapability.DOCUMENTS,
+        ChannelCapability.STICKERS,
+        ChannelCapability.LOCATION,
+        ChannelCapability.TEMPLATES,
+        ChannelCapability.BUTTONS,
+        ChannelCapability.READ_RECEIPTS,
+        ChannelCapability.DELIVERY_STATUS,
     ],
     "instagram": [
-        ChannelCapability.TEXT, ChannelCapability.IMAGES, ChannelCapability.AUDIO,
-        ChannelCapability.VIDEO, ChannelCapability.STICKERS, ChannelCapability.QUICK_REPLIES,
-        ChannelCapability.TYPING_INDICATOR, ChannelCapability.READ_RECEIPTS,
+        ChannelCapability.TEXT,
+        ChannelCapability.IMAGES,
+        ChannelCapability.AUDIO,
+        ChannelCapability.VIDEO,
+        ChannelCapability.STICKERS,
+        ChannelCapability.QUICK_REPLIES,
+        ChannelCapability.TYPING_INDICATOR,
+        ChannelCapability.READ_RECEIPTS,
     ],
     "telegram": [
-        ChannelCapability.TEXT, ChannelCapability.IMAGES, ChannelCapability.AUDIO,
-        ChannelCapability.VIDEO, ChannelCapability.DOCUMENTS, ChannelCapability.STICKERS,
-        ChannelCapability.LOCATION, ChannelCapability.BUTTONS, ChannelCapability.TEMPLATES,
-        ChannelCapability.READ_RECEIPTS, ChannelCapability.DELIVERY_STATUS,
+        ChannelCapability.TEXT,
+        ChannelCapability.IMAGES,
+        ChannelCapability.AUDIO,
+        ChannelCapability.VIDEO,
+        ChannelCapability.DOCUMENTS,
+        ChannelCapability.STICKERS,
+        ChannelCapability.LOCATION,
+        ChannelCapability.BUTTONS,
+        ChannelCapability.TEMPLATES,
+        ChannelCapability.READ_RECEIPTS,
+        ChannelCapability.DELIVERY_STATUS,
     ],
     "email": [
-        ChannelCapability.TEXT, ChannelCapability.IMAGES, ChannelCapability.DOCUMENTS,
-        ChannelCapability.FILE_UPLOADS, ChannelCapability.TEMPLATES,
+        ChannelCapability.TEXT,
+        ChannelCapability.IMAGES,
+        ChannelCapability.DOCUMENTS,
+        ChannelCapability.FILE_UPLOADS,
+        ChannelCapability.TEMPLATES,
     ],
     "sms": [
-        ChannelCapability.TEXT, ChannelCapability.DELIVERY_STATUS,
+        ChannelCapability.TEXT,
+        ChannelCapability.DELIVERY_STATUS,
     ],
     "tiktok": [
-        ChannelCapability.TEXT, ChannelCapability.IMAGES, ChannelCapability.VIDEO,
+        ChannelCapability.TEXT,
+        ChannelCapability.IMAGES,
+        ChannelCapability.VIDEO,
         ChannelCapability.QUICK_REPLIES,
     ],
     "live-chat": [
-        ChannelCapability.TEXT, ChannelCapability.IMAGES, ChannelCapability.FILE_UPLOADS,
-        ChannelCapability.TYPING_INDICATOR, ChannelCapability.READ_RECEIPTS,
+        ChannelCapability.TEXT,
+        ChannelCapability.IMAGES,
+        ChannelCapability.FILE_UPLOADS,
+        ChannelCapability.TYPING_INDICATOR,
+        ChannelCapability.READ_RECEIPTS,
         ChannelCapability.DELIVERY_STATUS,
     ],
 }
@@ -286,7 +322,7 @@ DEFAULT_CHANNELS = [
         "channel_type": ChannelType.INSTAGRAM.value,
         "name": "Instagram Direct",
         "description": "Instagram DMs via the Messenger Platform (same Graph API).",
-        "adapter_class": "",
+        "adapter_class": "apps.messaging.adapters.instagram.adapter.InstagramAdapter",
         "icon": "bi-instagram",
         "sort_order": 30,
         "is_enabled": True,
@@ -296,7 +332,7 @@ DEFAULT_CHANNELS = [
         "channel_type": ChannelType.TELEGRAM.value,
         "name": "Telegram",
         "description": "Telegram Bot API for business messaging.",
-        "adapter_class": "",
+        "adapter_class": "apps.messaging.adapters.telegram.adapter.TelegramAdapter",
         "icon": "bi-telegram",
         "sort_order": 40,
         "is_enabled": True,
@@ -326,7 +362,7 @@ DEFAULT_CHANNELS = [
         "channel_type": ChannelType.TIKTOK.value,
         "name": "TikTok",
         "description": "TikTok business messaging.",
-        "adapter_class": "",
+        "adapter_class": "apps.messaging.adapters.tiktok.adapter.TikTokAdapter",
         "icon": "bi-tiktok",
         "sort_order": 70,
         "is_enabled": True,
@@ -342,4 +378,3 @@ DEFAULT_CHANNELS = [
         "is_enabled": True,
     },
 ]
-
