@@ -46,7 +46,7 @@
 
 /* 3. Constrain inner flex containers */
 .navbar > .container-fluid > .d-flex.align-items-center {
-    width: 100% !important;
+    /* width: 100% !important; */
     flex-wrap: nowrap !important;
     /* Default flex-start (items start from left) */
     justify-content: flex-start !important;
@@ -128,10 +128,126 @@
     display: inline-flex;
     align-items: center;
     white-space: nowrap;
+    min-width: 40px;
+    justify-content: center;
 }
+
+.navbar-store-icon {
+    font-size: var(--font-size-lg, 1.125rem);
+    color: var(--brand-600, #2563eb);
+    visibility: visible;
+    opacity: 1;
+}
+
+.navbar-store-text {
+    color: var(--text-primary, #1f2937);
+    font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* Mobile specific fixes for store button */
+/* @media (max-width: 575.98px) {
+    .navbar-store-button .navbar-store-icon {
+        display: inline-flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        font-size: 1rem !important;
+        color: var(--brand-600, #2563eb) !important;
+    }
+} */
 
 /* 12. Notification badge — prevent it from being clipped by overflow */
 .navbar-notification-button {
     position: relative;
     overflow: visible;
+}
+
+/* 13. Store dropdown menu - scrollable and searchable */
+#storeDropdownMenu.show {
+    max-height: 378px !important;
+    overflow: hidden !important;
+    min-width: 280px;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Store dropdown search box */
+#storeDropdownMenu.show > .store-dropdown-search {
+    padding: var(--space-3, 0.75rem);
+    border-bottom: 1px solid var(--border-light, #e5e7eb);
+    background: white;
+    flex-shrink: 0;
+}
+
+.store-dropdown-search input {
+    width: 100%;
+    padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+    border: 1px solid var(--border-color, #d1d5db);
+    border-radius: var(--radius-sm, 4px);
+    font-size: var(--font-size-sm, 0.875rem);
+    outline: none;
+    transition: border-color 0.15s ease-in-out;
+}
+
+.store-dropdown-search input:focus {
+    border-color: var(--brand-500, #3b82f6);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Store list container - scrollable */
+#storeDropdownMenu.show > .store-dropdown-list {
+    max-height: 240px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    flex-shrink: 0;
+    flex-grow: 0;
+}
+
+.store-dropdown-list ul {
+    margin: 0;
+    padding: 0;
+}
+
+/* Store list items */
+.store-dropdown-list > ul > li {
+    margin: 0;
+    padding: 0;
+}
+
+.store-dropdown-list .dropdown-item {
+    padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+    border-bottom: 1px solid var(--border-light, #e5e7eb);
+    font-size: var(--font-size-sm, 0.875rem);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.store-dropdown-list .dropdown-item:hover {
+    background-color: var(--gray-50, #f9fafb);
+}
+
+.store-dropdown-list .dropdown-item:last-child {
+    border-bottom: none;
+}
+
+/* No results message */
+.store-dropdown-no-results {
+    padding: var(--space-3, 0.75rem);
+    text-align: center;
+    color: var(--text-muted, #6b7280);
+    font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* Manage store section */
+#storeDropdownMenu.show > .store-dropdown-manage {
+    border-top: 1px solid var(--border-light, #e5e7eb);
+    padding: var(--space-2, 0.5rem) 0;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.store-dropdown-manage .dropdown-item {
+    padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+    font-size: var(--font-size-sm, 0.875rem);
 }

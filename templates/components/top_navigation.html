@@ -45,49 +45,71 @@
             {% if user_stores or current_store %}
             <div class="navbar-store-selector">
                 <button class="navbar-store-button dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="bi bi-shop navbar-store-icon d-none d-sm-block"></i>
+                    <i class="bi bi-shop navbar-store-icon"></i>
                     {% if current_store %}
-                        <span class="navbar-store-text">{{ current_store.name }}</span>
+                        <span class="navbar-store-text d-none d-sm-inline">{{ current_store.name }}</span>
                     {% else %}
-                        <span class="navbar-store-text">Store</span>
+                        <span class="navbar-store-text d-none d-sm-inline">Store</span>
                     {% endif %}
                     <i class="bi bi-chevron-down d-none d-md-block" style="font-size: var(--font-size-xs);"></i>
                 </button>
-                <ul class="dropdown-menu dropdown-menu-end">
+                <ul class="dropdown-menu dropdown-menu-end" id="storeDropdownMenu">
                     {% if user_stores %}
-                        {% for store in user_stores %}
-                        <li>
-                            <!--  Pass ``next`` so the user lands back on the page they were viewing after the store context changes. The view validates this is a same-host URL before following it.  -->
-                            <a class="dropdown-item d-flex align-items-center justify-content-between" href="{% url 'dashboard:switch_store' store.id %}?next={{ request.get_full_path|urlencode }}">
-                                <div class="d-flex align-items-center gap-2">
-                                    <i class="bi bi-shop-window" style="color: var(--brand-600);"></i>
-                                    <span>{{ store.name }}</span>
-                                </div>
-                                {% if current_store.id == store.id %}
-                                    <i class="bi bi-check-circle" style="color: var(--success-500);"></i>
-                                {% endif %}
-                            </a>
-                        </li>
-                        {% endfor %}
+                    <!-- Search box -->
+                    <li class="store-dropdown-search">
+                        <input type="text" id="storeSearchInput" placeholder="Search stores..." autocomplete="off">
+                    </li>
+                    <!-- Store list -->
+                    <li class="store-dropdown-list">
+                        <ul class="list-unstyled mb-0" id="storeList">
+                            {% for store in user_stores %}
+                            <li data-store-name="{{ store.name|lower }}">
+                                <a class="dropdown-item d-flex align-items-center justify-content-between" href="{% url 'dashboard:switch_store' store.id %}?next={{ request.get_full_path|urlencode }}">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="bi bi-shop-window" style="color: var(--brand-600);"></i>
+                                        <span>{{ store.name }}</span>
+                                    </div>
+                                    {% if current_store.id == store.id %}
+                                        <i class="bi bi-check-circle" style="color: var(--success-500);"></i>
+                                    {% endif %}
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </li>
                     {% else %}
-                        <li>
-                            <span class="dropdown-item text-muted">No stores available</span>
-                        </li>
+                    <li>
+                        <span class="dropdown-item text-muted">No stores available</span>
+                    </li>
                     {% endif %}
-                    {% if current_store %}
-                        {% can_any "settings.view" "settings.update" as show_store_link %}
-                        {% if show_store_link %}
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <a class="dropdown-item" href="{% url 'settings:store' current_store.id %}">
-                                <i class="bi bi-gear me-2"></i>Manage Store
-                            </a>
-                        </li>
+
+                    <!-- Manage Store section -->
+                    {% if current_store or user.is_superuser %}
+                        {% if current_store %}
+                            {% can_any "settings.view" "settings.update" as show_store_link %}
+                            {% if show_store_link or user.is_superuser %}
+                            <li class="store-dropdown-manage">
+                                <hr class="dropdown-divider">
+                                <a class="dropdown-item" href="{% url 'settings:store' current_store.id %}">
+                                    <i class="bi bi-gear me-2"></i>Manage Store
+                                </a>
+                            </li>
+                            {% endif %}
+                            {% endif %}
+                        {% else %}
+                            <!-- Super admin without current store - link to first available store -->
+                            {% if user_stores %}
+                            <li class="store-dropdown-manage">
+                                <hr class="dropdown-divider">
+                                <a class="dropdown-item" href="{% url 'settings:store' user_stores.0.id %}">
+                                    <i class="bi bi-gear me-2"></i>Manage Store
+                                </a>
+                            </li>
+                            {% endif %}
                         {% endif %}
                     {% endif %}
                 </ul>
             </div>
-            {% endif %}
 
             <!-- Notifications -->
             <div class="navbar-notifications">

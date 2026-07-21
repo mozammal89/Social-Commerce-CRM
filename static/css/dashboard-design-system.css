@@ -649,7 +649,7 @@ body {
 
 .navbar-store-icon {
     width: 20px;
-    height: 20px;
+    height: 30px;
     color: var(--brand-600);
     flex-shrink: 0;
 }
@@ -2545,9 +2545,9 @@ textarea.form-control {
     }
 
     /* Hide store icon on very small screens */
-    .navbar-store-icon {
+    /* .navbar-store-icon {
         display: none;
-    }
+    } */
 
     /* Further reduce store selector text width */
     .navbar-store-text {

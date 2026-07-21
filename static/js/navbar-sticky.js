@@ -69,6 +69,74 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     console.log('Navbar sticky fix applied (Bootstrap-friendly)');
+
+    // Store dropdown search functionality
+    const storeSearchInput = document.getElementById('storeSearchInput');
+    const storeList = document.getElementById('storeList');
+    const storeDropdownMenu = document.getElementById('storeDropdownMenu');
+
+    if (storeSearchInput && storeList) {
+        // Store all store items for filtering
+        const storeItems = Array.from(storeList.querySelectorAll('li'));
+        const noResultsItem = document.createElement('li');
+        noResultsItem.className = 'store-dropdown-no-results';
+        noResultsItem.textContent = 'No stores found';
+        noResultsItem.style.display = 'none';
+
+        // Add no results item to the list
+        storeList.appendChild(noResultsItem);
+
+        // Focus search input when dropdown opens
+        const storeDropdownToggle = document.querySelector('.navbar-store-button');
+        if (storeDropdownToggle) {
+            storeDropdownToggle.addEventListener('click', function() {
+                setTimeout(() => {
+                    if (storeDropdownMenu && storeDropdownMenu.classList.contains('show')) {
+                        storeSearchInput.focus();
+                    }
+                }, 100);
+            });
+        }
+
+        // Filter stores on input
+        storeSearchInput.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase().trim();
+            let hasResults = false;
+
+            storeItems.forEach(item => {
+                if (item.classList.contains('store-dropdown-no-results')) return;
+
+                const storeName = item.getAttribute('data-store-name') || '';
+                const storeLink = item.querySelector('span');
+                const linkText = storeLink ? storeLink.textContent.toLowerCase() : '';
+
+                if (storeName.includes(searchTerm) || linkText.includes(searchTerm)) {
+                    item.style.display = '';
+                    hasResults = true;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+
+            // Show/hide no results message
+            if (noResultsItem) {
+                noResultsItem.style.display = hasResults ? 'none' : '';
+            }
+        });
+
+        // Clear search when dropdown closes
+        storeDropdownMenu.addEventListener('hidden.bs.dropdown', function() {
+            storeSearchInput.value = '';
+            storeItems.forEach(item => {
+                if (!item.classList.contains('store-dropdown-no-results')) {
+                    item.style.display = '';
+                }
+            });
+            if (noResultsItem) {
+                noResultsItem.style.display = 'none';
+            }
+        });
+    }
 });
 
 // Export for potential use in other modules
