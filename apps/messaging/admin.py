@@ -344,6 +344,7 @@ class ConversationAdmin(admin.ModelAdmin):
     list_display = [
         "id",
         "customer",
+        "connected_account",
         "channel",
         "status",
         "priority",
@@ -352,6 +353,7 @@ class ConversationAdmin(admin.ModelAdmin):
     ]
     list_filter = [
         "store",
+        "connected_account",
         "channel",
         "status",
         "priority",
@@ -372,7 +374,7 @@ class ConversationAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (_("Basic Information"), {
-            "fields": ("store", "customer", "channel")
+            "fields": ("store", "customer", "connected_account", "channel")
         }),
         (_("Status & Assignment"), {
             "fields": ("status", "priority", "assigned_to")
@@ -400,6 +402,7 @@ class MessageAdmin(admin.ModelAdmin):
     list_display = [
         "id",
         "conversation",
+        "connected_account",
         "direction",
         "sender_type",
         "message_type",
@@ -408,6 +411,7 @@ class MessageAdmin(admin.ModelAdmin):
     ]
     list_filter = [
         "store",
+        "connected_account",
         "channel",
         "direction",
         "sender_type",
@@ -436,10 +440,10 @@ class MessageAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (_("Basic Information"), {
-            "fields": ("store", "conversation", "channel", "external_id")
+            "fields": ("store", "conversation", "connected_account", "channel", "external_id")
         }),
         (_("Message Content"), {
-            "fields": ("direction", "sender_type", "message_type", "text")
+            "fields": ("direction", "sender_type", "sender", "message_type", "text")
         }),
         (_("Status"), {
             "fields": ("delivery_status", "error_message")

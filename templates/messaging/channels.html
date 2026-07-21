@@ -604,7 +604,7 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="showSettings = false">Close</button>
-          <button class="btn btn-primary" @click="verifyChannel(settingsAccount)" :class="{ disabled: verifyingId === settingsAccount?.id }">
+          <button class="btn btn-primary" @click="verifyChannel(settingsAccount)" :class="{ disabled: verifyingId === settingsAccount?.id || !settingsAccount }">
             <i class="bi me-2" :class="verifyingId === settingsAccount?.id ? 'bi-arrow-repeat spin' : 'bi-wifi'"></i>
             <span x-text="verifyingId === settingsAccount?.id ? 'Testing…' : 'Test Connection'"></span>
           </button>

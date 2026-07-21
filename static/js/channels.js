@@ -340,6 +340,12 @@ function channelsApp() {
         async verifyChannel(account) {
             // Live-check the credentials against the platform. Sets the
             // account status to connected/error and shows the result.
+            // Prevent duplicate calls and check for valid account
+            if (this.verifyingId) return; // Already verifying
+            if (!account || !account.id) {
+                this.notify('Cannot verify: account information is missing.', 'error');
+                return;
+            }
             this.verifyingId = account.id;
             try {
                 const updated = await api(`${this.apiBase}/channels/${account.id}/verify/`, {
@@ -369,11 +375,14 @@ function channelsApp() {
             this.settingsData = null;
             this.settingsTab = 'details';
             this.loadingSettings = true;
-            this.showSettings = true;
             this.updateFieldKey = '';
             this.updateValue = '';
             this.newVerifyToken = '';
             this.showVerifyToken = false;
+            // Show modal AFTER setting account to ensure reactive consistency
+            this.$nextTick(() => {
+                this.showSettings = true;
+            });
 
             try {
                 const data = await api(`${this.apiBase}/channels/${account.id}/settings/`, {
