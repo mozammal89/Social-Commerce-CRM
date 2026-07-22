@@ -45,7 +45,7 @@ class WhatsAppAdapter(BaseChannelAdapter):
     # Webhooks
     # ------------------------------------------------------------------
     def verify_webhook(self, *, method, headers, query_params, body, account) -> tuple[bool, Any]:
-        app_secret = self._cred(account, "app_secret")
+        app_secret = (self._cred(account, "app_secret") or "").strip()
         verify_token = self._cred(account, "verify_token") or account.webhook_verify_token
         ok, challenge = webhook.verify(
             query_params=query_params,

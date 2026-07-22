@@ -54,7 +54,7 @@ class FacebookAdapter(BaseChannelAdapter):
     # Webhooks
     # ------------------------------------------------------------------
     def verify_webhook(self, *, method, headers, query_params, body, account) -> tuple[bool, Any]:
-        app_secret = self._cred(account, "app_secret")
+        app_secret = (self._cred(account, "app_secret") or "").strip()
         if not app_secret:
             logger.error(
                 "Facebook webhook verification failed for account %s (%s): app_secret is empty or missing. "

@@ -104,8 +104,16 @@ def verify(
     if not provided or not hmac.compare_digest(provided, expected):
         logger.warning(
             "Instagram webhook signature mismatch: algorithm=%s, "
-            "provided_prefix=%s, expected_prefix=%s",
+            "body_length=%d, provided_length=%d, expected_length=%d, "
+            "app_secret_length=%d, provided_prefix=%s, expected_prefix=%s. "
+            "Common causes: (1) app_secret doesn't match the Meta App "
+            "sending the webhook, (2) app_secret has trailing whitespace, "
+            "(3) a proxy modified the request body.",
             algo,
+            len(body),
+            len(provided),
+            len(expected),
+            len(app_secret),
             provided[:10] if provided else "None",
             expected[:10],
         )

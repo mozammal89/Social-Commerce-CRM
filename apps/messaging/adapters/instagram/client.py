@@ -142,25 +142,21 @@ def fetch_profile(
 ) -> dict[str, Any]:
     """GET the sender's Instagram profile (best-effort, multi-tier).
 
-    Instagram exposes the following profile fields for a sender via
-    ``GET /{igsid}?fields=...`` when the Page token has the
-    ``instagram_manage_messages`` permission:
+    Instagram Messaging exposes only two profile fields for a sender
+    via ``GET /{igsid}?fields=...`` (the IGSID node, NOT the
+    ``/{ig-user-id}`` Business Account node):
 
-      * ``name``            — the IG display name (may equal username)
-      * ``username``        — the @handle (without the leading @)
-      * ``profile_pic``     — public profile picture URL
-      * ``followers_count`` — numeric follower count
-      * ``media_count``     — numeric post count
+      * ``name``        — the sender's IG display name
+      * ``profile_pic`` — public profile picture URL
 
-    Field availability varies by token scope and account type
-    (Business vs Creator), so we try the full set first and fall back
-    to ``profile_pic`` only. Never raises — profile enrichment is
-    best-effort.
+    Other fields (``username``, ``followers_count``, ``media_count``)
+    exist only on the IG Business Account node and are NOT available
+    for messaging senders — requesting them raises Graph API error
+    code 12 (``cannot_access_user_username_field``). Never raises —
+    profile enrichment is best-effort.
     """
     return (
-        _fetch_profile_fields(
-            account, igsid, "name,username,profile_pic,followers_count,media_count"
-        )
+        _fetch_profile_fields(account, igsid, "name,profile_pic")
         or _fetch_profile_fields(account, igsid, "profile_pic")
         or {}
     )
@@ -245,11 +241,15 @@ def fetch_page_tokens(*, user_access_token: str) -> list[dict[str, Any]]:
 def verify_token(*, account: "ConnectedAccount") -> dict[str, Any]:
     """Verify the IG page access token via ``GET /me``.
 
-    Returns the IG account's ``{id, username}`` on success; raises
-    ``AuthenticationError`` on any non-2xx response.
+    With a Page access token, ``/me`` resolves to the Facebook Page
+    node, so we request ``id,name`` (the Page's identity). The
+    ``username`` field is deprecated on this node (Graph API error
+    code 12) and must not be requested. Returns the Page's
+    ``{id, name}`` on success; raises ``AuthenticationError`` on any
+    non-2xx response.
     """
     url = f"{GRAPH_API_BASE}/me"
-    params = {"fields": "id,username", "access_token": _ig_token(account)}
+    params = {"fields": "id,name", "access_token": _ig_token(account)}
     try:
         resp = requests.get(url, params=params, timeout=DEFAULT_TIMEOUT)
     except requests.RequestException as exc:

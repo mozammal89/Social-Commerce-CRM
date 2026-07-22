@@ -64,7 +64,17 @@ class InstagramAdapter(BaseChannelAdapter):
     # Webhooks
     # ------------------------------------------------------------------
     def verify_webhook(self, *, method, headers, query_params, body, account) -> tuple[bool, Any]:
-        app_secret = self._cred(account, "app_secret")
+        app_secret = (self._cred(account, "app_secret") or "").strip()
+        if not app_secret:
+            logger.error(
+                "Instagram webhook verification failed for account %s (%s): app_secret is empty or "
+                "missing. Credentials keys available: %s",
+                account.id,
+                account.name,
+                list((account.credentials or {}).keys())
+                if isinstance(account.credentials, dict)
+                else "not_a_dict",
+            )
         verify_token = account.webhook_verify_token or self._cred(account, "verify_token")
         ok, challenge = webhook.verify(
             query_params=query_params,
@@ -159,19 +169,18 @@ class InstagramAdapter(BaseChannelAdapter):
     def fetch_identity_profile(self, *, account, external_id) -> dict[str, Any]:
         """Fetch the Instagram profile for an IGSID.
 
-        Maps the IG Graph profile fields into the channel-agnostic
-        ``fetch_identity_profile`` contract. Instagram does not expose a
-        separate locale/timezone via this endpoint, so those keys
-        default to ``""`` (per the contract).
+        Instagram Messaging only exposes ``name`` and ``profile_pic``
+        for a sender (the ``/{igsid}`` node). The ``username``,
+        ``followers_count`` and ``media_count`` fields are NOT
+        available for messaging senders — requesting them raises
+        Graph API error code 12. We fall back to the IGSID for the
+        display name when ``name`` is empty so the agent always sees
+        something. Locale/timezone are not exposed by Instagram.
         """
         profile = client.fetch_profile(account=account, igsid=external_id)
         name = profile.get("name", "")
-        username = profile.get("username", "")
-        # IG's display name is usually ``name``; fall back to the
-        # ``@username`` so the agent always sees *something* useful.
-        display = name or (f"@{username}" if username else external_id)
         return {
-            "display_name": display,
+            "display_name": name or external_id,
             "avatar_url": profile.get("profile_pic", ""),
             "first_name": "",
             "last_name": "",
@@ -202,10 +211,12 @@ class InstagramAdapter(BaseChannelAdapter):
         stored as-is — but without a user token it cannot be auto-
         refreshed; it will be marked ``expired`` when it dies.
         """
-        app_id = credentials.get("app_id") or self._cred(account, "app_id")
-        app_secret = credentials.get("app_secret") or self._cred(account, "app_secret")
-        page_token = credentials.get("page_access_token")
-        ig_user_id = credentials.get("ig_user_id") or account.external_id
+        app_id = (credentials.get("app_id") or self._cred(account, "app_id") or "").strip()
+        app_secret = (
+            credentials.get("app_secret") or self._cred(account, "app_secret") or ""
+        ).strip()
+        page_token = (credentials.get("page_access_token") or "").strip()
+        ig_user_id = (credentials.get("ig_user_id") or account.external_id or "").strip()
 
         if not app_id or not app_secret:
             raise ConfigurationError("Instagram connection requires app_id and app_secret.")
@@ -284,18 +295,22 @@ class InstagramAdapter(BaseChannelAdapter):
         return normalized
 
     def verify_credentials(self, *, account) -> VerifyResult:
-        """Check the page access token against the Graph API (``GET /me``)."""
+        """Check the page access token against the Graph API (``GET /me``).
+
+        With a Page token, ``/me`` returns the Page node's ``id`` and
+        ``name`` — we surface the Page name as the account's display
+        name. The ``username`` field is deprecated on this endpoint
+        (Graph API error code 12) and is never requested.
+        """
         try:
             data = client.verify_token(account=account)
         except AuthenticationError as exc:
             return VerifyResult(valid=False, error_code="auth_failed", error_message=str(exc))
         except Exception as exc:  # pragma: no cover - defensive
             return VerifyResult(valid=False, error_code="error", error_message=str(exc))
-        # Instagram exposes ``username`` for the connected account.
-        name = data.get("username") or data.get("name", "")
         return VerifyResult(
             valid=True,
-            account_name=name,
+            account_name=data.get("name", ""),
             external_id=data.get("id", ""),
             raw=data,
         )
