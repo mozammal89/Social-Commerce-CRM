@@ -52,6 +52,13 @@ if TYPE_CHECKING:  # pragma: no cover - type-only imports
 
 logger = logging.getLogger(__name__)
 
+
+def _build_path(base_url: str, account) -> str:
+    """Append the per-account webhook path to ``base_url``."""
+    slug = account.channel.slug if account.channel else "telegram"
+    return f"{base_url}/messaging/webhooks/{slug}/{account.id}/"
+
+
 # Map our internal attachment types → Telegram send-method + field name.
 # Telegram requires a different endpoint per media type.
 _TELEGRAM_MEDIA_METHODS = {
@@ -86,7 +93,19 @@ class TelegramAdapter(BaseChannelAdapter):
     def parse_webhook(
         self, *, headers, body, account
     ) -> list[NormalizedIncomingEvent | DeliveryUpdate]:
-        return webhook.parse(body=body)
+        events = webhook.parse(body=body)
+        # Resolve Telegram file_ids to downloadable URLs. Telegram media
+        # payloads only carry a ``file_id`` (not a URL); we call ``getFile``
+        # to resolve each attachment to a real download URL so the inbox
+        # can render the full-resolution image instead of a 200x200 thumbnail.
+        for event in events:
+            if isinstance(event, NormalizedIncomingEvent):
+                for att in event.attachments:
+                    if att.external_id and not att.external_url:
+                        url = client.get_file_url(account=account, file_id=att.external_id)
+                        if url:
+                            att.external_url = url
+        return events
 
     # ------------------------------------------------------------------
     # Sending
@@ -193,11 +212,10 @@ class TelegramAdapter(BaseChannelAdapter):
         """Fetch the Telegram profile for a user id.
 
         Telegram exposes ``first_name``, ``last_name``, ``username`` and
-        ``language_code`` (ISO 639-1) via ``getChat`` for users who have
-        messaged the bot. Avatars require a separate
-        ``getUserProfilePhotos`` call (best-effort, omitted here — the
-        ``extra`` block carries what ``getChat`` returned so the UI can
-        lazy-load photos later). Timezone is never exposed by Telegram.
+        ``language_code`` (ISO 639-1) via ``getChat``. Avatars are NOT
+        in the ``getChat`` response — we fetch them separately via
+        ``getUserProfilePhotos`` + ``getFile`` (two-step Bot API call).
+        Timezone is never exposed by Telegram.
         """
         chat_id = self._normalize_chat_id(external_id)
         chat = client.get_chat(account=account, chat_id=chat_id)
@@ -211,9 +229,12 @@ class TelegramAdapter(BaseChannelAdapter):
         # Telegram's ``language_code`` is already an ISO 639-1 code.
         language = chat.get("language_code", "")
 
+        # Fetch avatar via getUserProfilePhotos + getFile (best-effort).
+        avatar_url = client.get_user_profile_photo_url(account=account, user_id=chat_id)
+
         return {
             "display_name": display,
-            "avatar_url": "",  # not exposed by getChat; needs getUserProfilePhotos
+            "avatar_url": avatar_url,
             "first_name": first,
             "last_name": last,
             "language": language,
@@ -256,8 +277,9 @@ class TelegramAdapter(BaseChannelAdapter):
             if not account.external_id:
                 account.external_id = token_prefix
 
-        # Verify the token against Telegram.
-        me = client.get_me(account=account)  # uses the transient account
+        # Verify the token against Telegram. Pass the token directly
+        # (the transient account has no credentials yet).
+        me = client.get_me(bot_token=bot_token)
         bot_username = me.get("username", "")
         bot_id = str(me.get("id") or token_prefix)
         normalized["bot_id"] = bot_id
@@ -265,26 +287,36 @@ class TelegramAdapter(BaseChannelAdapter):
         if not account.external_id:
             account.external_id = bot_id
 
-        # Wire up the webhook if a URL was provided. The connect UI is
-        # expected to pass the full per-account webhook URL it wants
-        # Telegram to POST to (typically
-        # ``https://<host>/api/v1/messaging/webhooks/telegram/<account_id>/``).
+        # If the user explicitly provided a webhook_url, register it now.
+        # Otherwise the webhook is auto-registered in ``verify_credentials``
+        # (which runs AFTER the account is saved and has a UUID, so we
+        # can construct the per-account URL automatically).
         webhook_url = credentials.get("webhook_url")
         if webhook_url:
-            self._set_webhook(
-                account=account,
-                webhook_url=webhook_url,
-                secret_token=normalized["secret_token"],
-            )
-            normalized["webhook_url"] = webhook_url
+            try:
+                client.set_webhook(
+                    account=account,
+                    webhook_url=webhook_url,
+                    secret_token=normalized["secret_token"],
+                    bot_token=bot_token,
+                )
+                normalized["webhook_url"] = webhook_url
+            except Exception as exc:
+                logger.warning("Telegram setWebhook failed during connect: %s", exc)
 
         return normalized
 
     def verify_credentials(self, *, account) -> VerifyResult:
-        """Check the bot token via ``getMe``.
+        """Check the bot token via ``getMe``, then auto-register the webhook.
 
-        Confirms the token is valid and the bot is reachable, returning
-        the bot's @username (used by the UI as the display name).
+        ``verify_credentials`` runs AFTER the account is persisted (with
+        a real UUID), so we construct the per-account webhook URL here
+        and call ``setWebhook`` so Telegram starts delivering updates
+        automatically — the user never has to do it manually.
+
+        The webhook URL is derived from the Django Sites framework
+        (``Site.objects.get_current().domain``) so it works in any
+        deployment without hardcoding.
         """
         try:
             me = client.get_me(account=account)
@@ -292,6 +324,10 @@ class TelegramAdapter(BaseChannelAdapter):
             return VerifyResult(valid=False, error_code="auth_failed", error_message=str(exc))
         except Exception as exc:  # pragma: no cover - defensive
             return VerifyResult(valid=False, error_code="error", error_message=str(exc))
+
+        # Auto-register the webhook now that the account has an ID.
+        self._auto_register_webhook(account)
+
         username = me.get("username", "")
         return VerifyResult(
             valid=True,
@@ -300,39 +336,88 @@ class TelegramAdapter(BaseChannelAdapter):
             raw=me,
         )
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-    def _set_webhook(
-        self,
-        *,
-        account: "ConnectedAccount",
-        webhook_url: str,
-        secret_token: str = "",
-    ) -> None:
-        """Register the webhook URL with Telegram via ``setWebhook``.
+    def _auto_register_webhook(self, account: "ConnectedAccount") -> None:
+        """Construct the per-account webhook URL and register it with Telegram.
 
-        Best-effort: failure is logged but does not block connect, so
-        the user can still save credentials and configure the webhook
-        manually via BotFather / the Telegram API console.
+        Uses the Django Sites framework to derive the domain. If Sites
+        is not configured or the domain is ``example.com`` (the default),
+        we skip — the user can register the webhook manually from the
+        settings page.
         """
-        data: dict[str, Any] = {
-            "url": webhook_url,
-            "drop_pending_updates": True,
-        }
-        if secret_token:
-            data["secret_token"] = secret_token
+        webhook_url = self._build_webhook_url(account)
+        if not webhook_url:
+            logger.info(
+                "Skipping Telegram auto-webhook for account=%s: could not determine "
+                "public URL (configure Django Site domain or set WEBHOOK_BASE_URL).",
+                account.id,
+            )
+            return
+
+        secret_token = self._cred(account, "secret_token")
         try:
-            client._call(account=account, method="setWebhook", data=data)
-            logger.info("Telegram webhook set to %s", webhook_url)
-        except SendMessageError as exc:
+            client.set_webhook(
+                account=account,
+                webhook_url=webhook_url,
+                secret_token=secret_token,
+            )
+            logger.info(
+                "Telegram webhook auto-registered for account=%s -> %s", account.id, webhook_url
+            )
+            # Persist the webhook URL so the settings UI can display it.
+            creds = client._creds(account)
+            creds["webhook_url"] = webhook_url
+            account.credentials = creds
+            account.save(update_fields=["credentials", "updated_at"])
+        except Exception as exc:
             logger.warning(
-                "Telegram setWebhook failed (account=%s): %s — the bot will still "
-                "save; configure the webhook manually.",
+                "Telegram setWebhook failed for account=%s: %s — configure it "
+                "manually from the channel settings page.",
                 account.id,
                 exc,
             )
 
+    @staticmethod
+    def _build_webhook_url(account: "ConnectedAccount") -> str:
+        """Derive the public webhook URL for this account.
+
+        Resolution order:
+        1. ``WEBHOOK_BASE_URL`` Django setting (explicit override).
+        2. First HTTPS host in ``ALLOWED_HOSTS`` (covers ngrok tunnels).
+        3. Django Sites framework (if ``django.contrib.sites`` is installed).
+        4. ``""`` (skip) when no public URL can be determined.
+
+        The path is always ``/messaging/webhooks/<slug>/<account_id>/``.
+        """
+        from django.conf import settings
+
+        # 1. Explicit override
+        base_url = getattr(settings, "WEBHOOK_BASE_URL", "").strip().rstrip("/")
+        if base_url:
+            return _build_path(base_url, account)
+
+        # 2. First HTTPS host in ALLOWED_HOSTS (finds ngrok tunnels etc.)
+        for host in getattr(settings, "ALLOWED_HOSTS", []):
+            if host.startswith("https://"):
+                return _build_path(host.rstrip("/"), account)
+            # ngrok/production domains that aren't localhost/ IP
+            if "." in host and not host.startswith("localhost") and not host[0].isdigit():
+                return _build_path(f"https://{host}", account)
+
+        # 3. Django Sites framework (if installed)
+        try:
+            from django.contrib.sites.models import Site
+
+            domain = Site.objects.get_current().domain
+            if domain and domain != "example.com":
+                return _build_path(f"https://{domain}", account)
+        except Exception:
+            pass
+
+        return ""
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
     @staticmethod
     def _normalize_chat_id(chat_id: str | int) -> int | str:
         """Coerce a chat id to int when possible (Telegram's preference).

@@ -91,18 +91,29 @@ def _bot_token(account: "ConnectedAccount") -> str:
 
 def _call(
     *,
-    account: "ConnectedAccount",
+    account: "ConnectedAccount | None" = None,
     method: str,
     data: dict[str, Any] | None = None,
     files: dict[str, Any] | None = None,
+    bot_token: str = "",
 ) -> dict[str, Any]:
     """Invoke a Bot API method and return the parsed JSON response.
 
     Uses ``data=`` (form-encoded) rather than ``json=`` because the
     media-upload endpoints require multipart form data; mixing the two
     in a single client keeps the code simple.
+
+    The bot token is resolved from ``bot_token`` (explicit override,
+    used during connect before the account is persisted) or from the
+    account's credentials.
     """
-    token = _bot_token(account)
+    token = bot_token or _bot_token(account) if account else bot_token
+    if not token:
+        raise SendMessageError(
+            "Telegram API call requires either an account with bot_token "
+            "or an explicit bot_token argument.",
+            code="missing_token",
+        )
     url = f"{BOT_API_BASE}/bot{token}/{method}"
     logger.debug("Telegram API call: method=%s, data=%s", method, data)
     try:
@@ -118,7 +129,6 @@ def _call(
         raise SendMessageError(
             f"Telegram {method} request failed: {exc}", code="transport_error"
         ) from exc
-
     logger.debug(
         "Telegram API response: method=%s, status=%s, body=%s",
         method,
@@ -204,15 +214,120 @@ def get_chat(*, account: "ConnectedAccount", chat_id: str | int) -> dict[str, An
     return data.get("result", {}) if isinstance(data, dict) else {}
 
 
-def get_me(*, account: "ConnectedAccount") -> dict[str, Any]:
+def get_file(
+    *, account: "ConnectedAccount | None" = None, file_id: str, bot_token: str = ""
+) -> dict[str, Any]:
+    """Fetch metadata (including ``file_path``) for a Telegram file via ``getFile``.
+
+    Telegram media (photos, documents, voice, etc.) only carries a
+    ``file_id`` in webhook payloads — you must call ``getFile`` to
+    resolve the download path. Returns ``{}`` on failure (best-effort).
+
+    Accepts either a persisted account or an explicit ``bot_token``.
+    """
+    try:
+        data = _call(
+            account=account, method="getFile", data={"file_id": file_id}, bot_token=bot_token
+        )
+    except SendMessageError as exc:
+        logger.info("Telegram getFile failed for file_id=%s: %s", file_id[:20], exc)
+        return {}
+    return data.get("result", {}) if isinstance(data, dict) else {}
+
+
+def get_file_url(
+    *, account: "ConnectedAccount | None" = None, file_id: str, bot_token: str = ""
+) -> str:
+    """Resolve a Telegram ``file_id`` to a publicly downloadable URL.
+
+    Two-step process (per Bot API docs):
+    1. ``getFile`` → returns ``{file_path: "photos/file_1.jpg", ...}``
+    2. Construct URL: ``https://api.telegram.org/file/bot<token>/<file_path>``
+
+    Returns ``""`` on failure so callers can degrade gracefully.
+    """
+    token = bot_token or _creds(account).get("bot_token", "") if account else bot_token
+    if not token or not file_id:
+        return ""
+    result = get_file(account=account, file_id=file_id, bot_token=bot_token)
+    file_path = result.get("file_path", "")
+    if not file_path:
+        return ""
+    return f"{BOT_API_BASE}/file/bot{token}/{file_path}"
+
+
+def get_user_profile_photo_url(
+    *,
+    account: "ConnectedAccount",
+    user_id: str | int,
+) -> str:
+    """Fetch a user's profile photo URL via ``getUserProfilePhotos`` + ``getFile``.
+
+    ``getChat`` does NOT return profile photo data for private chats.
+    This two-step call fetches the most recent photo's ``file_id`` and
+    resolves it to a downloadable URL. Best-effort — returns ``""``
+    when the user has no profile photo or the bot lacks access.
+    """
+    try:
+        data = _call(
+            account=account,
+            method="getUserProfilePhotos",
+            data={"user_id": user_id, "limit": 1},
+        )
+    except SendMessageError as exc:
+        logger.info("Telegram getUserProfilePhotos failed for user=%s: %s", user_id, exc)
+        return ""
+    result = data.get("result", {}) if isinstance(data, dict) else {}
+    photos = result.get("photos", [])
+    if not photos:
+        return ""
+    # photos is [[PhotoSize, ...], ...] — pick the largest from the first set.
+    sizes = photos[0]
+    if not sizes:
+        return ""
+    # Largest size is last in the array (Telegram sorts by resolution).
+    file_id = sizes[-1].get("file_id", "")
+    if not file_id:
+        return ""
+    return get_file_url(account=account, file_id=file_id)
+
+
+def set_webhook(
+    *,
+    account: "ConnectedAccount | None" = None,
+    webhook_url: str,
+    secret_token: str = "",
+    bot_token: str = "",
+) -> dict[str, Any]:
+    """Register (or update) the bot's webhook URL via ``setWebhook``.
+
+    Called after the account is saved so we can construct the full
+    per-account webhook URL. ``drop_pending_updates=True`` clears any
+    backlog from before the webhook was set.
+    """
+    data: dict[str, Any] = {
+        "url": webhook_url,
+        "drop_pending_updates": True,
+    }
+    if secret_token:
+        data["secret_token"] = secret_token
+    return _call(account=account, method="setWebhook", data=data, bot_token=bot_token)
+
+
+def get_me(
+    *,
+    account: "ConnectedAccount | None" = None,
+    bot_token: str = "",
+) -> dict[str, Any]:
     """Verify the bot token via ``getMe`` — the canonical Telegram check.
 
     Returns the bot's ``{id, username, first_name}`` on success; raises
     ``AuthenticationError`` on any non-OK response (invalid token, wrong
-    format, etc.).
+    format, etc.). Accepts either a persisted account or an explicit
+    ``bot_token`` (used during connect before the account is saved).
     """
     try:
-        data = _call(account=account, method="getMe")
+        data = _call(account=account, method="getMe", bot_token=bot_token)
     except SendMessageError as exc:
         raise AuthenticationError(str(exc)) from exc
     return data.get("result", {}) if isinstance(data, dict) else {}

@@ -206,7 +206,7 @@
 }
 .conv-channel-icon {
     color: var(--text-muted);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
 }
 
 /* ================================================================
