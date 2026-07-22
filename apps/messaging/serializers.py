@@ -66,8 +66,16 @@ class ChannelCatalogSerializer(serializers.ModelSerializer):
     class Meta:
         model = Channel
         fields = [
-            "id", "slug", "channel_type", "name", "description", "icon",
-            "is_enabled", "capabilities", "adapter_class", "adapter_available",
+            "id",
+            "slug",
+            "channel_type",
+            "name",
+            "description",
+            "icon",
+            "is_enabled",
+            "capabilities",
+            "adapter_class",
+            "adapter_available",
             "sort_order",
         ]
         read_only_fields = fields
@@ -78,6 +86,7 @@ class ChannelCatalogSerializer(serializers.ModelSerializer):
         if not obj.is_enabled:
             return False
         from .adapters.registry import get_adapter_class
+
         return get_adapter_class(obj.channel_type) is not None
 
 
@@ -88,9 +97,17 @@ class AttachmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Attachment
         fields = [
-            "id", "attachment_type", "external_url", "external_id",
-            "mime_type", "file_name", "file_size", "width", "height",
-            "duration", "thumbnail_url",
+            "id",
+            "attachment_type",
+            "external_url",
+            "external_id",
+            "mime_type",
+            "file_name",
+            "file_size",
+            "width",
+            "height",
+            "duration",
+            "thumbnail_url",
         ]
         read_only_fields = fields
 
@@ -100,13 +117,23 @@ class AttachmentSerializer(serializers.ModelSerializer):
 # ===========================================================================
 class ReplyToBriefSerializer(serializers.ModelSerializer):
     """Minimal representation of a replied-to message (for the reply quote)."""
+
     message_type = serializers.CharField(read_only=True)
     has_attachments = serializers.SerializerMethodField()
     first_attachment = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ["id", "text", "direction", "sender_type", "created_at", "message_type", "has_attachments", "first_attachment"]
+        fields = [
+            "id",
+            "text",
+            "direction",
+            "sender_type",
+            "created_at",
+            "message_type",
+            "has_attachments",
+            "first_attachment",
+        ]
         read_only_fields = fields
 
     def get_has_attachments(self, obj: Message) -> bool:
@@ -138,11 +165,28 @@ class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = [
-            "id", "conversation", "channel", "external_id", "direction",
-            "sender_type", "sender", "message_type", "text", "quick_replies",
-            "delivery_status", "external_timestamp", "sent_at", "delivered_at",
-            "read_at", "failed_at", "error_code", "error_message",
-            "attachments", "reply_to", "reactions", "created_at",
+            "id",
+            "conversation",
+            "channel",
+            "external_id",
+            "direction",
+            "sender_type",
+            "sender",
+            "message_type",
+            "text",
+            "quick_replies",
+            "delivery_status",
+            "external_timestamp",
+            "sent_at",
+            "delivered_at",
+            "read_at",
+            "failed_at",
+            "error_code",
+            "error_message",
+            "attachments",
+            "reply_to",
+            "reactions",
+            "created_at",
         ]
         read_only_fields = fields
 
@@ -188,10 +232,22 @@ class ConversationListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Conversation
         fields = [
-            "id", "channel", "customer_id", "customer_name", "customer_avatar",
-            "subject", "status", "priority", "assigned_to", "unread_count",
-            "message_count", "last_message_at", "last_message_preview",
-            "last_message_direction", "is_unread", "created_at",
+            "id",
+            "channel",
+            "customer_id",
+            "customer_name",
+            "customer_avatar",
+            "subject",
+            "status",
+            "priority",
+            "assigned_to",
+            "unread_count",
+            "message_count",
+            "last_message_at",
+            "last_message_preview",
+            "last_message_direction",
+            "is_unread",
+            "created_at",
         ]
         read_only_fields = fields
 
@@ -211,10 +267,24 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Conversation
         fields = [
-            "id", "channel", "connected_account", "customer", "subject",
-            "status", "priority", "assigned_to", "tags", "unread_count",
-            "message_count", "last_message_at", "last_message_preview",
-            "last_message_direction", "metadata", "closed_at", "created_at", "updated_at",
+            "id",
+            "channel",
+            "connected_account",
+            "customer",
+            "subject",
+            "status",
+            "priority",
+            "assigned_to",
+            "tags",
+            "unread_count",
+            "message_count",
+            "last_message_at",
+            "last_message_preview",
+            "last_message_direction",
+            "metadata",
+            "closed_at",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = fields
 
@@ -274,18 +344,41 @@ class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = [
-            "id", "first_name", "last_name", "display_name", "email", "phone",
-            "avatar", "assigned_to", "tags", "notes", "metadata",
-            "channel_identities", "is_merged", "merged_into", "first_seen_at",
-            "last_seen_at", "open_conversations_count", "created_at",
+            "id",
+            "first_name",
+            "last_name",
+            "display_name",
+            "email",
+            "phone",
+            "avatar",
+            "assigned_to",
+            "tags",
+            "notes",
+            "metadata",
+            "channel_identities",
+            "is_merged",
+            "merged_into",
+            "first_seen_at",
+            "last_seen_at",
+            "open_conversations_count",
+            "created_at",
         ]
-        read_only_fields = ["id", "avatar", "is_merged", "merged_into", "first_seen_at", "last_seen_at", "created_at"]
+        read_only_fields = [
+            "id",
+            "avatar",
+            "is_merged",
+            "merged_into",
+            "first_seen_at",
+            "last_seen_at",
+            "created_at",
+        ]
 
     def get_open_conversations_count(self, obj: Customer) -> int:
         # Cheap count; only computed on detail reads.
-        return getattr(obj, "_open_conversations_count", None) or obj.conversations.filter(
-            status__in=["open", "pending"]
-        ).count()
+        return (
+            getattr(obj, "_open_conversations_count", None)
+            or obj.conversations.filter(status__in=["open", "pending"]).count()
+        )
 
 
 class CustomerUpdateSerializer(serializers.ModelSerializer):
@@ -324,13 +417,27 @@ class ConnectedAccountSerializer(serializers.ModelSerializer):
     connected_by = UserBriefSerializer(read_only=True)
     is_active = serializers.BooleanField(read_only=True)
     webhook_verify_token_masked = serializers.SerializerMethodField()
+    credentials_keys = serializers.SerializerMethodField()
+    skip_signature_verification = serializers.SerializerMethodField()
 
     class Meta:
         model = ConnectedAccount
         fields = [
-            "id", "channel", "name", "external_id", "status", "is_active",
-            "webhook_verify_token_masked", "metadata", "connected_by",
-            "last_synced_at", "error_message", "created_at", "updated_at",
+            "id",
+            "channel",
+            "name",
+            "external_id",
+            "status",
+            "is_active",
+            "webhook_verify_token_masked",
+            "credentials_keys",
+            "skip_signature_verification",
+            "metadata",
+            "connected_by",
+            "last_synced_at",
+            "error_message",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = fields
 
@@ -345,6 +452,26 @@ class ConnectedAccountSerializer(serializers.ModelSerializer):
             return f"{token[:2]}{'*' * (len(token) - 4)}{token[-2:]}"
         return "****"
 
+    def get_credentials_keys(self, obj: ConnectedAccount) -> list[str]:
+        """Return the list of credential key names (never values).
+
+        Lets the UI show indicators (e.g. "signature verification off")
+        without ever exposing secret material.
+        """
+        return list(obj.credentials.keys()) if isinstance(obj.credentials, dict) else []
+
+    def get_skip_signature_verification(self, obj: ConnectedAccount) -> bool:
+        """True when webhook signature verification is intentionally disabled.
+
+        Reads the actual VALUE (not just key presence) so the UI reflects
+        the true state even after a toggle-off leaves an empty-string
+        value behind in the credentials dict.
+        """
+        return (
+            isinstance(obj.credentials, dict)
+            and obj.credentials.get("skip_signature_verification") is True
+        )
+
 
 class ConnectChannelSerializer(serializers.Serializer):
     """Input for connecting a channel account (delegates to ChannelService).
@@ -353,7 +480,8 @@ class ConnectChannelSerializer(serializers.Serializer):
     """
 
     channel_slug = serializers.SlugRelatedField(
-        slug_field="slug", queryset=Channel.objects.filter(is_enabled=True),
+        slug_field="slug",
+        queryset=Channel.objects.filter(is_enabled=True),
         source="channel",
     )
     external_id = serializers.CharField(required=True, max_length=255)
@@ -390,7 +518,9 @@ class UpdateCredentialsSerializer(serializers.Serializer):
     credential object. Only the fields being updated need to be provided.
     """
 
-    credentials = serializers.DictField(required=False, help_text="Partial or full credential dict to update")
+    credentials = serializers.DictField(
+        required=False, help_text="Partial or full credential dict to update"
+    )
     webhook_verify_token = serializers.CharField(required=False, allow_blank=True, max_length=255)
 
     def validate_credentials(self, value):
@@ -408,5 +538,14 @@ class ActivitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Activity
-        fields = ["id", "customer", "conversation", "actor", "action_type", "description", "metadata", "created_at"]
+        fields = [
+            "id",
+            "customer",
+            "conversation",
+            "actor",
+            "action_type",
+            "description",
+            "metadata",
+            "created_at",
+        ]
         read_only_fields = fields

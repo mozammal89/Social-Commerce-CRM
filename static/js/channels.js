@@ -561,6 +561,55 @@ function channelsApp() {
             this.showVerifyToken = !this.showVerifyToken;
         },
 
+        /* True when signature verification is currently disabled for the
+           account shown in the Settings modal. Reads the explicit boolean
+           from the API (not key presence) so it reflects the true state. */
+        skipSignatureVerify() {
+            return this.settingsData?.credentials?.skip_signature_verification === true;
+        },
+
+        async toggleSkipSignatureVerification(enable) {
+            // Toggle the ``skip_signature_verification`` flag on the
+            // connected account's credentials. When enabled, webhook
+            // signatures are NOT verified (insecure — only for
+            // troubleshooting Meta app-secret mismatches).
+            if (!this.settingsAccount) return;
+
+            const ok = await window.confirmAction({
+                title: enable ? 'Skip signature verification?' : 'Re-enable signature verification?',
+                message: enable
+                    ? 'This is INSECURE. Webhooks will be accepted without verifying their HMAC signature. Only use this when a platform signs with a key you cannot reproduce. Every unverified webhook is logged.'
+                    : 'Signature verification will be re-enabled. Webhooks with mismatched signatures will be rejected with 403.',
+                confirmText: enable ? 'Skip verification (insecure)' : 'Re-enable',
+                confirmClass: enable ? 'btn-warning' : 'btn-success',
+            });
+            if (!ok) return; // checkbox reverts via :checked binding automatically
+
+            this.updatingCredentials = true;
+            try {
+                const body = enable
+                    ? { credentials: { skip_signature_verification: true } }
+                    : { credentials: { skip_signature_verification: '' } };
+                await api(`${this.apiBase}/channels/${this.settingsAccount.id}/credentials/`, {
+                    method: 'POST',
+                    storeId: this.storeId,
+                    body,
+                });
+                this.notify(
+                    `Signature verification ${enable ? 'DISABLED' : 'enabled'} for ${this.settingsAccount.name}.`,
+                    enable ? 'warning' : 'success',
+                );
+                // Reload settings so the checkbox reflects the persisted state
+                await this.openSettings(this.settingsAccount);
+                // Reload accounts so the card badge updates
+                await this.loadAccounts();
+            } catch (err) {
+                this.notify(err.message, 'error');
+            } finally {
+                this.updatingCredentials = false;
+            }
+        },
+
         generateVerifyToken() {
             // Generate a random token similar to the connect modal
             this.newVerifyToken = 'crm_' + Math.random().toString(36).slice(2, 14);

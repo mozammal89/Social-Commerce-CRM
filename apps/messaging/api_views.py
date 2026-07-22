@@ -637,6 +637,13 @@ def account_settings(request, channel_id):
                 "keys": list(account.credentials.keys()) if account.credentials else [],
                 "count": len(account.credentials) if account.credentials else 0,
                 "has_credentials": bool(account.credentials),
+                # Explicit flags derived from credential VALUES (not just
+                # key presence) so the UI reflects the true state even
+                # after a toggle-off leaves an empty-string value behind.
+                "skip_signature_verification": bool(
+                    isinstance(account.credentials, dict)
+                    and account.credentials.get("skip_signature_verification") is True
+                ),
             },
             "webhook": {
                 "url": webhook_url,

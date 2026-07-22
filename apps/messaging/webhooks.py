@@ -75,6 +75,12 @@ def channel_webhook(
     """
     # Resolve the connected account. A bad/unknown account_id must never
     # reveal whether the account exists, so all lookup failures return 404.
+    print(
+        "-------------- request --------------- ",
+        request.headers,
+        "----- Body ----- ",
+        request.body,
+    )
     account = (
         ConnectedAccount.objects.select_related("store", "channel")
         .filter(pk=account_id, channel__slug=channel_slug)
@@ -135,6 +141,9 @@ def _handle_event(request, account, adapter) -> HttpResponse:
         logger.info("Empty webhook body for account=%s", account.id)
         return HttpResponse(status=200)
 
+    skip_verification = _should_skip_signature_verification(account)
+
+    ok = False
     try:
         ok, _ = adapter.verify_webhook(
             method="POST",
@@ -144,15 +153,33 @@ def _handle_event(request, account, adapter) -> HttpResponse:
             account=account,
         )
     except WebhookVerificationError as exc:
-        # Signature mismatch → refuse and log. Return 403 so the platform
-        # (and we) can tell genuine events from spoofing attempts.
-        logger.warning("Webhook signature verification failed (account=%s): %s", account.id, exc)
-        return HttpResponse(status=403)
+        if skip_verification:
+            # Verification is intentionally disabled for this account.
+            # Log prominently so it's visible in monitoring, but process
+            # the payload so the channel keeps working.
+            logger.warning(
+                "Webhook signature verification BYPASSED for account=%s (%s): %s. "
+                "Set skip_signature_verification=False on the account or "
+                "WEBHOOK_VERIFY_SIGNATURES=True in env to re-enable.",
+                account.id,
+                account.name,
+                exc,
+            )
+        else:
+            # Signature mismatch → refuse and log. Return 403 so the
+            # platform (and we) can tell genuine events from spoofing.
+            logger.warning(
+                "Webhook signature verification failed (account=%s): %s",
+                account.id,
+                exc,
+            )
+            _dump_mismatch_diagnostics(request, body, account)
+            return HttpResponse(status=403)
     except AdapterError as exc:
         logger.warning("Webhook verification adapter error (account=%s): %s", account.id, exc)
         return HttpResponse(status=400)
 
-    if not ok:
+    if not ok and not skip_verification:
         return HttpResponse(status=403)
 
     # Hand off to Celery for parsing + ingestion. Pass the body as text
@@ -176,6 +203,76 @@ def _handle_event(request, account, adapter) -> HttpResponse:
     return HttpResponse(status=200)
 
 
+def _should_skip_signature_verification(account: ConnectedAccount) -> bool:
+    """Determine whether signature verification should be skipped.
+
+    Verification is skipped (in order of specificity):
+
+    1. **Per-account**: ``skip_signature_verification`` flag in
+       ``ConnectedAccount.metadata`` (set by a super-admin via the UI
+       or API for a single misconfigured channel).
+    2. **Global**: ``WEBHOOK_VERIFY_SIGNATURES=False`` in the Django
+       settings/env (useful for development / behind a VPN).
+
+    Default is **always verify** (secure). Skipping is logged at WARNING
+    level on every webhook so it's never silently insecure.
+    """
+    # Global kill-switch — defaults to True (verify everything).
+    from django.conf import settings
+
+    if not getattr(settings, "WEBHOOK_VERIFY_SIGNATURES", True):
+        return True
+
+    # Per-account opt-out (stored in the encrypted credentials dict so
+    # it rides the same encryption-at-rest guarantee as tokens).
+    creds = account.credentials
+    if isinstance(creds, dict) and creds.get("skip_signature_verification") is True:
+        return True
+
+    return False
+
+
 def _header_dict(request: HttpRequest) -> dict[str, str]:
     """Extract a plain dict of headers (case-insensitive lookups happen in adapters)."""
     return {k: v for k, v in request.headers.items()}
+
+
+def _dump_mismatch_diagnostics(
+    request: HttpRequest, body: bytes, account: ConnectedAccount
+) -> None:
+    """Log a detailed diagnostic snapshot when an HMAC signature mismatches.
+
+    Distinguishes the two possible root causes:
+
+    * **Body tampering** (proxy/tunnel re-encoded the body) — detected by
+      comparing the ``Content-Length`` header with ``len(body)``.
+    * **Wrong app_secret** — detected by dumping the raw body + the
+      received signature so the HMAC can be verified independently with
+      ``openssl`` or a Python one-liner.
+
+    Logs at WARNING level (always visible) but never logs credentials.
+    """
+    content_length = request.headers.get("Content-Length", "?")
+    content_encoding = request.headers.get("Content-Encoding", "none")
+    sig = (
+        request.headers.get("X-Hub-Signature-256") or request.headers.get("X-Hub-Signature") or "?"
+    )
+    logger.warning(
+        "Webhook mismatch diagnostic (account=%s):\n"
+        "  Content-Length header : %s\n"
+        "  Actual body length    : %d\n"
+        "  Content-Encoding      : %s\n"
+        "  Signature header      : %s\n"
+        "  Body (first 500 chars) : %s\n"
+        "  ---\n"
+        "  To verify independently, run:\n"
+        "    echo -n '<body_above>' | openssl dgst -sha256 -hmac '<your_app_secret>'\n"
+        "  If the output matches the Signature header, the stored app_secret is wrong.\n"
+        "  If Content-Length != Actual body length, a proxy/tunnel modified the body.",
+        account.id,
+        content_length,
+        len(body),
+        content_encoding,
+        sig,
+        body.decode("utf-8", errors="replace")[:500],
+    )
