@@ -18,7 +18,12 @@
      x-cloak>
 
   <div class="inbox-shell"
-       :class="{ 'mobile-view-active': isMobileView }">
+       :class="{ 'mobile-view-active': isMobileView, 'is-resizing': resizingPane }"
+       @mousemove="resizingPane && dragResize($event)"
+       @mouseup="resizingPane && stopResize()"
+       @mouseleave="resizingPane && stopResize()"
+       @touchmove.prevent="resizingPane && dragResize($event)"
+       @touchend="resizingPane && stopResize()">
 
     <!-- Browser notification permission prompt (shown once) -->
     <div class="notif-permission-banner" x-show="showNotifPrompt" x-transition style="display:none;">
@@ -226,6 +231,13 @@
       </div>
     </aside>
 
+    <!-- Resizer 1: drag to resize list ↔ thread -->
+    <div class="inbox-resizer"
+         @mousedown.prevent.stop="startResize($event, 'list')"
+         @touchstart.prevent.stop="startResize($event, 'list')">
+      <div class="inbox-resizer-handle"></div>
+    </div>
+
     <!-- ================================================================
        Pane 2 — Message thread
     ================================================================ -->
@@ -323,7 +335,7 @@
                         <div class="reply-image-preview">
                           <img :src="msg.reply_to.first_attachment.thumbnail_url || msg.reply_to.first_attachment.external_url"
                                :alt="msg.reply_to.message_type === 'image' ? 'Image' : 'Attachment'"
-                               @click="window.open(msg.reply_to.first_attachment.external_url, '_blank')">
+                               @click="openLightbox(msg.reply_to.first_attachment.external_url)">
                           <span class="reply-image-indicator">
                             <i class="bi bi-image"></i> Image
                           </span>
@@ -359,7 +371,7 @@
                         <div class="reply-image-preview">
                           <img :src="msg.reply_to_first_attachment.thumbnail_url || msg.reply_to_first_attachment.external_url"
                                :alt="msg.reply_to_message_type === 'image' ? 'Image' : 'Attachment'"
-                               @click="window.open(msg.reply_to_first_attachment.external_url, '_blank')">
+                               @click="openLightbox(msg.reply_to_first_attachment.external_url)">
                           <span class="reply-image-indicator">
                             <i class="bi bi-image"></i> Image
                           </span>
@@ -508,6 +520,13 @@
       </template>
     </section>
 
+    <!-- Resizer 2: drag to resize thread ↔ customer -->
+    <div class="inbox-resizer"
+         @mousedown.prevent.stop="startResize($event, 'customer')"
+         @touchstart.prevent.stop="startResize($event, 'customer')">
+      <div class="inbox-resizer-handle"></div>
+    </div>
+
     <!-- ================================================================
        Pane 3 — Customer panel
     ================================================================ -->
@@ -596,6 +615,16 @@
         </div>
       </template>
     </aside>
+  </div>
+
+  <!-- Image lightbox overlay (click any image to enlarge) -->
+  <div class="inbox-lightbox" x-show="lightboxUrl" x-transition.opacity
+       @click="closeLightbox()" @keydown.escape.window="closeLightbox()"
+       style="display:none;">
+    <button type="button" class="inbox-lightbox-close" @click="closeLightbox()" title="Close (Esc)">
+      <i class="bi bi-x-lg"></i>
+    </button>
+    <img :src="lightboxUrl" alt="Image" @click.stop>
   </div>
 
   <!-- Notifications use the global showNotification() system (main.js). -->

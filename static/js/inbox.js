@@ -152,6 +152,16 @@ function inboxApp() {
         browserNotifPerm: 'default',   // 'granted'|'denied'|'default'|'unsupported'
         showNotifPrompt: false,
 
+        /* ---- lightbox (image viewer) ---- */
+        lightboxUrl: null,
+
+        /* ---- pane resizing state ---- */
+        resizingPane: null,            // null | 'list' | 'customer'
+        _resizeStartX: 0,
+        _resizeStartWidth: 0,
+        listPaneWidth: null,           // persisted px width (CSS var override)
+        customerPaneWidth: null,
+
         /* ================================================================
          * Lifecycle
          * ================================================================ */
@@ -170,6 +180,7 @@ function inboxApp() {
             this.setupScrollHandler();
             this.loadNotifPrefs();
             this.maybeShowNotifPrompt();
+            this.restorePaneWidths();
         },
 
         /* ---- notification preference management ---- */
@@ -923,6 +934,20 @@ function inboxApp() {
         },
 
         /* ---- display helpers (used in template) ---- */
+
+        /** Open an image in the in-app lightbox overlay instead of
+         *  navigating to a new tab. Works consistently for all channels
+         *  (Facebook CDN, Telegram file URLs, etc.). */
+        openLightbox(url) {
+            if (!url) return;
+            this.lightboxUrl = url;
+            document.body.style.overflow = 'hidden';
+        },
+        closeLightbox() {
+            this.lightboxUrl = null;
+            document.body.style.overflow = '';
+        },
+
         channelIcon(conv) {
             return CHANNEL_ICONS[conv.channel?.channel_type] || 'bi-chat';
         },
@@ -985,6 +1010,101 @@ function inboxApp() {
         syncBadge() {
             const store = window.Alpine && Alpine.store('inboxBadge');
             if (store) store.set(this.unreadTotal);
+        },
+
+        /* ================================================================
+         * Pane resizing (drag dividers to expand/collapse sections)
+         * ================================================================ */
+        /** Begin a drag-resize gesture. ``pane`` is 'list' or 'customer'. */
+        startResize(event, pane) {
+            this.resizingPane = pane;
+            const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+            this._resizeStartX = clientX;
+            this._resizeStartWidth = this._paneWidth(pane);
+        },
+
+        /** Track mouse/touch movement while dragging a divider. */
+        dragResize(event) {
+            if (!this.resizingPane) return;
+            const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+            const delta = clientX - this._resizeStartX;
+            // List pane grows rightward; customer pane grows leftward.
+            let newWidth;
+            if (this.resizingPane === 'list') {
+                newWidth = this._resizeStartWidth + delta;
+            } else {
+                newWidth = this._resizeStartWidth - delta;
+            }
+
+            // Compute bounds so panes never push siblings off-screen.
+            // The shell width minus the OTHER pane and a min thread area.
+            const shellWidth = this._shellWidth();
+            const minPane = 220;
+            const minThread = 300;   // keep the message thread usable
+            const otherW = this._paneWidth(this.resizingPane === 'list' ? 'customer' : 'list');
+            const maxBySpace = shellWidth - otherW - minThread - 14; // 14px = 2 resizers
+            const max = Math.max(minPane, Math.min(window.innerWidth * 0.55, maxBySpace));
+
+            newWidth = Math.min(Math.max(newWidth, minPane), max);
+            this._applyPaneWidth(this.resizingPane, newWidth);
+        },
+
+        /** Total width of the inbox shell (the flex container). */
+        _shellWidth() {
+            const shell = document.querySelector('#inbox-root .inbox-shell');
+            return shell ? shell.getBoundingClientRect().width : window.innerWidth;
+        },
+
+        /** End the drag — persist the width to localStorage. */
+        stopResize() {
+            if (!this.resizingPane) return;
+            const pane = this.resizingPane;
+            this.resizingPane = null;
+            const width = this._paneWidth(pane);
+            if (width) {
+                this._persistPaneWidth(pane, width);
+            }
+        },
+
+        /** Restore saved pane widths from localStorage on init. */
+        restorePaneWidths() {
+            const listW = this._readPaneWidth('list');
+            const custW = this._readPaneWidth('customer');
+            if (listW) {
+                this.listPaneWidth = listW;
+                this._applyPaneWidth('list', listW);
+            }
+            if (custW) {
+                this.customerPaneWidth = custW;
+                this._applyPaneWidth('customer', custW);
+            }
+        },
+
+        /** Read the current rendered width of a pane (px). */
+        _paneWidth(pane) {
+            const shell = document.querySelector('#inbox-root .inbox-shell');
+            const el = shell && shell.querySelector(pane === 'list' ? '.inbox-list' : '.inbox-customer');
+            return el ? el.getBoundingClientRect().width : 0;
+        },
+
+        /** Apply a width to a pane by setting a CSS custom property on
+         *  the inbox root element. Scoped there so mobile breakpoints
+         *  (which zero out the width) still win via specificity. */
+        _applyPaneWidth(pane, px) {
+            const root = document.getElementById('inbox-root');
+            if (!root) return;
+            const prop = pane === 'list' ? '--inbox-list-width' : '--inbox-customer-width';
+            root.style.setProperty(prop, px + 'px');
+            if (pane === 'list') this.listPaneWidth = px;
+            else this.customerPaneWidth = px;
+        },
+
+        _persistPaneWidth(pane, px) {
+            try { localStorage.setItem('inbox_pane_' + pane, String(px)); } catch {}
+        },
+        _readPaneWidth(pane) {
+            const raw = localStorage.getItem('inbox_pane_' + pane);
+            return raw ? parseInt(raw, 10) || null : null;
         },
 
         /** Resolve a human-readable sender name for a WS message, used

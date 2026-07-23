@@ -693,6 +693,11 @@
         position: relative;
     }
 
+    /* Resizers only apply to desktop side-by-side layout */
+    .inbox-resizer {
+        display: none !important;
+    }
+
     /* Both panes take full width, we control visibility via classes */
     .inbox-list,
     .inbox-detail {
@@ -990,4 +995,91 @@
     border-top: 1px solid var(--border-light, #e2e8f0);
     background: var(--surface-secondary, #f8fafc);
     text-align: center;
+}
+
+/* =================================================================
+   Draggable pane resizers (between list ↔ thread ↔ customer)
+   ================================================================= */
+.inbox-resizer {
+    flex: 0 0 7px;
+    width: 7px;
+    cursor: col-resize;
+    background: transparent;
+    position: relative;
+    z-index: 5;
+    transition: background var(--transition-fast, 0.15s);
+}
+.inbox-resizer:hover,
+.inbox-shell.is-resizing .inbox-resizer {
+    background: var(--brand-200, #c7d2fe);
+}
+/* Center grip dots — subtle visual cue */
+.inbox-resizer-handle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 3px;
+    height: 32px;
+    border-radius: var(--radius-full, 9999px);
+    background: var(--slate-300, #cbd5e1);
+    opacity: 0;
+    transition: opacity var(--transition-fast, 0.15s);
+}
+.inbox-resizer:hover .inbox-resizer-handle {
+    opacity: 1;
+}
+/* While dragging, disable text selection across the whole inbox */
+.inbox-shell.is-resizing {
+    cursor: col-resize;
+    user-select: none;
+}
+.inbox-shell.is-resizing * {
+    pointer-events: none !important;
+}
+.inbox-shell.is-resizing .inbox-resizer {
+    pointer-events: auto !important;
+}
+
+/* =================================================================
+   Image lightbox overlay
+   ================================================================= */
+.inbox-lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    cursor: zoom-out;
+    padding: var(--space-4, 1rem);
+}
+.inbox-lightbox img {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: var(--radius-md, 8px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    cursor: default;
+}
+.inbox-lightbox-close {
+    position: absolute;
+    top: var(--space-4, 1rem);
+    right: var(--space-4, 1rem);
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--transition-fast, 0.15s);
+}
+.inbox-lightbox-close:hover {
+    background: rgba(255, 255, 255, 0.3);
 }
