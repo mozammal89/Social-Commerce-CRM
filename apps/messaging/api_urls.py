@@ -87,4 +87,15 @@ urlpatterns = [
         api_views.toggle_channel,
         name="admin-channel-toggle",
     ),
+    # ---- TikTok OAuth 2.0 flow ----------------------------------------
+    path(
+        "oauth/tiktok/authorize/",
+        api_views.tiktok_oauth_authorize,
+        name="tiktok-oauth-authorize",
+    ),
+    path(
+        "oauth/tiktok/callback/",
+        api_views.tiktok_oauth_callback,
+        name="tiktok-oauth-callback",
+    ),
 ]

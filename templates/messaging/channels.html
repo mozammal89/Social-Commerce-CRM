@@ -7,7 +7,18 @@
 <style>
   @keyframes channels-spin { to { transform: rotate(360deg); } }
   .spin { animation: channels-spin .8s linear infinite; display: inline-block; }
-</style>
+  /* TikTok OAuth quick-connect box */
+  .tiktok-oauth-box {
+    display: flex; align-items: center; gap: .75rem;
+    padding: 1rem; border: 1px solid #e2e8f0; border-radius: 12px;
+    background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
+  }
+  .tiktok-oauth-icon {
+    width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+    background: #000; color: #fff; display: flex;
+    align-items: center; justify-content: center; font-size: 1.4rem;
+  }
+ </style>
 {% endblock %}
 
 {% block content %}
@@ -379,6 +390,55 @@
                 See the TikTok setup guide &rarr;
               </button>
             </div>
+          </div>
+
+          <!-- TikTok: "Connect with TikTok" OAuth button (auto-exchanges code for tokens) -->
+          <div x-show="connectChannel?.channel_type === 'tiktok'" class="mb-3">
+            <div class="tiktok-oauth-box">
+              <div class="tiktok-oauth-icon"><i class="bi bi-tiktok"></i></div>
+              <div class="flex-grow-1">
+                <div class="fw-semibold">Quick connect with TikTok</div>
+                <div class="text-muted" style="font-size:.8rem;">
+                  Opens TikTok's authorization page. After you approve, tokens are fetched
+                  automatically — no manual copy-paste needed.
+                </div>
+              </div>
+            </div>
+            <!-- Inputs needed for OAuth -->
+            <div class="row g-2 mt-2">
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">Client Key <span class="text-danger">*</span></label>
+                <input type="text" class="form-control form-control-sm"
+                       x-model="connectCreds['client_key']"
+                       placeholder="e.g. 7abcdef1234567890">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">Client Secret <span class="text-danger">*</span></label>
+                <input type="password" class="form-control form-control-sm"
+                       x-model="connectCreds['client_secret']"
+                       placeholder="App secret from TikTok console">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">Business ID <span class="text-danger">*</span></label>
+                <input type="text" class="form-control form-control-sm"
+                       x-model="connectExternalId"
+                       placeholder="e.g. 7001234567890">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">Account Name</label>
+                <input type="text" class="form-control form-control-sm"
+                       x-model="connectName"
+                       placeholder="e.g. TikTok Business">
+              </div>
+            </div>
+            <div class="text-center mt-2">
+              <button type="button" class="btn btn-dark btn-sm px-4" @click="connectTikTokOAuth()"
+                      :disabled="tiktokOAuthLoading">
+                <span x-show="!tiktokOAuthLoading"><i class="bi bi-box-arrow-in-right me-1"></i>Connect with TikTok</span>
+                <span x-show="tiktokOAuthLoading"><span class="spinner-border spinner-border-sm me-1"></span>Opening…</span>
+              </button>
+            </div>
+            <div class="text-center text-muted my-2" style="font-size:.75rem;">— or enter tokens manually below —</div>
           </div>
           <p class="text-muted small mb-3"><i class="bi bi-shield-lock me-1"></i>Credentials are encrypted at rest and never shown again after saving.</p>
 

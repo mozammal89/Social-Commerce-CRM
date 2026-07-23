@@ -15,6 +15,19 @@ ALLOWED_HOSTS = [
     "outline-kilometer-abroad.ngrok-free.dev",
 ]
 
+# Trust the X-Forwarded-Proto / X-Forwarded-Host headers from the reverse
+# proxy (ngrok / nginx) so request.build_absolute_uri() generates https://
+# URLs — required for OAuth redirect_uri matching (TikTok, Meta, etc.).
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# TikTok OAuth redirect URI — must EXACTLY match the URL registered in the
+# TikTok developer console (Login Kit → Set up redirect URL).
+TIKTOK_REDIRECT_URI = env.str(
+    "TIKTOK_REDIRECT_URI",
+    default="https://outline-kilometer-abroad.ngrok-free.dev/api/v1/messaging/oauth/tiktok/callback/",
+)
+
 # DATABASES = {
 #     "default": env.db_url(
 #         "DATABASE_URL", default="postgresql://crm_user:crm_password@localhost:5432/crm_db_dev"

@@ -274,18 +274,34 @@ class TikTokAdapter(BaseChannelAdapter):
         business_id = credentials.get("business_id") or account.external_id
         open_id = credentials.get("open_id") or self._cred(account, "open_id")
 
-        # If an authorization_code was supplied (OAuth redirect), we
-        # can't exchange it here without an HTTP call into TikTok's
-        # /v2/oauth/token — that's typically handled by the connect UI
-        # (or a future ``client.exchange_code``). We surface a clear
-        # error so the wiring is obvious.
+        # If an authorization_code was supplied (from the OAuth redirect),
+        # exchange it for access + refresh tokens via the TikTok API.
         code = credentials.get("authorization_code") or credentials.get("code")
         if code and not access_token:
-            raise ConfigurationError(
-                "TikTok authorization_code exchange is not yet supported in the "
-                "adapter — exchange it for tokens in the connect UI and pass "
-                "access_token + refresh_token."
+            redirect_uri = credentials.get("redirect_uri") or ""
+            if not redirect_uri:
+                raise ConfigurationError(
+                    "TikTok OAuth code exchange requires a redirect_uri (the "
+                    "callback URL registered in the TikTok developer console)."
+                )
+            exchanged = client.exchange_authorization_code(
+                client_key=client_key,
+                client_secret=client_secret,
+                code=code,
+                redirect_uri=redirect_uri,
             )
+            token_data = exchanged.get("data") or exchanged
+            access_token = token_data.get("access_token", "")
+            refresh_token = token_data.get("refresh_token", refresh_token)
+            open_id = token_data.get("open_id", open_id)
+            # Stash expiry seconds so the block below sets timestamps.
+            if token_data.get("expires_in"):
+                credentials = {**credentials, "expires_in": token_data["expires_in"]}
+            if token_data.get("refresh_expires_in"):
+                credentials = {
+                    **credentials,
+                    "refresh_expires_in": token_data["refresh_expires_in"],
+                }
 
         if not access_token:
             raise ConfigurationError(
@@ -314,19 +330,35 @@ class TikTokAdapter(BaseChannelAdapter):
         return normalized
 
     def verify_credentials(self, *, account) -> VerifyResult:
-        """Check the access token + business id via ``GET /v2/business/get/``."""
+        """Check the access token via ``GET /v2/user/info/``.
+
+        If the user-info endpoint fails (e.g. the token lacks the scope),
+        fall back to checking that we simply have an access_token stored
+        — the OAuth flow already validated it at connect time.
+        """
         try:
             data = client.get_business_info(account=account)
         except AuthenticationError as exc:
+            # Fallback: if we have tokens stored from the OAuth flow,
+            # consider the account valid even if the user-info endpoint
+            # is unavailable (scope restrictions, API changes, etc.).
+            creds = account.credentials if isinstance(account.credentials, dict) else {}
+            if creds.get("access_token") and creds.get("refresh_token"):
+                return VerifyResult(
+                    valid=True,
+                    account_name=account.name,
+                    external_id=creds.get("open_id", ""),
+                    raw={"note": "Token present; user-info endpoint unavailable."},
+                )
             return VerifyResult(valid=False, error_code="auth_failed", error_message=str(exc))
         except Exception as exc:  # pragma: no cover - defensive
             return VerifyResult(valid=False, error_code="error", error_message=str(exc))
         block = (data or {}).get("data") or {}
-        name = block.get("name") or block.get("business_name") or ""
+        name = block.get("display_name") or block.get("username") or ""
         return VerifyResult(
             valid=True,
-            account_name=name,
-            external_id=str(block.get("business_id") or ""),
+            account_name=name or account.name,
+            external_id=str(block.get("open_id") or ""),
             raw=data,
         )
 

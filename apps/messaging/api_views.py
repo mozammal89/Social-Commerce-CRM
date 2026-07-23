@@ -791,3 +791,279 @@ def toggle_channel(request, channel_id):
     channel.is_enabled = new_enabled
     channel.save(update_fields=["is_enabled", "updated_at"])
     return Response(ChannelCatalogSerializer(channel).data)
+
+
+# ======================================================================
+# TikTok OAuth 2.0 — authorization-code flow
+# ======================================================================
+# Flow:
+#   1. Frontend calls ``oauth/tiktok/authorize/`` with client_key +
+#      business_id + redirect params → gets back the TikTok auth URL.
+#   2. User opens that URL in a popup/tab, logs into TikTok, approves.
+#   3. TikTok redirects to ``oauth/tiktok/callback/?code=...&state=...``.
+#   4. The callback view exchanges the code for tokens and creates the
+#      ``ConnectedAccount`` via the standard service layer.
+#   5. The callback view renders a small HTML page that closes the popup
+#      and notifies the parent window (via ``postMessage``).
+
+
+@api_view(["POST"])
+@current_store
+def tiktok_oauth_authorize(request):
+    """Return the TikTok OAuth authorization URL for the user to visit.
+
+    The frontend opens this URL in a popup. After the user approves,
+    TikTok redirects to our callback which exchanges the code and
+    finishes the connection automatically.
+
+    Request body:
+        client_key    — TikTok app client key
+        business_id   — TikTok Business Center ID
+        account_name  — display name for the connected account
+    """
+    client_key = request.data.get("client_key", "").strip()
+    business_id = request.data.get("business_id", "").strip()
+    account_name = request.data.get("account_name", "TikTok Business").strip()
+    client_secret = request.data.get("client_secret", "").strip()
+
+    if not client_key:
+        return Response(
+            {"detail": "client_key is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Build the callback URL (must EXACTLY match what's registered in the
+    # TikTok developer console). Prefer the explicit TIKTOK_REDIRECT_URI
+    # setting so the URL is stable regardless of proxy/headers.
+    from django.conf import settings as dj_settings
+
+    callback_url = getattr(dj_settings, "TIKTOK_REDIRECT_URI", "").strip()
+    if not callback_url:
+        # Fallback: derive from the request (works when SECURE_PROXY_SSL_HEADER
+        # is configured so build_absolute_uri generates https://).
+        callback_url = request.build_absolute_uri("/api/v1/messaging/oauth/tiktok/callback/")
+        if (
+            callback_url.startswith("http://")
+            and request.headers.get("X-Forwarded-Proto") == "https"
+        ):
+            callback_url = "https://" + callback_url[len("http://") :]
+
+    # Debug: log the exact URL so the user can compare it with the console.
+    import logging
+
+    logging.getLogger(__name__).warning(
+        "TikTok OAuth redirect_uri being sent: %s (ensure this EXACTLY matches "
+        "the URL registered in the TikTok developer console).",
+        callback_url,
+    )
+
+    # Encode state so the callback knows which store/user to attribute
+    # the connection to. Base64-encoded JSON keeps it compact + opaque.
+    # Includes the PKCE code_verifier so the callback can exchange the
+    # code (TikTok requires PKCE).
+    import base64
+    import json
+
+    from .adapters.tiktok.client import build_authorize_url, generate_pkce_pair
+
+    code_verifier, code_challenge = generate_pkce_pair()
+
+    state_payload = {
+        "store_id": str(request.store.id),
+        "user_id": str(request.user.id),
+        "client_key": client_key,
+        "client_secret": client_secret,
+        "business_id": business_id,
+        "account_name": account_name,
+        "callback_url": callback_url,
+        "code_verifier": code_verifier,
+    }
+    state = base64.urlsafe_b64encode(json.dumps(state_payload).encode()).decode()
+
+    auth_url = build_authorize_url(
+        client_key=client_key,
+        redirect_uri=callback_url,
+        state=state,
+        code_challenge=code_challenge,
+    )
+    return Response({"authorize_url": auth_url, "state": state})
+
+
+@api_view(["GET"])
+@permission_classes([permissions.AllowAny])
+def tiktok_oauth_callback(request):
+    """Handle the TikTok OAuth redirect (code → tokens → ConnectedAccount).
+
+    TikTok redirects here with ``?code=...&state=...`` (or ``?error=...``
+    on rejection). We decode the state to recover the store/user context,
+    exchange the code for tokens, and create the connected account.
+
+    On success/failure, a minimal HTML page is returned that closes the
+    popup and notifies the parent window via ``postMessage``.
+    """
+    import base64
+    import json
+    import logging
+
+    logger = logging.getLogger(__name__)
+    error = request.GET.get("error")
+    code = request.GET.get("code")
+    state_raw = request.GET.get("state", "")
+
+    if error:
+        return _tiktok_oauth_render(
+            success=False,
+            message=f"TikTok authorization denied: {error}",
+        )
+
+    if not code or not state_raw:
+        return _tiktok_oauth_render(success=False, message="Missing code or state from TikTok.")
+
+    # Decode state → recover store/user context.
+    try:
+        state = json.loads(base64.urlsafe_b64decode(state_raw).decode())
+    except Exception:
+        return _tiktok_oauth_render(success=False, message="Invalid OAuth state.")
+
+    client_key = state.get("client_key", "")
+    business_id = state.get("business_id", "")
+    account_name = state.get("account_name", "TikTok Business")
+    callback_url = state.get("callback_url", "")
+    store_id = state.get("store_id", "")
+    user_id = state.get("user_id", "")
+    code_verifier = state.get("code_verifier", "")
+    # client_secret may have been passed from the form (via state) or
+    # configured as an env var. Prefer the env var for security (so the
+    # secret isn't embedded in the redirect URL), but accept the form
+    # value as a fallback for dev/first-connect.
+    from django.conf import settings as dj_settings
+
+    client_secret = getattr(dj_settings, "TIKTOK_CLIENT_SECRET", "") or state.get(
+        "client_secret", ""
+    )
+
+    if not client_secret:
+        # Try to read from an existing connected account.
+        existing = ConnectedAccount.objects.filter(
+            store_id=store_id, channel__channel_type="tiktok"
+        ).first()
+        if existing and isinstance(existing.credentials, dict):
+            client_secret = existing.credentials.get("client_secret", "")
+
+    if not client_secret:
+        return _tiktok_oauth_render(
+            success=False,
+            message="Client secret not found. Set TIKTOK_CLIENT_SECRET in env "
+            "or connect once with the manual form.",
+        )
+
+    # Exchange the authorization code for tokens.
+    from .adapters.tiktok import client as tt_client
+    from .adapters.exceptions import AuthenticationError
+
+    try:
+        exchanged = tt_client.exchange_authorization_code(
+            client_key=client_key,
+            client_secret=client_secret,
+            code=code,
+            redirect_uri=callback_url,
+            code_verifier=code_verifier,
+        )
+    except AuthenticationError as exc:
+        logger.error("TikTok OAuth code exchange failed: %s", exc)
+        return _tiktok_oauth_render(success=False, message=str(exc))
+
+    token_data = exchanged.get("data") or exchanged
+    access_token = token_data.get("access_token", "")
+    refresh_token = token_data.get("refresh_token", "")
+    open_id = token_data.get("open_id", "")
+
+    if not access_token:
+        return _tiktok_oauth_render(success=False, message="TikTok returned no access_token.")
+
+    # Create the connected account via the standard service layer.
+    User = get_user_model()
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return _tiktok_oauth_render(success=False, message="User not found.")
+
+    channel = Channel.objects.filter(channel_type="tiktok").first()
+    if not channel:
+        return _tiktok_oauth_render(success=False, message="TikTok channel is not enabled.")
+
+    try:
+        from apps.stores.models import Store
+
+        store = Store.objects.get(pk=store_id)
+        account = services.ChannelService.connect_account(
+            store=store,
+            channel_slug=channel.slug,
+            external_id=business_id or open_id,
+            name=account_name,
+            credentials={
+                "client_key": client_key,
+                "client_secret": client_secret,
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "business_id": business_id,
+                "open_id": open_id,
+                "expires_in": token_data.get("expires_in"),
+                "refresh_expires_in": token_data.get("refresh_expires_in"),
+            },
+            webhook_verify_token="",
+            actor=user,
+        )
+    except Exception as exc:
+        logger.error("TikTok OAuth account creation failed: %s", exc, exc_info=True)
+        return _tiktok_oauth_render(success=False, message=str(exc))
+
+    return _tiktok_oauth_render(success=True, message="TikTok connected successfully!")
+
+
+def _tiktok_oauth_render(*, success: bool, message: str):
+    """Return a minimal HTML page that closes the popup + posts to parent.
+
+    The parent window (channels page) listens for the ``tiktok-oauth``
+    ``postMessage`` and refreshes the account list / shows a toast.
+    """
+    from django.http import HttpResponse
+    import json as _json
+
+    status_color = "#16a34a" if success else "#dc2626"
+    icon_html = "&#10003;" if success else "&#10007;"
+    # JSON-encode the message so quotes/apostrophes don't break JS.
+    msg_js = _json.dumps(message)
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>TikTok OAuth</title>
+<style>
+  body {{ font-family: system-ui, sans-serif; display: flex; align-items: center;
+         justify-content: center; min-height: 100vh; margin: 0;
+         background: #f8fafc; color: #1e293b; }}
+  .card {{ text-align: center; padding: 2rem; background: #fff; border-radius: 12px;
+          box-shadow: 0 4px 12px rgba(0,0,0,.1); max-width: 400px; }}
+  .icon {{ font-size: 3rem; color: {status_color}; margin-bottom: 1rem; }}
+  .msg {{ font-size: 1.1rem; margin-bottom: 0.5rem; }}
+  .sub {{ color: #64748b; font-size: .9rem; }}
+</style></head>
+<body>
+  <div class="card">
+    <div class="icon">{icon_html}</div>
+    <div class="msg" id="msg"></div>
+    <div class="sub">This window will close automatically…</div>
+  </div>
+  <script>
+    var msg = {msg_js};
+    document.getElementById('msg').textContent = msg;
+    // Always notify the parent window + close, even on error.
+    if (window.opener) {{
+      window.opener.postMessage(
+        {{ type: 'tiktok-oauth', success: {str(success).lower()}, message: msg }},
+        '*'
+      );
+    }}
+    // Close after a short delay so the user sees the result.
+    setTimeout(function() {{ window.close(); }}, 2000);
+  </script>
+</body></html>"""
+    return HttpResponse(html)

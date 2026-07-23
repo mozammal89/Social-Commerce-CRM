@@ -211,6 +211,9 @@ function channelsApp() {
         connectCreds: {},           // {field_key: value}
         connecting: false,
 
+        // TikTok OAuth flow state
+        tiktokOAuthLoading: false,
+
         // Settings modal state
         showSettings: false,
         settingsAccount: null,      // the account being edited
@@ -415,6 +418,108 @@ function channelsApp() {
             } finally {
                 this.connecting = false;
             }
+        },
+
+        /* ---- TikTok OAuth (quick connect) ---- */
+        /** Initiate the TikTok OAuth flow in a popup window.
+
+         Flow:
+         1. POST to /api/v1/messaging/oauth/tiktok/authorize/ with
+            client_key + business_id → get the TikTok auth URL.
+         2. Open that URL in a centered popup.
+         3. Listen for ``postMessage('tiktok-oauth')`` from the popup's
+            callback page.
+         4. On success, close the modal + reload accounts.
+         */
+        async connectTikTokOAuth() {
+            // Require client_key + client_secret + business_id from the form.
+            const clientKey = this.connectCreds['client_key'] || '';
+            const clientSecret = this.connectCreds['client_secret'] || '';
+            const businessId = this.connectExternalId || '';
+            if (!clientKey) {
+                this.notify('Enter your TikTok Client Key first.', 'warning');
+                return;
+            }
+            if (!clientSecret) {
+                this.notify('Enter your TikTok Client Secret first.', 'warning');
+                return;
+            }
+
+            this.tiktokOAuthLoading = true;
+
+            // Open a blank popup immediately (browsers block popups that
+            // open after an async call — we resize/navigate it later).
+            const popup = window.open('', 'tiktok-oauth', [
+                'width=520', 'height=700',
+                'top=' + (window.screenY + 80),
+                'left=' + (window.screenX + (window.outerWidth - 520) / 2),
+            ].join(','));
+
+            try {
+                const resp = await api(`${this.apiBase}/oauth/tiktok/authorize/`, {
+                    method: 'POST',
+                    storeId: this.storeId,
+                    body: {
+                        client_key: clientKey,
+                        client_secret: clientSecret,
+                        business_id: businessId,
+                        account_name: this.connectName || 'TikTok Business',
+                    },
+                });
+                if (resp.authorize_url) {
+                    popup.location.href = resp.authorize_url;
+                } else {
+                    throw new Error('No authorize_url returned.');
+                }
+            } catch (err) {
+                this.tiktokOAuthLoading = false;
+                if (popup) popup.close();
+                this.notify(err.message || 'Failed to start TikTok OAuth.', 'error');
+                return;
+            }
+
+            // Listen for the callback page's postMessage.
+            let pollTimer;
+            const handler = (event) => {
+                if (!event.data || event.data.type !== 'tiktok-oauth') return;
+                window.removeEventListener('message', handler);
+                clearInterval(pollTimer);
+                this.tiktokOAuthLoading = false;
+                if (event.data.success) {
+                    this.showConnect = false;
+                    this.notify(event.data.message || 'TikTok connected!', 'success');
+                    this.loadAccounts();
+                    this.loadCatalog();
+                } else {
+                    this.notify(event.data.message || 'TikTok connection failed.', 'error');
+                }
+            };
+            window.addEventListener('message', handler);
+
+            // Fallback: poll the popup's closed state. When the popup
+            // closes (postMessage may fail across cross-origin navigations),
+            // reload accounts + close the modal.
+            pollTimer = setInterval(() => {
+                if (!popup || popup.closed) {
+                    clearInterval(pollTimer);
+                    window.removeEventListener('message', handler);
+                    this.tiktokOAuthLoading = false;
+                    // The connection likely succeeded — reload + close modal.
+                    this.showConnect = false;
+                    this.loadAccounts();
+                    this.loadCatalog();
+                    this.notify('TikTok connection completed.', 'success');
+                }
+            }, 500);
+
+            // Safety timeout: if the popup doesn't postMessage within 5 min,
+            // reset the loading state (the user may have closed it manually).
+            setTimeout(() => {
+                if (this.tiktokOAuthLoading) {
+                    this.tiktokOAuthLoading = false;
+                    window.removeEventListener('message', handler);
+                }
+            }, 300000);
         },
 
         /* ---- enable / disable ---- */
