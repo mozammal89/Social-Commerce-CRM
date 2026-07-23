@@ -20,6 +20,17 @@
   <div class="inbox-shell"
        :class="{ 'mobile-view-active': isMobileView }">
 
+    <!-- Browser notification permission prompt (shown once) -->
+    <div class="notif-permission-banner" x-show="showNotifPrompt" x-transition style="display:none;">
+      <i class="bi bi-bell-fill"></i>
+      <div class="flex-grow-1">
+        <strong>Enable desktop notifications?</strong>
+        Get alerted about new messages even when this tab is in the background.
+      </div>
+      <button class="btn btn-sm btn-primary" @click="enableBrowserNotif()">Enable</button>
+      <button class="btn btn-sm btn-ghost" @click="dismissNotifPrompt()">Not now</button>
+    </div>
+
     <!-- ================================================================
        Pane 1 — Conversation list
        ================================================================ -->
@@ -31,10 +42,96 @@
             Inbox
             <span x-show="unreadTotal > 0" class="conv-badge" x-text="unreadTotal"></span>
           </h2>
-          <span class="ws-status" :class="{ live: wsConnected }">
-            <span class="dot"></span>
-            <span x-text="wsConnected ? 'Live' : 'Connecting…'"></span>
-          </span>
+          <div class="d-flex align-items-center gap-2">
+            <span class="ws-status" :class="{ live: wsConnected }">
+              <span class="dot"></span>
+              <span x-text="wsConnected ? 'Live' : 'Connecting…'"></span>
+            </span>
+            <!-- Quick mute/unmute toggle -->
+            <button type="button" class="notif-settings-btn" @click="quickMuteToggle()"
+                    :title="notifSoundOn ? 'Mute notification sound' : 'Unmute notification sound'"
+                    :class="{ 'is-muted': !notifSoundOn }">
+              <i class="bi" :class="notifSoundOn ? 'bi-volume-up text-success' : 'bi-volume-mute text-danger'"></i>
+            </button>
+            <!-- Notification settings gear -->
+            <div class="notif-settings-wrapper" x-data="{ open: false }" @click.outside="open = false">
+              <button class="notif-settings-btn" @click="open = !open" title="Notification settings"
+                      :class="{ 'has-dropdown': open }">
+                <i class="bi bi-gear"></i>
+              </button>
+              <div class="notif-settings-popover" x-show="open" x-transition.origin.top-right style="display:none;">
+                <div class="notif-settings-header">
+                  <i class="bi bi-bell"></i>
+                  <span>Notifications</span>
+                </div>
+                <div class="notif-settings-body">
+                  <!-- Sound toggle -->
+                  <div class="notif-setting-row">
+                    <div class="notif-setting-label">
+                      <i class="bi" :class="notifSoundOn ? 'bi-volume-up text-success' : 'bi-volume-mute text-muted'"></i>
+                      <div>
+                        <div class="fw-semibold">Notification sound</div>
+                        <div class="notif-setting-desc" x-text="notifSoundOn ? 'Plays a tone for new messages' : 'Muted'"></div>
+                      </div>
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                      <input type="checkbox" class="form-check-input" :checked="notifSoundOn"
+                             @change="toggleNotifSound($event.target.checked)">
+                    </div>
+                  </div>
+                  <!-- Volume slider (only visible when sound is on) -->
+                  <div class="notif-setting-row" x-show="notifSoundOn" x-collapse style="display:none;">
+                    <div class="notif-setting-label">
+                      <i class="bi bi-sliders text-muted"></i>
+                      <div>
+                        <div class="fw-semibold">Volume</div>
+                        <div class="notif-setting-desc" x-text="Math.round(notifVolume * 100) + '%'"></div>
+                      </div>
+                    </div>
+                    <input type="range" class="form-range notif-volume-slider" min="0" max="100" step="10"
+                           :value="Math.round(notifVolume * 100)"
+                           @input="setNotifVolume($event.target.value / 100)">
+                  </div>
+                  <!-- Outgoing sound toggle -->
+                  <div class="notif-setting-row" x-show="notifSoundOn" x-collapse style="display:none;">
+                    <div class="notif-setting-label">
+                      <i class="bi bi-arrow-return-right text-muted"></i>
+                      <div>
+                        <div class="fw-semibold">Outgoing sound</div>
+                        <div class="notif-setting-desc">Play a blip when you send</div>
+                      </div>
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                      <input type="checkbox" class="form-check-input" :checked="notifOutgoingSound"
+                             @change="toggleNotifOutgoingSound($event.target.checked)">
+                    </div>
+                  </div>
+                  <!-- Browser notifications -->
+                  <div class="notif-setting-row">
+                    <div class="notif-setting-label">
+                      <i class="bi" :class="notifBrowserOn ? 'bi-pc-display text-success' : 'bi-pc-display text-muted'"></i>
+                      <div>
+                        <div class="fw-semibold">Desktop notifications</div>
+                        <div class="notif-setting-desc"
+                             x-text="browserNotifStatusText()"></div>
+                      </div>
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                      <input type="checkbox" class="form-check-input"
+                             :checked="notifBrowserOn"
+                             :disabled="browserNotifPerm === 'unsupported' || browserNotifPerm === 'denied'"
+                             @change="toggleBrowserNotif($event.target.checked)">
+                    </div>
+                  </div>
+                </div>
+                <div class="notif-settings-footer">
+                  <button class="btn btn-sm btn-ghost" @click="testNotifSound()">
+                    <i class="bi bi-music-note-beamed me-1"></i>Test sound
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
          <!-- Search -->

@@ -105,7 +105,17 @@
             // A new inbound message means one more unread store-wide —
             // but only the first time we see its id.
             if (payload && payload.conversation_id && payload.direction === 'inbound') {
-                store.countInbound(payload.id);
+                const counted = store.countInbound(payload.id);
+                // Play notification sound + browser notification when the
+                // user is NOT on the inbox page (the inbox SPA handles
+                // its own notifications when it's open).
+                if (counted && window.InboxNotifications) {
+                    window.InboxNotifications.onIncomingMessage({
+                        senderName: 'New message',
+                        preview: payload.text || payload.message_type || '',
+                        conversationId: payload.conversation_id,
+                    });
+                }
             }
         }
 

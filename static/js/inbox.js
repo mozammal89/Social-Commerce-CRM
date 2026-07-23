@@ -144,6 +144,14 @@ function inboxApp() {
         wsConnected: false,
         wsReconnectTimer: null,
 
+        /* ---- notification preferences (mirror of InboxNotifications) ---- */
+        notifSoundOn: true,
+        notifOutgoingSound: false,
+        notifVolume: 0.5,
+        notifBrowserOn: false,
+        browserNotifPerm: 'default',   // 'granted'|'denied'|'default'|'unsupported'
+        showNotifPrompt: false,
+
         /* ================================================================
          * Lifecycle
          * ================================================================ */
@@ -160,6 +168,119 @@ function inboxApp() {
             this.loadChannels();
             this.connectWebSocket();
             this.setupScrollHandler();
+            this.loadNotifPrefs();
+            this.maybeShowNotifPrompt();
+        },
+
+        /* ---- notification preference management ---- */
+        /** Sync local Alpine state from the global InboxNotifications prefs. */
+        loadNotifPrefs() {
+            if (!window.InboxNotifications) return;
+            const p = window.InboxNotifications.getPrefs();
+            this.notifSoundOn = p.sound_enabled;
+            this.notifOutgoingSound = p.sound_outgoing;
+            this.notifVolume = p.sound_volume;
+            this.notifBrowserOn = p.browser_notifications;
+            this.browserNotifPerm = window.InboxNotifications.permissionState();
+        },
+
+        /** Show the browser-notification permission banner once, only if
+         *  the browser supports it, permission hasn't been decided, the
+         *  user hasn't dismissed it before, and they have at least one
+         *  conversation (avoids nagging brand-new users). */
+        maybeShowNotifPrompt() {
+            if (!window.InboxNotifications) return;
+            const perm = window.InboxNotifications.permissionState();
+            const prefs = window.InboxNotifications.getPrefs();
+            if (perm === 'default' && !prefs.permission_prompt_dismissed && this.conversations.length > 0) {
+                // Small delay so it doesn't feel aggressive on page load.
+                setTimeout(() => { this.showNotifPrompt = true; }, 2000);
+            }
+        },
+
+        async enableBrowserNotif() {
+            if (!window.InboxNotifications) return;
+            this.showNotifPrompt = false;
+            const result = await window.InboxNotifications.requestPermission();
+            this.browserNotifPerm = result;
+            this.notifBrowserOn = (result === 'granted');
+            if (result === 'granted') {
+                this.notify('Desktop notifications enabled.', 'success');
+                // Show a test notification immediately.
+                window.InboxNotifications.showBrowserNotification(
+                    'Notifications enabled',
+                    "You'll be notified of new messages in the background.",
+                );
+            } else if (result === 'denied') {
+                this.notify('Notifications were blocked. Update browser settings to allow.', 'error');
+            }
+        },
+
+        dismissNotifPrompt() {
+            this.showNotifPrompt = false;
+            if (window.InboxNotifications) {
+                window.InboxNotifications.setPref('permission_prompt_dismissed', true);
+            }
+        },
+
+        toggleNotifSound(on) {
+            this.notifSoundOn = on;
+            if (window.InboxNotifications) {
+                window.InboxNotifications.setPref('sound_enabled', on);
+                // Sub-toggles inherit.
+                if (!on) this.notifOutgoingSound = false;
+            }
+        },
+
+        /** One-click mute/unmute for the header speaker icon.
+         *  Guarded against double-firing (bubbling / rapid clicks). */
+        quickMuteToggle() {
+            if (this._muteToastTimer) return;
+            const newState = !this.notifSoundOn;
+            this.toggleNotifSound(newState);
+            // Brief visual + audio feedback.
+            if (newState && window.InboxNotifications) {
+                window.InboxNotifications.playIncoming();
+            }
+            this.notify(newState ? 'Sound on' : 'Muted', newState ? 'success' : 'info');
+            this._muteToastTimer = setTimeout(() => { this._muteToastTimer = null; }, 500);
+        },
+
+        toggleNotifOutgoingSound(on) {
+            this.notifOutgoingSound = on;
+            if (window.InboxNotifications) window.InboxNotifications.setPref('sound_outgoing', on);
+        },
+
+        setNotifVolume(v) {
+            this.notifVolume = v;
+            if (window.InboxNotifications) window.InboxNotifications.setPref('sound_volume', v);
+        },
+
+        async toggleBrowserNotif(on) {
+            if (on && this.browserNotifPerm !== 'granted') {
+                // Need to request permission first.
+                if (!window.InboxNotifications) return;
+                const result = await window.InboxNotifications.requestPermission();
+                this.browserNotifPerm = result;
+                this.notifBrowserOn = (result === 'granted');
+                if (result !== 'granted') {
+                    this.notify('Browser blocked notifications. Allow them in site settings.', 'error');
+                }
+            } else {
+                this.notifBrowserOn = on;
+                if (window.InboxNotifications) window.InboxNotifications.setPref('browser_notifications', on);
+            }
+        },
+
+        browserNotifStatusText() {
+            if (this.browserNotifPerm === 'unsupported') return 'Not supported in this browser';
+            if (this.browserNotifPerm === 'denied') return 'Blocked by browser settings';
+            if (this.notifBrowserOn) return 'Enabled — shows when tab is in background';
+            return 'Off';
+        },
+
+        testNotifSound() {
+            if (window.InboxNotifications) window.InboxNotifications.playIncoming();
         },
 
         setupScrollHandler() {
@@ -485,6 +606,8 @@ function inboxApp() {
                 this.replyText = '';
                 this.touchConversation({ last_message_preview: text, last_message_direction: 'outbound', message_count: (this.activeConversation.message_count || 0) + 1 });
                 this.$nextTick(() => this.scrollToBottom());
+                // Outgoing message sound (if enabled in prefs).
+                if (window.InboxNotifications) window.InboxNotifications.onOutgoingMessage();
             } catch (err) {
                 this.threadError = err.message;
             } finally {
@@ -720,6 +843,17 @@ function inboxApp() {
                 attachments_count: msg.attachments?.length || 0,
                 attachments: msg.attachments
             });
+
+            // --- Notification hooks (sound + browser notification) ---
+            // Fire before DOM updates so the tone plays instantly.
+            if (msg.direction === 'inbound' && window.InboxNotifications) {
+                window.InboxNotifications.onIncomingMessage({
+                    senderName: this._senderLabelFor(msg),
+                    preview: msg.text || msg.message_type || 'New message',
+                    conversationId: msg.conversation_id,
+                });
+            }
+
             if (msg.conversation_id === this.activeConversationId) {
                 if (!this.messages.find(m => m.id === msg.id)) {
                     this.messages.push(msg);
@@ -851,6 +985,23 @@ function inboxApp() {
         syncBadge() {
             const store = window.Alpine && Alpine.store('inboxBadge');
             if (store) store.set(this.unreadTotal);
+        },
+
+        /** Resolve a human-readable sender name for a WS message, used
+         *  as the title of browser notifications. Falls back gracefully
+         *  through the conversation's customer name → channel name. */
+        _senderLabelFor(msg) {
+            const conv = this.conversations.find(c => c.id === msg.conversation_id);
+            if (conv) {
+                const name = conv.customer_name || conv.customer_display_name;
+                if (name) return name;
+            }
+            if (this.activeConversation) {
+                const name = this.activeConversation.customer_name
+                    || this.activeConversation.customer_display_name;
+                if (name) return name;
+            }
+            return 'New message';
         },
     };
 }
