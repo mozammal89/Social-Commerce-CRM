@@ -404,7 +404,7 @@
                         {# Image attachment #}
                         <template x-if="isImageAttachment(att)">
                           <div class="msg-attachment-image">
-                            <img :src="att.external_url" :alt="att.file_name || 'Image'" @click="window.open(att.external_url, '_blank')">
+                            <img :src="att.external_url" :alt="att.file_name || 'Image'" @click="openLightbox(att.external_url)">
                             <template x-if="att.width && att.height">
                               <span class="msg-attachment-size" x-text="att.width + '×' + att.height"></span>
                             </template>
